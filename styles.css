@@ -245,10 +245,15 @@ body.locked .gear { visibility: hidden; }
   font-variant-numeric: tabular-nums;
   font-weight: 500;
   transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-left: 0.8em;
+}
+.minyan-row .time:first-of-type {
+  margin-left: 0;
 }
 .minyan-row .time.next {
   color: var(--accent);
-  font-weight: 600;
+  font-weight: 700;
+  font-size: calc(var(--minyan) * 1.15);
 }
 .none, .unavailable {
   font-size: clamp(14px, 2.1vh, 20px);
