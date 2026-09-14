@@ -7,7 +7,7 @@
   --accent: #c9a227;
   --clock-scale: 1;
   --minyan-scale: 1;
-  --minyan: calc(clamp(24px, 4.5vh, 48px) * var(--minyan-scale));
+  --minyan: calc(clamp(20px, 4vh, 44px) * var(--minyan-scale));
   --serif: ui-serif, "New York", Charter, Georgia, serif;
   --sans: ui-sans-serif, -apple-system, "Avenir Next", sans-serif;
 }

@@ -310,9 +310,15 @@ function renderShuls(now) {
     return { shul, html: card(shul.name, body || '<p class="none">Nothing further listed.</p>') };
   });
 
-  // Scale minyan font size based on total count
-  // Fewer minyanim = larger text for readability across the room
-  const scale = totalMinyanim <= 2 ? 1.2 : totalMinyanim <= 4 ? 1.1 : 1;
+  // Scale minyan font size based on total count to always fit
+  // More items = smaller text so everything fits
+  let scale;
+  if (totalMinyanim <= 2) scale = 1.4;
+  else if (totalMinyanim <= 4) scale = 1.2;
+  else if (totalMinyanim <= 6) scale = 1.0;
+  else if (totalMinyanim <= 8) scale = 0.85;
+  else if (totalMinyanim <= 12) scale = 0.7;
+  else scale = 0.6;
   document.documentElement.style.setProperty('--minyan-scale', scale);
 
   $('shuls').innerHTML = cardsData.map((c) => c.html).join('');
