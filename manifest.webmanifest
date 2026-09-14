@@ -1,0 +1,13 @@
+{
+  "name": "Shabbos Clock",
+  "short_name": "Shabbos",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#12141F",
+  "theme_color": "#12141F",
+  "icons": [
+    { "src": "icons/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "icons/icon-512.png", "type": "image/png", "sizes": "512x512" }
+  ]
+}

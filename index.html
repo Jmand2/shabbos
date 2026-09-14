@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#12141F">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Shabbos Clock</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main id="screen">
+  <header class="masthead">
+    <div class="hebrew" id="hebrewDate"></div>
+    <div class="occasion" id="occasion"></div>
+    <div class="civil" id="civilDate"></div>
+  </header>
+
+  <div class="clock" id="clock">--:--</div>
+
+  <!-- Horizon: the day from dawn to nightfall. Sun marks now, ticks mark minyanim. -->
+  <figure class="horizon" aria-hidden="true">
+    <div class="horizon-track"><div class="horizon-elapsed" id="horizonElapsed"></div></div>
+    <div class="horizon-marks" id="horizonMarks"></div>
+    <figcaption class="horizon-ends"><span id="horizonStart"></span><span id="horizonEnd"></span></figcaption>
+  </figure>
+
+  <p class="edge" id="edge"></p>
+
+  <section class="shuls" id="shuls"></section>
+
+  <footer class="footer">
+    <span id="freshness"></span>
+    <button class="gear" id="gear" type="button" aria-label="Settings">Settings</button>
+  </footer>
+</main>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <h2>Settings</h2>
+      <button class="close" id="close" type="button">Done</button>
+    </div>
+
+    <h3>Shuls to show</h3>
+    <p class="hint">Times come from teaneckminyanim.com. A shul with no confirmed times for today says so rather than showing an estimate.</p>
+    <div class="picker" id="shulPicker"></div>
+
+    <h3>Display</h3>
+    <label class="row"><span>Layout</span>
+      <select id="layout">
+        <option value="board">Full board</option>
+        <option value="clock">Clock only</option>
+      </select>
+    </label>
+    <label class="row"><span>Times shown per shul</span>
+      <select id="perShul">
+        <option value="2">Next 2</option>
+        <option value="3">Next 3</option>
+        <option value="4">Next 4</option>
+      </select>
+    </label>
+    <label class="row"><span>Theme</span>
+      <select id="theme">
+        <option value="auto">Night after dark</option>
+        <option value="night">Always night</option>
+        <option value="day">Always day</option>
+      </select>
+    </label>
+    <label class="row"><span>Accent</span>
+      <select id="accent">
+        <option value="brass">Brass</option>
+        <option value="copper">Copper</option>
+        <option value="sage">Sage</option>
+        <option value="ice">Ice</option>
+      </select>
+    </label>
+    <label class="row"><span>Clock size</span>
+      <select id="clockSize">
+        <option value="0.8">Smaller</option>
+        <option value="1">Standard</option>
+        <option value="1.25">Larger</option>
+      </select>
+    </label>
+    <label class="row"><span>Show seconds</span><input type="checkbox" id="seconds"></label>
+    <label class="row"><span>Show the day horizon</span><input type="checkbox" id="showHorizon"></label>
+    <label class="row"><span>Show zmanim strip</span><input type="checkbox" id="showZmanim"></label>
+  </div>
+</div>
+
+<script src="vendor/kosher-zmanim.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
