@@ -7,7 +7,7 @@
   --accent: #c9a227;
   --clock-scale: 1;
   --minyan-scale: 1;
-  --minyan: calc(clamp(22px, 4.2vh, 42px) * var(--minyan-scale));
+  --minyan: calc(clamp(28px, 5.5vh, 56px) * var(--minyan-scale));
   --serif: ui-serif, "New York", Charter, Georgia, serif;
   --sans: ui-sans-serif, -apple-system, "Avenir Next", sans-serif;
 }
@@ -154,15 +154,17 @@ body.locked .gear { visibility: hidden; }
   display: grid;
   gap: clamp(10px, 1.6vw, 22px);
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  align-content: start;
+  align-content: stretch;
+  grid-auto-rows: 1fr;
 }
 .card {
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: 10px;
-  padding: clamp(10px, 1.6vh, 18px);
+  padding: clamp(16px, 2.5vh, 28px);
   min-height: 0;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .card h2 {
   font-family: var(--serif);
