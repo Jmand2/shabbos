@@ -271,7 +271,7 @@ function renderShuls(now) {
 
   // Scale minyan font size based on total count
   // Fewer minyanim = larger text for readability across the room
-  const scale = totalMinyanim <= 2 ? 1.4 : totalMinyanim <= 4 ? 1.25 : totalMinyanim <= 6 ? 1.15 : 1;
+  const scale = totalMinyanim <= 2 ? 1.2 : totalMinyanim <= 4 ? 1.1 : 1;
   document.documentElement.style.setProperty('--minyan-scale', scale);
 
   $('shuls').innerHTML = cardsData.map((c) => c.html).join('');
