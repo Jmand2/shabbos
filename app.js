@@ -315,13 +315,25 @@ function renderFreshness() {
     : 'Times from teaneckminyanim.com';
 }
 
+let lastTime = '';
 function tick() {
   const now = new Date();
   const t = hhmm(now);
   const secs = settings.seconds
     ? `<span class="sec">:${String(now.getSeconds()).padStart(2, '0')}</span>` : '';
-  $('clock').innerHTML =
-    `${t.hour}:${t.minute}${secs}<span class="mer">${t.meridiem}</span>`;
+  const currentTime = `${t.hour}:${t.minute}`;
+
+  // Wrap each character in a span for flip animation
+  const timeHTML = currentTime.split('').map((char, i) => {
+    const wasChar = lastTime[i] || '';
+    const changed = char !== wasChar;
+    return char === ':'
+      ? ':'
+      : `<span class="digit${changed ? ' flip' : ''}">${char}</span>`;
+  }).join('');
+
+  $('clock').innerHTML = `${timeHTML}${secs}<span class="mer">${t.meridiem}</span>`;
+  lastTime = currentTime;
 }
 
 /* Settings -------------------------------------------------------------- */
