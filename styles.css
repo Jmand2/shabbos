@@ -7,7 +7,7 @@
   --accent: #c9a227;
   --clock-scale: 1;
   --minyan-scale: 1;
-  --minyan: calc(clamp(28px, 5.5vh, 56px) * var(--minyan-scale));
+  --minyan: calc(clamp(36px, 7vh, 72px) * var(--minyan-scale));
   --serif: ui-serif, "New York", Charter, Georgia, serif;
   --sans: ui-sans-serif, -apple-system, "Avenir Next", sans-serif;
 }
@@ -188,7 +188,6 @@ body.locked .gear { visibility: hidden; }
   min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   animation: slide-in 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   transition: background 1.2s ease, border-color 1.2s ease;
 }
@@ -212,36 +211,40 @@ body.locked .gear { visibility: hidden; }
   border-bottom: 1px solid var(--rule);
 }
 .group {
-  font-size: clamp(12px, 1.8vh, 18px);
-  letter-spacing: 0.2em;
+  font-size: clamp(14px, 2.2vh, 22px);
+  letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--dim);
-  margin: 1.2em 0 0.5em;
+  font-weight: 500;
+  margin: 1.5em 0 0.6em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--rule);
 }
 .group:first-child {
-  margin-top: 0.5em;
+  margin-top: 0.8em;
 }
 .minyan {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  gap: 1em;
+  align-items: center;
+  gap: 1.5em;
   font-size: var(--minyan);
   font-variant-numeric: tabular-nums;
-  line-height: 1.4;
-  padding: 0.6em 0;
+  line-height: 1.1;
+  padding: 0.3em 0;
   transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .minyan.next {
   color: var(--accent);
   font-weight: 600;
-  font-size: calc(var(--minyan) * 1.2);
 }
 .minyan .label {
   color: var(--dim);
   font-weight: 400;
-  flex: 1;
-  min-width: 0;
+  font-size: 0.45em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
 }
 .minyan.next .label { color: var(--accent); }
 .none, .unavailable {
