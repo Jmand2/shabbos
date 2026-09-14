@@ -7,7 +7,7 @@
   --accent: #c9a227;
   --clock-scale: 1;
   --minyan-scale: 1;
-  --minyan: calc(clamp(36px, 7vh, 72px) * var(--minyan-scale));
+  --minyan: calc(clamp(24px, 4.5vh, 48px) * var(--minyan-scale));
   --serif: ui-serif, "New York", Charter, Georgia, serif;
   --sans: ui-sans-serif, -apple-system, "Avenir Next", sans-serif;
 }
@@ -224,16 +224,23 @@ body.locked .gear { visibility: hidden; }
 .group:first-child {
   margin-top: 0.8em;
 }
+.minyan-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1em;
+  align-items: baseline;
+}
 .minyan {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1.5em;
+  gap: 1em;
   font-size: var(--minyan);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   padding: 0.3em 0;
   transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  flex: 0 1 auto;
 }
 .minyan.next {
   color: var(--accent);
