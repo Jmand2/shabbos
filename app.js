@@ -254,11 +254,20 @@ function renderShuls(now) {
     if (s.state === 'awaiting') {
       return { shul, html: card(shul.name, '<p class="unavailable">Done for today. Tomorrow\'s times not confirmed yet.</p>') };
     }
-    const ahead = s.rows.sort((a, b) => a.at - b.at)
-      .slice(0, Number(settings.perShul));
+    // Show all remaining times from today, plus some from tomorrow to fill the display
+    const sorted = s.rows.sort((a, b) => a.at - b.at);
+    const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const todayTimes = sorted.filter((r) => r.at < tomorrowStart);
+    const tomorrowTimes = sorted.filter((r) => r.at >= tomorrowStart);
+
+    // Show all of today's remaining times, then fill up to perShul setting with tomorrow's
+    const maxTotal = Number(settings.perShul);
+    const ahead = [
+      ...todayTimes,
+      ...tomorrowTimes.slice(0, Math.max(0, maxTotal - todayTimes.length))
+    ];
     totalMinyanim += ahead.length;
     const next = ahead[0];
-    const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const body = ['shacharis', 'mincha', 'maariv'].map((group) => {
       const rows = ahead.filter((r) => r.group === group);
       if (!rows.length) return '';
