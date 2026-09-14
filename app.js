@@ -315,13 +315,23 @@ function renderFreshness() {
     : 'Times from teaneckminyanim.com';
 }
 
+let lastHour = -1;
 function tick() {
   const now = new Date();
   const t = hhmm(now);
   const secs = settings.seconds
     ? `<span class="sec">:${String(now.getSeconds()).padStart(2, '0')}</span>` : '';
-  $('clock').innerHTML =
-    `${t.hour}:${t.minute}${secs}<span class="mer">${t.meridiem}</span>`;
+
+  // Trigger slot machine roll at the top of each hour
+  const shouldRoll = now.getMinutes() === 0 && now.getSeconds() < 2 && t.hour !== lastHour;
+  if (shouldRoll) lastHour = t.hour;
+
+  const timeStr = `${t.hour}:${t.minute}`;
+  const timeHTML = timeStr.split('').map(char =>
+    char === ':' ? ':' : `<span class="digit${shouldRoll ? ' rolling' : ''}">${char}</span>`
+  ).join('');
+
+  $('clock').innerHTML = `${timeHTML}${secs}<span class="mer">${t.meridiem}</span>`;
 }
 
 /* Settings -------------------------------------------------------------- */
