@@ -125,11 +125,16 @@ const timeToDate = (base, text) => {
 function scheduleFor(slug, now) {
   const today = minyanim.days?.[isoOf(now)]?.[slug];
   const tomorrow = minyanim.days?.[isoOf(addDays(now, 1))]?.[slug];
-  if (!today) return { state: 'unavailable' };
-  const rows = flatten(today, now);
-  if (rows.some((r) => r.at > now)) return { state: 'ok', when: 'today', rows };
-  if (tomorrow) return { state: 'ok', when: 'tomorrow', rows: flatten(tomorrow, addDays(now, 1)) };
-  return { state: 'awaiting' };
+  if (!today && !tomorrow) return { state: 'unavailable' };
+
+  // Combine today and tomorrow's minyanim, then filter to future ones
+  const allRows = [
+    ...(today ? flatten(today, now) : []),
+    ...(tomorrow ? flatten(tomorrow, addDays(now, 1)) : [])
+  ].filter((r) => r.at > now);
+
+  if (!allRows.length) return { state: 'awaiting' };
+  return { state: 'ok', rows: allRows };
 }
 
 function flatten(sections, base) {
@@ -249,16 +254,19 @@ function renderShuls(now) {
     if (s.state === 'awaiting') {
       return { shul, html: card(shul.name, '<p class="unavailable">Done for today. Tomorrow\'s times not confirmed yet.</p>') };
     }
-    const ahead = s.rows.filter((r) => r.at > now).sort((a, b) => a.at - b.at)
+    const ahead = s.rows.sort((a, b) => a.at - b.at)
       .slice(0, Number(settings.perShul));
     totalMinyanim += ahead.length;
     const next = ahead[0];
+    const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const body = ['shacharis', 'mincha', 'maariv'].map((group) => {
       const rows = ahead.filter((r) => r.group === group);
       if (!rows.length) return '';
       // If all labels in this group contain a slash (like "Mincha/Maariv"), skip the header
       const allCombined = rows.every((r) => r.label.includes('/'));
-      const header = allCombined ? '' : `<p class="group">${GROUPS[group]}${s.when === 'tomorrow' ? ' · tomorrow' : ''}</p>`;
+      // Check if any row in this group is tomorrow
+      const hasTomorrow = rows.some((r) => r.at >= tomorrowStart);
+      const header = allCombined ? '' : `<p class="group">${GROUPS[group]}${hasTomorrow ? ' · tomorrow' : ''}</p>`;
       return header +
         rows.map((r) => {
           const label = r.label.toLowerCase() === group ? (r.note ?? '') : r.label;
@@ -296,7 +304,9 @@ function renderHorizon(now, info) {
 
   const marks = shownShuls().flatMap((shul) => {
     const s = scheduleFor(shul.slug, now);
-    return s.state === 'ok' && s.when === 'today' ? s.rows : [];
+    // Only show today's minyanim on the horizon (not tomorrow's)
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    return s.state === 'ok' ? s.rows.filter((r) => r.at <= todayEnd) : [];
   }).filter((r) => r.at >= start && r.at <= end).sort((a, b) => a.at - b.at);
 
   const next = marks.find((r) => r.at > now);
