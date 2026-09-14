@@ -45,13 +45,13 @@ body.locked .gear { visibility: hidden; }
 #screen {
   height: 100%;
   padding:
-    calc(clamp(14px, 3vh, 34px) + env(safe-area-inset-top))
-    calc(clamp(18px, 4vw, 48px) + env(safe-area-inset-right))
-    calc(clamp(14px, 3vh, 34px) + env(safe-area-inset-bottom))
-    calc(clamp(18px, 4vw, 48px) + env(safe-area-inset-left));
+    calc(clamp(12px, 2vh, 24px) + env(safe-area-inset-top))
+    calc(clamp(12px, 2vw, 28px) + env(safe-area-inset-right))
+    calc(clamp(12px, 2vh, 24px) + env(safe-area-inset-bottom))
+    calc(clamp(12px, 2vw, 28px) + env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
-  gap: clamp(8px, 1.6vh, 20px);
+  gap: clamp(6px, 1.2vh, 16px);
 }
 
 /* Masthead ------------------------------------------------------------- */
@@ -184,10 +184,11 @@ body.locked .gear { visibility: hidden; }
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: 10px;
-  padding: clamp(16px, 2.5vh, 28px);
+  padding: clamp(20px, 3vh, 36px);
   min-height: 0;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   animation: slide-in 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   transition: background 1.2s ease, border-color 1.2s ease;
 }
@@ -205,9 +206,9 @@ body.locked .gear { visibility: hidden; }
 .card h2 {
   font-family: var(--serif);
   font-weight: 500;
-  font-size: clamp(16px, 2.4vh, 28px);
-  padding-bottom: 0.35em;
-  margin-bottom: 0.35em;
+  font-size: clamp(20px, 3.2vh, 36px);
+  padding-bottom: 0.5em;
+  margin-bottom: 0.8em;
   border-bottom: 1px solid var(--rule);
 }
 .group {
@@ -227,8 +228,8 @@ body.locked .gear { visibility: hidden; }
   gap: 1em;
   font-size: var(--minyan);
   font-variant-numeric: tabular-nums;
-  line-height: 1.3;
-  padding: 0.4em 0;
+  line-height: 1.4;
+  padding: 0.6em 0;
   transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .minyan.next {
