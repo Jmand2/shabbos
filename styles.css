@@ -227,9 +227,9 @@ body.locked .gear { visibility: hidden; }
 .minyan-row {
   display: flex;
   align-items: baseline;
-  gap: 1.2em;
+  gap: 0.8em;
   padding: 0.4em 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .minyan-row .label {
   color: var(--dim);
