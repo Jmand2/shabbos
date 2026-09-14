@@ -268,45 +268,54 @@ function renderShuls(now) {
     totalMinyanim += ahead.length;
     const next = ahead[0];
 
-    // Group consecutive minyanim of same type (e.g., multiple Shacharis) on one line
+    // Group by tefillah type, then by label within each type
     let body = '';
     let currentGroup = null;
+    let currentLabel = null;
     let groupRows = [];
+
+    const renderGroup = () => {
+      if (!groupRows.length) return;
+      const allCombined = groupRows.every((row) => row.label.includes('/'));
+      const wasTomorrow = groupRows[0].at >= tomorrowStart;
+
+      if (currentGroup !== groupRows[0].group) {
+        const header = allCombined ? '' : `<p class="group">${GROUPS[groupRows[0].group]}${wasTomorrow ? ' · tomorrow' : ''}</p>`;
+        body += header;
+        currentGroup = groupRows[0].group;
+      }
+
+      // Group by unique labels
+      const byLabel = {};
+      for (const row of groupRows) {
+        const label = row.label.toLowerCase() === row.group ? (row.note ?? '') : row.label;
+        if (!byLabel[label]) byLabel[label] = [];
+        byLabel[label].push(row);
+      }
+
+      // Render each label group
+      for (const [label, rows] of Object.entries(byLabel)) {
+        body += '<div class="minyan-row"><span class="label">' + esc(label || '') + '</span>';
+        body += rows.map((row) =>
+          `<span class="time${row === next ? ' next' : ''}">${esc(row.time)}</span>`
+        ).join('');
+        body += '</div>';
+      }
+    };
 
     for (let i = 0; i < ahead.length; i++) {
       const r = ahead[i];
       const isTomorrow = r.at >= tomorrowStart;
 
       if (currentGroup !== r.group || (i > 0 && ahead[i-1].at >= tomorrowStart !== isTomorrow)) {
-        // Render previous group if exists
-        if (groupRows.length) {
-          const allCombined = groupRows.every((row) => row.label.includes('/'));
-          const wasTomorrow = groupRows[0].at >= tomorrowStart;
-          const header = allCombined ? '' : `<p class="group">${GROUPS[currentGroup]}${wasTomorrow ? ' · tomorrow' : ''}</p>`;
-          body += header + '<div class="minyan-group">' + groupRows.map((row) => {
-            const label = row.label.toLowerCase() === currentGroup ? (row.note ?? '') : row.label;
-            return `<div class="minyan${row === next ? ' next' : ''}">` +
-              `<span class="label">${esc(label)}</span><span>${esc(row.time)}</span></div>`;
-          }).join('') + '</div>';
-        }
-        currentGroup = r.group;
+        renderGroup();
         groupRows = [r];
+        currentGroup = r.group;
       } else {
         groupRows.push(r);
       }
     }
-
-    // Render final group
-    if (groupRows.length) {
-      const allCombined = groupRows.every((row) => row.label.includes('/'));
-      const wasTomorrow = groupRows[0].at >= tomorrowStart;
-      const header = allCombined ? '' : `<p class="group">${GROUPS[currentGroup]}${wasTomorrow ? ' · tomorrow' : ''}</p>`;
-      body += header + '<div class="minyan-group">' + groupRows.map((row) => {
-        const label = row.label.toLowerCase() === currentGroup ? (row.note ?? '') : row.label;
-        return `<div class="minyan${row === next ? ' next' : ''}">` +
-          `<span class="label">${esc(label)}</span><span>${esc(row.time)}</span></div>`;
-      }).join('') + '</div>';
-    }
+    renderGroup();
     return { shul, html: card(shul.name, body || '<p class="none">Nothing further listed.</p>') };
   });
 
