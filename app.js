@@ -273,29 +273,39 @@ function renderShuls(now) {
     let lastGroup = null;
     let lastTomorrow = false;
 
-    // First, organize by group and label
-    const organized = {};
+    // First, organize by group and label while preserving order
+    const organized = [];
+    let currentSection = null;
+
     for (const r of ahead) {
       const isTomorrow = r.at >= tomorrowStart;
-      const key = `${r.group}-${isTomorrow}`;
-      if (!organized[key]) {
-        organized[key] = { group: r.group, isTomorrow, byLabel: {} };
+      const sectionKey = `${r.group}-${isTomorrow}`;
+
+      // Start new section if group or day changes
+      if (!currentSection || currentSection.key !== sectionKey) {
+        currentSection = {
+          key: sectionKey,
+          group: r.group,
+          isTomorrow,
+          byLabel: new Map()
+        };
+        organized.push(currentSection);
       }
 
       const label = r.label.toLowerCase() === r.group ? (r.note ?? '') : r.label;
-      if (!organized[key].byLabel[label]) {
-        organized[key].byLabel[label] = [];
+      if (!currentSection.byLabel.has(label)) {
+        currentSection.byLabel.set(label, []);
       }
-      organized[key].byLabel[label].push(r);
+      currentSection.byLabel.get(label).push(r);
     }
 
     // Now render
-    for (const section of Object.values(organized)) {
-      const allCombined = Object.keys(section.byLabel).every(label => label.includes('/'));
+    for (const section of organized) {
+      const allCombined = Array.from(section.byLabel.keys()).every(label => label.includes('/'));
       const header = allCombined ? '' : `<p class="group">${GROUPS[section.group]}${section.isTomorrow ? ' · tomorrow' : ''}</p>`;
       body += header;
 
-      for (const [label, rows] of Object.entries(section.byLabel)) {
+      for (const [label, rows] of section.byLabel) {
         body += `<div class="minyan-row"><span class="label">${esc(label)}</span>`;
         for (const r of rows) {
           body += `<span class="time${r === next ? ' next' : ''}">${esc(r.time)}</span>`;
