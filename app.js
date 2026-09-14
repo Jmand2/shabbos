@@ -253,18 +253,12 @@ function renderShuls(now) {
     if (s.state === 'awaiting') {
       return { shul, html: card(shul.name, '<p class="unavailable">Done for today. Tomorrow\'s times not confirmed yet.</p>') };
     }
-    // Show all remaining times from today, plus some from tomorrow to fill the display
+    // Show all times from today and tomorrow (space permitting)
     const sorted = s.rows.sort((a, b) => a.at - b.at);
     const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const todayTimes = sorted.filter((r) => r.at < tomorrowStart);
-    const tomorrowTimes = sorted.filter((r) => r.at >= tomorrowStart);
 
-    // Show all of today's remaining times, then fill up to perShul setting with tomorrow's
-    const maxTotal = Number(settings.perShul);
-    const ahead = [
-      ...todayTimes,
-      ...tomorrowTimes.slice(0, Math.max(0, maxTotal - todayTimes.length))
-    ];
+    // Just show all upcoming times - they'll fit or scale down
+    const ahead = sorted;
     totalMinyanim += ahead.length;
     const next = ahead[0];
 
