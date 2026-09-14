@@ -87,24 +87,9 @@ body.locked .gear { visibility: hidden; }
   text-align: center;
   font-size: calc(clamp(84px, 20vh, 210px) * var(--clock-scale));
   padding: clamp(4px, 1.2vh, 16px) 0;
-  display: inline-block;
-}
-.clock .digit {
-  display: inline-block;
-  transition: transform 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-}
-.clock .digit.flip {
-  animation: flip-digit 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 .clock .sec { font-size: 0.34em; color: var(--dim); letter-spacing: 0; }
 .clock .mer { font-size: 0.26em; color: var(--dim); letter-spacing: 0.12em; }
-
-@keyframes flip-digit {
-  0% { transform: rotateX(0deg); }
-  50% { transform: rotateX(90deg); opacity: 0; }
-  51% { transform: rotateX(-90deg); opacity: 0; }
-  100% { transform: rotateX(0deg); opacity: 1; }
-}
 
 /* Horizon: dawn on the left, nightfall on the right --------------------- */
 .horizon { position: relative; margin: 0 0 0.4em; }
