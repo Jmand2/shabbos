@@ -268,28 +268,40 @@ function renderShuls(now) {
     totalMinyanim += ahead.length;
     const next = ahead[0];
 
-    // Render minyanim grouped by tefillah type
+    // Group by tefillah type, then by label within that type
     let body = '';
     let lastGroup = null;
     let lastTomorrow = false;
 
+    // First, organize by group and label
+    const organized = {};
     for (const r of ahead) {
       const isTomorrow = r.at >= tomorrowStart;
-
-      // Show group header when group changes or crossing day boundary
-      if (r.group !== lastGroup || isTomorrow !== lastTomorrow) {
-        const allCombined = r.label.includes('/');
-        const header = allCombined ? '' : `<p class="group">${GROUPS[r.group]}${isTomorrow ? ' · tomorrow' : ''}</p>`;
-        body += header;
-        lastGroup = r.group;
-        lastTomorrow = isTomorrow;
+      const key = `${r.group}-${isTomorrow}`;
+      if (!organized[key]) {
+        organized[key] = { group: r.group, isTomorrow, byLabel: {} };
       }
 
       const label = r.label.toLowerCase() === r.group ? (r.note ?? '') : r.label;
-      body += `<div class="minyan-row">` +
-        `<span class="label">${esc(label)}</span>` +
-        `<span class="time${r === next ? ' next' : ''}">${esc(r.time)}</span>` +
-        `</div>`;
+      if (!organized[key].byLabel[label]) {
+        organized[key].byLabel[label] = [];
+      }
+      organized[key].byLabel[label].push(r);
+    }
+
+    // Now render
+    for (const section of Object.values(organized)) {
+      const allCombined = Object.keys(section.byLabel).every(label => label.includes('/'));
+      const header = allCombined ? '' : `<p class="group">${GROUPS[section.group]}${section.isTomorrow ? ' · tomorrow' : ''}</p>`;
+      body += header;
+
+      for (const [label, rows] of Object.entries(section.byLabel)) {
+        body += `<div class="minyan-row"><span class="label">${esc(label)}</span>`;
+        for (const r of rows) {
+          body += `<span class="time${r === next ? ' next' : ''}">${esc(r.time)}</span>`;
+        }
+        body += `</div>`;
+      }
     }
     return { shul, html: card(shul.name, body || '<p class="none">Nothing further listed.</p>') };
   });
