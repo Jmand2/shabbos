@@ -157,10 +157,11 @@ body.locked .gear { visibility: hidden; }
 .horizon-ends {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
-  letter-spacing: 0.12em;
+  font-size: clamp(11px, 1.6vh, 15px);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--dim);
+  font-weight: 500;
 }
 
 .edge {

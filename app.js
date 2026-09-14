@@ -225,9 +225,8 @@ function renderEdge(now, info) {
     parts.push(`Havdalah <b>${clockTime(restEndsAt(now))}</b>`);
   } else if (restingNext && now < candles) {
     parts.push(`Candle lighting <b>${clockTime(candles)}</b>`);
-  } else {
-    parts.push(`Shkiya ${clockTime(info.sunset)}`, `Tzeis ${clockTime(info.tzeis)}`);
   }
+  // Don't show shkiya/tzeis here - already displayed on horizon
   if (settings.showZmanim) {
     parts.push(`Netz ${clockTime(toDate(info.cal.getSunrise()))}`,
       `Shema ${clockTime(toDate(info.cal.getSofZmanShmaGRA()))}`,
