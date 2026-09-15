@@ -296,7 +296,9 @@ function renderShuls(now) {
     // Now render
     for (const section of organized) {
       const allCombined = Array.from(section.byLabel.keys()).every(label => label.includes('/'));
-      const header = allCombined ? '' : `<p class="group">${GROUPS[section.group]}${section.isTomorrow ? ' · tomorrow' : ''}</p>`;
+      // Only show "tomorrow" label for Shacharis (morning prayers), not for evening prayers tonight
+      const showTomorrow = section.isTomorrow && section.group === 'shacharis';
+      const header = allCombined ? '' : `<p class="group">${GROUPS[section.group]}${showTomorrow ? ' · tomorrow' : ''}</p>`;
       body += header;
 
       for (const [label, rows] of section.byLabel) {
