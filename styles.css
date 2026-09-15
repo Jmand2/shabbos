@@ -136,14 +136,29 @@ body.locked .gear { visibility: hidden; }
 }
 
 /* Clock ---------------------------------------------------------------- */
+/* Clock face. The old default was a light serif at weight 300: elegant close up,
+   but this is read across a room, and at that distance the hairlines are the
+   first thing to go. Every face here is sturdy enough to survive the trip, and
+   carries lining tabular figures so the numerals do not jostle each other as
+   the minute changes. All are present on iPadOS and macOS. */
+body[data-face="sturdy"]  .clock { font-family: Superclarendon, Charter, Georgia, serif; }
+body[data-face="classic"] .clock { font-family: "Hoefler Text", ui-serif, Charter, Georgia, serif; }
+body[data-face="elegant"] .clock { font-family: "Bodoni 72", Didot, ui-serif, Georgia, serif; }
+body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -apple-system, sans-serif; }
+
 .clock {
-  font-family: var(--serif);
-  font-weight: 300;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  font-family: Superclarendon, Charter, Georgia, serif;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.01em;
   line-height: 0.9;
   text-align: center;
-  font-size: calc(clamp(84px, 20vh, 210px) * var(--clock-scale) * var(--clock-fill));
+  /* The vw ceiling is a width guard: the numerals are nowrap, the body clips,
+     and the widest face is about 2.9em across, so an unbounded vh-based size
+     would run off the side of a short, narrow window. */
+  font-size: min(
+    calc(clamp(84px, 20vh, 210px) * var(--clock-scale) * var(--clock-fill)),
+    27vw);
   padding: clamp(4px, 1.2vh, 16px) 0;
   flex: 1 1 auto;
   min-height: 0;
@@ -172,16 +187,26 @@ body.locked .gear { visibility: hidden; }
   color: var(--dim);
   line-height: 1;
 }
-.clock .dial { width: 0.3em; height: 0.3em; overflow: visible; }
+.clock .dial { width: 0.32em; height: 0.32em; overflow: visible; }
 .clock .dial[hidden] { display: none; }
-.dial-ring { fill: none; stroke: var(--rule); stroke-width: 4; }
+.dial-ring { fill: none; stroke: var(--rule); stroke-width: 2.5; }
+.dial-tick line { stroke: var(--rule); stroke-width: 2; stroke-linecap: round; }
+.dial-quarter line { stroke: var(--rule); stroke-width: 2.6; stroke-linecap: round; opacity: 0.75; }
 .dial-pin { fill: var(--accent); }
 .dial-hand {
   stroke: var(--accent);
-  stroke-width: 7;
+  stroke-width: 3.2;
   stroke-linecap: round;
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
+  /* view-box, not fill-box: the hand's own bounding box is a zero-width sliver,
+     so a fill-box origin lands on the middle of the hand and it pivots about
+     itself instead of the dial. Under view-box these are user units — the
+     centre of the 100x100 viewBox, which is the centre of the dial. */
+  transform-box: view-box;
+  transform-origin: 50px 50px;
+  /* A quartz detent: the hand snaps over and settles back, rather than sliding.
+     app.js feeds a monotonically increasing angle so 59s -> 0s steps forward
+     instead of unwinding a full turn. */
+  transition: transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Horizon: dawn on the left, nightfall on the right --------------------- */
@@ -346,7 +371,7 @@ body.clock-only .horizon,
 body.clock-only #freshness { display: none; }
 body.clock-only .footer { justify-content: flex-end; }
 body.clock-only .clock {
-  font-size: calc(clamp(120px, 36vh, 400px) * var(--clock-scale));
+  font-size: min(calc(clamp(120px, 36vh, 400px) * var(--clock-scale)), 28vw);
   margin: auto 0;
 }
 

@@ -15,7 +15,7 @@ const FLIGHT_MS = 15000;
 const DEFAULTS = {
   shuls: ['beth-aaron', 'ohr-saadya'],
   layout: 'board', perShul: '8', theme: 'auto', accent: 'brass', clockSize: '1',
-  seconds: false, showHorizon: true, showZmanim: false,
+  face: 'sturdy', seconds: false, showHorizon: true, showZmanim: false,
 };
 
 const CHOICES = {
@@ -24,6 +24,7 @@ const CHOICES = {
   theme: ['auto', 'night', 'day'],
   accent: ['brass', 'copper', 'sage', 'ice'],
   clockSize: ['0.8', '1', '1.25'],
+  face: ['sturdy', 'classic', 'elegant', 'clean'],
 };
 
 // A stored value outside the allowed set blanks its select, and for perShul it
@@ -176,6 +177,7 @@ function render() {
 
   document.body.classList.toggle('day', themeIsDay(now, info));
   document.body.dataset.accent = settings.accent;
+  document.body.dataset.face = settings.face;
   const locked = isLocked(now, info);
   document.body.classList.toggle('locked', locked);
   document.body.classList.toggle('clock-only', settings.layout === 'clock');
@@ -383,14 +385,34 @@ function renderFreshness() {
     : 'Times from teaneckminyanim.com';
 }
 
+// The hand's angle only ever increases. Feeding it seconds * 6 would send it
+// backwards through a whole revolution at 59 -> 0, which the detent transition
+// would then animate; accumulating the step keeps every move a forward one.
+// Steps are taken mod 60 seconds, so the angle stays correct mod 360 even after
+// the dial has been switched off for a while.
+let handAngle = null;
+let handAt = -1;
+
+function paintDial(now) {
+  $('dial').hidden = !settings.seconds;
+  const second = now.getSeconds();
+  if (second === handAt) return;
+  const hand = $('dialHand');
+  const first = handAngle === null;
+  handAngle = first ? second * 6 : handAngle + (((second - handAt + 60) % 60) * 6);
+  handAt = second;
+  // On the very first paint the hand would wind up from twelve to wherever it
+  // belongs. Place it, then let the detent run from the next step on.
+  hand.style.transition = first ? 'none' : '';
+  hand.style.transform = `rotate(${handAngle}deg)`;
+}
+
 function tick() {
   const now = new Date();
   const t = hhmm(now);
   $('clockTime').textContent = `${t.hour}:${t.minute}`;
   $('clockMer').textContent = t.meridiem;
-  // Subsidiary seconds: one hand, one sweep a minute, no digits to read.
-  $('dial').hidden = !settings.seconds;
-  $('dialHand').style.transform = `rotate(${now.getSeconds() * 6}deg)`;
+  paintDial(now);
   checkFlight(now);
 }
 
@@ -493,7 +515,7 @@ function buildSettings() {
   });
 
   for (const [id, key] of [['layout', 'layout'], ['perShul', 'perShul'], ['theme', 'theme'],
-    ['accent', 'accent'], ['clockSize', 'clockSize']]) {
+    ['accent', 'accent'], ['clockSize', 'clockSize'], ['face', 'face']]) {
     $(id).value = settings[key];
     $(id).addEventListener('change', () => { settings[key] = $(id).value; save(); render(); });
   }

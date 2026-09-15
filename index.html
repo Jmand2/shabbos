@@ -24,10 +24,28 @@
     <span class="hm" id="clockTime">--:--</span><!--
     --><span class="suffix">
       <span class="mer" id="clockMer"></span>
+      <!-- Subsidiary seconds. Ticks every five seconds, longer at the quarters, and
+           a hand with a counterbalance tail so the pivot reads as the centre. -->
       <svg class="dial" id="dial" viewBox="0 0 100 100" aria-hidden="true">
         <circle class="dial-ring" cx="50" cy="50" r="45"/>
-        <line class="dial-hand" id="dialHand" x1="50" y1="50" x2="50" y2="12"/>
-        <circle class="dial-pin" cx="50" cy="50" r="4.5"/>
+        <g class="dial-tick">
+          <line x1="72.25" y1="11.46" x2="69.50" y2="16.23"/>
+          <line x1="88.54" y1="27.75" x2="83.77" y2="30.50"/>
+          <line x1="88.54" y1="72.25" x2="83.77" y2="69.50"/>
+          <line x1="72.25" y1="88.54" x2="69.50" y2="83.77"/>
+          <line x1="27.75" y1="88.54" x2="30.50" y2="83.77"/>
+          <line x1="11.46" y1="72.25" x2="16.23" y2="69.50"/>
+          <line x1="11.46" y1="27.75" x2="16.23" y2="30.50"/>
+          <line x1="27.75" y1="11.46" x2="30.50" y2="16.23"/>
+        </g>
+        <g class="dial-quarter">
+          <line x1="50" y1="5.5" x2="50" y2="14"/>
+          <line x1="94.5" y1="50" x2="86" y2="50"/>
+          <line x1="50" y1="94.5" x2="50" y2="86"/>
+          <line x1="5.5" y1="50" x2="14" y2="50"/>
+        </g>
+        <line class="dial-hand" id="dialHand" x1="50" y1="61" x2="50" y2="13"/>
+        <circle class="dial-pin" cx="50" cy="50" r="3.4"/>
       </svg>
     </span>
   </div>
@@ -90,6 +108,14 @@
         <option value="copper">Copper</option>
         <option value="sage">Sage</option>
         <option value="ice">Ice</option>
+      </select>
+    </label>
+    <label class="row"><span>Clock face</span>
+      <select id="face">
+        <option value="sturdy">Sturdy</option>
+        <option value="classic">Classic</option>
+        <option value="elegant">Elegant</option>
+        <option value="clean">Clean</option>
       </select>
     </label>
     <label class="row"><span>Clock size</span>
