@@ -217,18 +217,18 @@ body.locked .gear { visibility: hidden; }
   text-transform: uppercase;
   color: var(--dim);
   font-weight: 500;
-  margin: 1.5em 0 0.6em;
-  padding-bottom: 0.3em;
+  margin: 1.2em 0 0.8em;
+  padding-bottom: 0.4em;
   border-bottom: 1px solid var(--rule);
 }
 .group:first-child {
-  margin-top: 0.8em;
+  margin-top: 0;
 }
 .minyan-row {
   display: flex;
   align-items: baseline;
   gap: 0.8em;
-  padding: 0.4em 0;
+  padding: 0.5em 0;
   flex-wrap: nowrap;
 }
 .minyan-row .label {

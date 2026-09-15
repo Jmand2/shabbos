@@ -262,48 +262,41 @@ function renderShuls(now) {
     totalMinyanim += ahead.length;
     const next = ahead[0];
 
-    // Group by tefillah type, then by label within that type
+    // Group by day first, then by label within each day
     let body = '';
-    let lastGroup = null;
-    let lastTomorrow = false;
 
-    // First, organize by group and label while preserving order
-    const organized = [];
-    let currentSection = null;
-
+    // Organize by day
+    const byDay = new Map();
     for (const r of ahead) {
       const isTomorrow = r.at >= tomorrowStart;
-      const sectionKey = `${r.group}-${isTomorrow}`;
-
-      // Start new section if group or day changes
-      if (!currentSection || currentSection.key !== sectionKey) {
-        currentSection = {
-          key: sectionKey,
-          group: r.group,
-          isTomorrow,
-          byLabel: new Map()
-        };
-        organized.push(currentSection);
+      const dayKey = isTomorrow ? 'tomorrow' : 'today';
+      if (!byDay.has(dayKey)) {
+        byDay.set(dayKey, []);
       }
-
-      const label = r.label.toLowerCase() === r.group ? (r.note ?? '') : r.label;
-      if (!currentSection.byLabel.has(label)) {
-        currentSection.byLabel.set(label, []);
-      }
-      currentSection.byLabel.get(label).push(r);
+      byDay.get(dayKey).push(r);
     }
 
-    // Now render
-    for (const section of organized) {
-      const allCombined = Array.from(section.byLabel.keys()).every(label => label.includes('/'));
-      // Only show "tomorrow" label for Shacharis (morning prayers), not for evening prayers tonight
-      const showTomorrow = section.isTomorrow && section.group === 'shacharis';
-      const header = allCombined ? '' : `<p class="group">${GROUPS[section.group]}${showTomorrow ? ' · tomorrow' : ''}</p>`;
-      body += header;
+    // Render each day
+    for (const [dayKey, rows] of byDay) {
+      // Show day header only if we have both today and tomorrow
+      if (byDay.size > 1) {
+        body += `<p class="group">${dayKey === 'tomorrow' ? 'TOMORROW' : 'TODAY'}</p>`;
+      }
 
-      for (const [label, rows] of section.byLabel) {
+      // Group by label within this day
+      const byLabel = new Map();
+      for (const r of rows) {
+        const label = r.label.toLowerCase() === r.group ? (r.note ?? '') : r.label;
+        if (!byLabel.has(label)) {
+          byLabel.set(label, []);
+        }
+        byLabel.get(label).push(r);
+      }
+
+      // Render each label group
+      for (const [label, labelRows] of byLabel) {
         body += `<div class="minyan-row"><span class="label">${esc(label)}</span>`;
-        for (const r of rows) {
+        for (const r of labelRows) {
           body += `<span class="time${r === next ? ' next' : ''}">${esc(r.time)}</span>`;
         }
         body += `</div>`;
