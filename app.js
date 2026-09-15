@@ -10,16 +10,17 @@ const CACHE = 'shabbos-clock-minyanim';
 const STALE_HOURS = 36;
 const ROTATE_MS = 45000;
 const PER_PAGE = 3;
+const FLIGHT_MS = 15000;
 
 const DEFAULTS = {
   shuls: ['beth-aaron', 'ohr-saadya'],
-  layout: 'board', perShul: '3', theme: 'auto', accent: 'brass', clockSize: '1',
+  layout: 'board', perShul: '8', theme: 'auto', accent: 'brass', clockSize: '1',
   seconds: false, showHorizon: true, showZmanim: false,
 };
 
 const CHOICES = {
   layout: ['board', 'clock'],
-  perShul: ['2', '3', '4'],
+  perShul: ['4', '8', '12'],
   theme: ['auto', 'night', 'day'],
   accent: ['brass', 'copper', 'sage', 'ice'],
   clockSize: ['0.8', '1', '1.25'],
@@ -166,6 +167,8 @@ function shownShuls() {
 }
 
 const GROUPS = { shacharis: 'Shacharis', mincha: 'Mincha', maariv: 'Maariv' };
+let lastBoard = '';
+let lastTicks = '';
 
 function render() {
   const now = new Date();
@@ -233,93 +236,102 @@ function renderEdge(now, info) {
       `Mincha gedola ${clockTime(toDate(info.cal.getMinchaGedola()))}`,
       `Plag ${clockTime(toDate(info.cal.getPlagHamincha()))}`);
   }
+  // On an ordinary weekday there is no transition to announce. Hide the element
+  // rather than leaving an empty one contributing a gap to the column.
   $('edge').innerHTML = parts.join(' &nbsp;·&nbsp; ');
+  $('edge').hidden = !parts.length;
+}
+
+// One writer for the board, so every state updates the cache. Writing the DOM
+// directly anywhere else leaves lastBoard stale and the next identical render
+// gets skipped.
+function paintBoard(html) {
+  if (html === lastBoard) return;
+  lastBoard = html;
+  $('shuls').innerHTML = html;
 }
 
 function renderShuls(now) {
   const list = shownShuls();
   if (!list.length) {
-    $('shuls').innerHTML = '<p class="none">No shuls chosen. Open Settings to pick some.</p>';
+    paintBoard('<p class="none">No shuls chosen. Open Settings to pick some.</p>');
     return;
   }
 
-  // Count total minyanim across all cards to scale font size
-  let totalMinyanim = 0;
-  const cardsData = list.map((shul) => {
+  const cap = Number(settings.perShul);
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  let lines = 0;
+
+  const cards = list.map((shul) => {
     const s = scheduleFor(shul.slug, now);
     if (s.state === 'unavailable') {
-      return { shul, html: card(shul.name, `<p class="unavailable">Times unavailable — check ${esc(shul.name)}'s own schedule.</p>`) };
+      lines += 1;
+      return card(shul.name, `<p class="unavailable">Times unavailable — check ${esc(shul.name)}'s own schedule.</p>`);
     }
     if (s.state === 'awaiting') {
-      return { shul, html: card(shul.name, '<p class="unavailable">Done for today. Tomorrow\'s times not confirmed yet.</p>') };
+      lines += 1;
+      return card(shul.name, '<p class="unavailable">Done for today. Tomorrow\'s times not confirmed yet.</p>');
     }
-    // Show all times from today and tomorrow (space permitting)
-    const sorted = s.rows.sort((a, b) => a.at - b.at);
-    const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 
-    // Just show all upcoming times - they'll fit or scale down
-    const ahead = sorted;
-    totalMinyanim += ahead.length;
+    // Chronological, then capped so the type can stay large.
+    const ahead = [...s.rows].sort((a, b) => a.at - b.at).slice(0, cap);
     const next = ahead[0];
 
-    // Group by day first, then by label within each day
-    let body = '';
-
-    // Organize by day
     const byDay = new Map();
     for (const r of ahead) {
-      const isTomorrow = r.at >= tomorrowStart;
-      const dayKey = isTomorrow ? 'tomorrow' : 'today';
-      if (!byDay.has(dayKey)) {
-        byDay.set(dayKey, []);
-      }
-      byDay.get(dayKey).push(r);
+      const key = r.at >= midnight ? 'tomorrow' : 'today';
+      if (!byDay.has(key)) byDay.set(key, []);
+      byDay.get(key).push(r);
     }
 
-    // Render each day
-    for (const [dayKey, rows] of byDay) {
-      // Show day header only if we have both today and tomorrow
-      if (byDay.size > 1) {
-        body += `<p class="group">${dayKey === 'tomorrow' ? 'TOMORROW' : 'TODAY'}</p>`;
+    let body = '';
+    for (const [day, rows] of byDay) {
+      // Tomorrow is always announced. Without this, a board late at night shows
+      // tomorrow's 5:10 AM with nothing saying it is not tonight.
+      if (day === 'tomorrow' || byDay.size > 1) {
+        body += `<p class="group">${day === 'tomorrow' ? 'Tomorrow' : 'Today'}</p>`;
+        lines += 1;
       }
 
-      // Group by label within this day
+      // Same tefillah on one line. The label is always the tefillah — never
+      // blanked, or Mincha and Maariv collapse into one unlabelled row.
       const byLabel = new Map();
       for (const r of rows) {
-        const label = r.label.toLowerCase() === r.group ? (r.note ?? '') : r.label;
-        if (!byLabel.has(label)) {
-          byLabel.set(label, []);
-        }
+        const label = r.label.toLowerCase() === r.group ? GROUPS[r.group] : r.label;
+        if (!byLabel.has(label)) byLabel.set(label, []);
         byLabel.get(label).push(r);
       }
 
-      // Render each label group
-      for (const [label, labelRows] of byLabel) {
-        body += `<div class="minyan-row"><span class="label">${esc(label)}</span>`;
-        for (const r of labelRows) {
-          body += `<span class="time${r === next ? ' next' : ''}">${esc(r.time)}</span>`;
-        }
-        body += `</div>`;
+      // A run of times wraps, so count the lines it will actually occupy.
+      // Narrower cards (more shuls across) fit fewer per line.
+      const perLine = list.length <= 2 ? 4 : 3;
+      for (const [label, group] of byLabel) {
+        lines += Math.ceil(group.length / perLine);
+        body += `<span class="label">${esc(label)}</span>`
+          + `<span class="times">`
+          + group.map((r) => `<span class="time${r === next ? ' next' : ''}">${esc(r.time)}</span>`).join('')
+          + `</span>`;
       }
     }
-    return { shul, html: card(shul.name, body || '<p class="none">Nothing further listed.</p>') };
+    return card(shul.name, body || '<p class="none">Nothing further listed.</p>');
   });
 
-  // Scale minyan font size based on total count to always fit
-  // More items = smaller text so everything fits
-  let scale;
-  if (totalMinyanim <= 2) scale = 1.4;
-  else if (totalMinyanim <= 4) scale = 1.2;
-  else if (totalMinyanim <= 6) scale = 1.0;
-  else if (totalMinyanim <= 8) scale = 0.85;
-  else if (totalMinyanim <= 12) scale = 0.7;
-  else scale = 0.6;
+  // Scale on the number of LINES, which is what actually consumes height, and
+  // never below 0.8 — past that the times stop being readable across a room.
+  const perCard = lines / Math.max(1, list.length);
+  const scale = perCard <= 4 ? 1.15 : perCard <= 6 ? 1 : perCard <= 8 ? 0.9 : 0.8;
   document.documentElement.style.setProperty('--minyan-scale', scale);
 
-  $('shuls').innerHTML = cardsData.map((c) => c.html).join('');
+  // Cards hug their content, so the clock inherits the rest of the column. A
+  // sparse evening gives it room; a full Friday board takes it back.
+  const fill = perCard <= 3 ? 1.45 : perCard <= 5 ? 1.25 : perCard <= 7 ? 1.1
+    : perCard <= 9 ? 1 : 0.85;
+  document.documentElement.style.setProperty('--clock-fill', fill);
+
+  paintBoard(cards.join(''));
 }
 
-const card = (name, body) => `<article class="card"><h2>${esc(name)}</h2>${body}</article>`;
+const card = (name, body) => `<article class="card"><h2>${esc(name)}</h2><div class="body">${body}</div></article>`;
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function renderHorizon(now, info) {
@@ -327,27 +339,39 @@ function renderHorizon(now, info) {
   figure.hidden = !settings.showHorizon;
   if (figure.hidden) return;
 
-  const start = toDate(info.cal.getAlos72());
-  const end = info.tzeis;
+  // Past nightfall the day it describes is over. Roll to tomorrow's arc, which
+  // is also the day the cards below have already moved to.
+  const nightfall = now >= info.tzeis;
+  const arcDay = nightfall ? addDays(now, 1) : now;
+  const arcCal = nightfall ? zmanim(arcDay) : info.cal;
+  const start = toDate(arcCal.getAlos72());
+  const end = toDate(arcCal.getTzais());
   const span = end - start;
   const at = (d) => Math.min(100, Math.max(0, ((d - start) / span) * 100));
 
-  $('horizonElapsed').style.width = `${at(now)}%`;
-  $('horizonStart').textContent = `Alos ${clockTime(start)}`;
+  $('horizonElapsed').style.width = nightfall ? '0%' : `${at(now)}%`;
+  $('horizonStart').textContent = `${nightfall ? 'Tomorrow · ' : ''}Alos ${clockTime(start)}`;
   $('horizonEnd').textContent = `Tzeis ${clockTime(end)}`;
 
   const marks = shownShuls().flatMap((shul) => {
     const s = scheduleFor(shul.slug, now);
-    // Only show today's minyanim on the horizon (not tomorrow's)
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-    return s.state === 'ok' ? s.rows.filter((r) => r.at <= todayEnd) : [];
+    return s.state === 'ok' ? s.rows : [];
   }).filter((r) => r.at >= start && r.at <= end).sort((a, b) => a.at - b.at);
 
+  // The sun is its own node now: moved in place so its transition runs, and not
+  // destroyed every render along with the ticks.
+  const sun = $('sun');
+  sun.hidden = nightfall;
+  if (!nightfall) sun.style.left = `${at(now)}%`;
+
   const next = marks.find((r) => r.at > now);
-  $('horizonMarks').innerHTML =
-    `<span class="sun" style="left:${at(now)}%"></span>` +
-    marks.map((r) => `<span class="tick${r === next ? ' next' : ''}" style="left:${at(r.at)}%">` +
-      `${r === next ? esc(r.time) : ''}</span>`).join('');
+  const ticks = marks.map((r) =>
+    `<span class="tick${r === next ? ' next' : ''}" style="left:${at(r.at)}%">`
+    + `${r === next ? esc(r.time) : ''}</span>`).join('');
+  if (ticks !== lastTicks) {
+    lastTicks = ticks;
+    $('horizonMarks').innerHTML = ticks;
+  }
 }
 
 function renderFreshness() {
@@ -359,23 +383,99 @@ function renderFreshness() {
     : 'Times from teaneckminyanim.com';
 }
 
-let lastHour = -1;
 function tick() {
   const now = new Date();
   const t = hhmm(now);
-  const secs = settings.seconds
-    ? `<span class="sec">:${String(now.getSeconds()).padStart(2, '0')}</span>` : '';
+  $('clockTime').textContent = `${t.hour}:${t.minute}`;
+  $('clockMer').textContent = t.meridiem;
+  // Subsidiary seconds: one hand, one sweep a minute, no digits to read.
+  $('dial').hidden = !settings.seconds;
+  $('dialHand').style.transform = `rotate(${now.getSeconds() * 6}deg)`;
+  checkFlight(now);
+}
 
-  // Trigger slot machine roll at the top of each hour
-  const shouldRoll = now.getMinutes() === 0 && now.getSeconds() < 2 && t.hour !== lastHour;
-  if (shouldRoll) lastHour = t.hour;
+/* Something crosses on the hour ---------------------------------------- */
 
-  const timeStr = `${t.hour}:${t.minute}`;
-  const timeHTML = timeStr.split('').map(char =>
-    char === ':' ? ':' : `<span class="digit${shouldRoll ? ' rolling' : ''}">${char}</span>`
-  ).join('');
+// The grandchildren watch this wall. Once an hour something crosses it, and what
+// crosses depends on the hour, so waiting is worth it. Everything here is
+// decoration: it never moves a time, and it never blocks a tap.
 
-  $('clock').innerHTML = `${timeHTML}${secs}<span class="mer">${t.meridiem}</span>`;
+let lastFlight = -1;
+
+// Same hour always gives the same flight, so a reload mid-wait does not cheat
+// anyone out of the one they were promised.
+function flightSeed(d) {
+  const n = d.getFullYear() * 1e4 + (d.getMonth() + 1) * 100 + d.getDate() + d.getHours() * 7919;
+  const x = Math.sin(n) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+const BIRD = '<svg viewBox="0 0 40 18"><path d="M2 11 Q10 2 20 10 Q30 2 38 11"/></svg>';
+const STAR = '<svg viewBox="0 0 60 18"><path d="M4 9 L52 9"/><circle cx="54" cy="9" r="3.5"/></svg>';
+
+function flier(html, { top, size, dur, delay, kind }) {
+  const el = document.createElement('span');
+  el.className = `flier ${kind}`;
+  el.innerHTML = html;
+  el.style.top = `${top}%`;
+  el.style.setProperty('--size', `${size}px`);
+  el.style.setProperty('--dur', `${dur}ms`);
+  el.style.animationDelay = `${delay}ms`;
+  // Timer rather than animationend: if the animation never fires, the node still
+  // goes away, and this display stays up for months.
+  setTimeout(() => el.remove(), dur + delay + 1000);
+  return el;
+}
+
+// Not every WebView has matchMedia. Treat its absence as "motion is fine"
+// rather than letting a missing API throw.
+function reducedMotion() {
+  return typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function launchFlight(now) {
+  if (reducedMotion()) return;
+  const layer = $('flyway');
+  if (!layer) return;
+  const info = dayInfo(now);
+  const r = flightSeed(now);
+
+  const night = now >= info.tzeis || now < toDate(info.cal.getAlos72());
+  if (night) {
+    // After dark the sky gets a shooting star instead.
+    layer.appendChild(flier(STAR, {
+      top: 12 + r * 22, size: 46 + r * 20, dur: 2600, delay: 0, kind: 'star',
+    }));
+    return;
+  }
+
+  const candles = toDate(info.cal.getCandleLighting());
+  const rushing = info.civil.jc.isTomorrowShabbosOrYomTov()
+    && candles - now > 0 && candles - now < 5400000;
+
+  // Erev Shabbos, the last hour and a half: the whole flock, and in a hurry.
+  const count = rushing ? 5 : 1 + Math.floor(r * 3);
+  const glider = !rushing && r > 0.88;
+
+  for (let i = 0; i < count; i += 1) {
+    const spread = (i % 2 ? -1 : 1) * Math.ceil(i / 2);
+    layer.appendChild(flier(BIRD, {
+      top: 46 + spread * 3.5 + r * 8,
+      size: glider ? 90 : 34 + r * 14,
+      dur: glider ? FLIGHT_MS * 1.8 : rushing ? FLIGHT_MS * 0.55 : FLIGHT_MS,
+      delay: i * (rushing ? 220 : 700),
+      kind: glider ? 'glider' : 'bird',
+    }));
+  }
+}
+
+function checkFlight(now) {
+  const hourKey = now.getDate() * 100 + now.getHours();
+  if (now.getMinutes() !== 0 || hourKey === lastFlight) return;
+  lastFlight = hourKey;
+  // This is ornament, and it runs inside the one function that must never fail.
+  try { launchFlight(now); } catch (err) { console.error(err); }
 }
 
 /* Settings -------------------------------------------------------------- */
@@ -453,5 +553,8 @@ async function keepAwake() {
 
 start().catch((err) => {
   console.error(err);
-  document.getElementById('edge').textContent = 'Zmanim unavailable — reload when back online.';
+  // renderEdge hides this element on an ordinary day, so a throw after the first
+  // successful render would otherwise post the warning into a hidden line.
+  $('edge').hidden = false;
+  $('edge').textContent = 'Zmanim unavailable — reload when back online.';
 });

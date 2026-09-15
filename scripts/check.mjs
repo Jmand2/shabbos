@@ -35,6 +35,8 @@ async function boot(fakeNow, { failFetch = [], settings = null, wakeLock = true 
 }
 
 const text = (w, id) => (w.document.getElementById(id)?.textContent ?? '').trim();
+// The clock is several elements now, so read its parts rather than the container.
+const clockOf = (w) => `${text(w, 'clockTime')}${text(w, 'clockMer')}`;
 
 console.log('=== Shabbos and Yom Tov transitions ===');
 for (const [when, tag] of [
@@ -53,7 +55,7 @@ for (const [when, tag] of [
   ['2027-04-23T20:00:00-04:00', 'Pesach Friday, after candles'],
 ]) {
   const w = await boot(when);
-  console.log(' ', tag.padEnd(30), text(w, 'clock').padEnd(9),
+  console.log(' ', tag.padEnd(30), clockOf(w).padEnd(9),
     text(w, 'occasion').padEnd(22), text(w, 'edge').padEnd(30),
     'lock:', w.document.body.classList.contains('locked') ? 'Y' : 'n');
 }
@@ -70,7 +72,7 @@ for (const [tag, opts] of [
   ['corrupt settings', { settings: { perShul: 'nonsense', accent: 'bogus', clockSize: 'x' } }],
 ]) {
   const w = await boot(when, opts);
-  console.log(' ', tag.padEnd(24), '| clock', JSON.stringify(text(w, 'clock')).padEnd(10),
+  console.log(' ', tag.padEnd(24), '| clock', JSON.stringify(clockOf(w)).padEnd(10),
     '|', text(w, 'shuls').replace(/\s+/g, ' ').slice(0, 58));
 }
 
@@ -90,8 +92,11 @@ let bad = 0;
 for (let i = 0; i < 365; i += 1) {
   const d = new Date(Date.UTC(2026, 8, 1 + i, 21, 0));
   const w = await boot(d.toISOString());
-  const out = [text(w, 'clock'), text(w, 'edge'), text(w, 'hebrewDate')];
-  if (!/^\d{1,2}:\d{2}(am|pm)$/.test(out[0]) || out.some((x) => !x)
+  const out = [clockOf(w), text(w, 'edge'), text(w, 'hebrewDate')];
+  const locked = w.document.body.classList.contains('locked');
+  const edgeRequired = locked || !w.document.getElementById('edge').hidden;
+  if (!/^\d{1,2}:\d{2}(am|pm)$/.test(out[0]) || !out[2]
+      || (edgeRequired && !out[1])
       || /NaN|undefined|Invalid/.test(out.join(''))) {
     bad += 1;
     console.log('  BAD', d.toISOString().slice(0, 10), JSON.stringify(out));
