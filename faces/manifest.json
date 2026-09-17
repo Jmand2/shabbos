@@ -1,0 +1,109 @@
+{
+  "v": 1,
+  "kdf": "PBKDF2-SHA256",
+  "iterations": 600000,
+  "salt": "46612ca15542b2ed0d3a35a3cefaead0",
+  "cipher": "AES-GCM",
+  "faces": [
+    {
+      "id": "d23849f49bf7",
+      "file": "a8d28506c1a0.bin",
+      "ring": "#E8C547"
+    },
+    {
+      "id": "a31ebf0adb66",
+      "file": "9ca9bf129c0d.bin",
+      "ring": "#5FC9A0"
+    },
+    {
+      "id": "acd363e80d28",
+      "file": "0572e843dff5.bin",
+      "ring": "#F08A6E"
+    },
+    {
+      "id": "007ff786aaa6",
+      "file": "82a876bb898a.bin",
+      "ring": "#7FB2F0"
+    },
+    {
+      "id": "a8da9b0f1097",
+      "file": "8b2e0ec08b69.bin",
+      "ring": "#D98CC8"
+    },
+    {
+      "id": "129a03aab5d5",
+      "file": "0f2b6dd4c8bb.bin",
+      "ring": "#9FD356"
+    },
+    {
+      "id": "c1bcd2dbe91c",
+      "file": "910f4d8a9beb.bin",
+      "ring": "#F5A25D"
+    },
+    {
+      "id": "260241f37062",
+      "file": "88f1dac91271.bin",
+      "ring": "#6ED3D3"
+    },
+    {
+      "id": "bf066ba4fd18",
+      "file": "ac8180194c5a.bin",
+      "ring": "#E8C547"
+    },
+    {
+      "id": "e3b9d7f83e53",
+      "file": "40684ca12eb5.bin",
+      "ring": "#5FC9A0"
+    },
+    {
+      "id": "29c40ac47159",
+      "file": "bc6a0eafcb2b.bin",
+      "ring": "#F08A6E"
+    },
+    {
+      "id": "2630fac50271",
+      "file": "d16354ffd103.bin",
+      "ring": "#7FB2F0"
+    },
+    {
+      "id": "41c69ce4807b",
+      "file": "9648c8d7c46e.bin",
+      "ring": "#D98CC8"
+    },
+    {
+      "id": "30ee0f317dbd",
+      "file": "3d01786bfa63.bin",
+      "ring": "#9FD356"
+    },
+    {
+      "id": "dc3381211b47",
+      "file": "e39e68efbec8.bin",
+      "ring": "#F5A25D"
+    },
+    {
+      "id": "c2488c45b9da",
+      "file": "ce78ffa727d9.bin",
+      "ring": "#6ED3D3"
+    },
+    {
+      "id": "306c5377d8b0",
+      "file": "1b455d6832be.bin",
+      "ring": "#E8C547"
+    },
+    {
+      "id": "c97697afbeab",
+      "file": "d1da7be81b32.bin",
+      "ring": "#5FC9A0"
+    },
+    {
+      "id": "06027304ac95",
+      "file": "d168271e94c4.bin",
+      "ring": "#F08A6E"
+    },
+    {
+      "id": "3239c0da9bb4",
+      "file": "4d56ef915dd5.bin",
+      "ring": "#7FB2F0"
+    }
+  ]
+}
