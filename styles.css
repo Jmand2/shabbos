@@ -9,8 +9,17 @@
   --clock-fill: 1;
   --minyan-scale: 1;
   --minyan: calc(clamp(22px, 4.2vh, 44px) * var(--minyan-scale));
+  /* Ceiling on the clock so the two date boxes always fit beside it. The
+     numerals plus their gutters run about 3.8x the font size at the widest
+     time, and the boxes want a fixed width, so this is what is left. */
+  --clock-cap: 17.5vw;
   --serif: ui-serif, "New York", Charter, Georgia, serif;
   --sans: ui-sans-serif, -apple-system, "Avenir Next", sans-serif;
+}
+
+/* Portrait has much less width to divide three ways. */
+@media (max-aspect-ratio: 1 / 1) {
+  :root { --clock-cap: 15.5vw; }
 }
 
 body.day {
@@ -56,28 +65,54 @@ body.locked .gear { visibility: hidden; }
   gap: clamp(6px, 1.2vh, 16px);
 }
 
-/* Masthead ------------------------------------------------------------- */
-.masthead {
-  display: flex;
-  align-items: baseline;
-  gap: 0.9em;
-  flex-wrap: wrap;
-  border-bottom: 1px solid var(--rule);
-  padding-bottom: 0.5em;
+/* The clock band. Three columns: the dates take the dead space either side of
+   the numerals, and the clock stays centred because the two 1fr tracks share
+   whatever is left equally. ------------------------------------------------ */
+.topline {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: clamp(8px, 1.4vw, 26px);
 }
-.hebrew { font-family: var(--serif); font-size: clamp(18px, 2.6vh, 30px); }
+.datebox {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: clamp(10px, 1.6vh, 18px) clamp(12px, 1.4vw, 20px);
+  /* Both boxes take their whole column, so they match each other instead of
+     shrink-wrapping to two different shapes. Capped so they do not sprawl when
+     a busy board shrinks the clock and leaves the side tracks wide. */
+  width: clamp(104px, 12.5vw, 230px);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  transition: background 1.2s ease, border-color 1.2s ease;
+}
+.datebox.heb { justify-self: start; }
+.datebox.civ { justify-self: end; }
+.hebrew {
+  font-family: var(--serif);
+  font-size: clamp(17px, 2.5vh, 30px);
+  line-height: 1.2;
+}
 .occasion {
-  font-size: clamp(11px, 1.5vh, 15px);
-  letter-spacing: 0.16em;
+  font-size: clamp(10px, 1.4vh, 14px);
+  letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--accent);
+  margin-top: 0.5em;
+  line-height: 1.3;
 }
 .civil {
-  margin-left: auto;
-  font-size: clamp(11px, 1.5vh, 15px);
-  letter-spacing: 0.1em;
+  font-size: clamp(13px, 1.9vh, 20px);
+  letter-spacing: 0.04em;
   color: var(--dim);
+  line-height: 1.35;
 }
+/* Clock only drops everything but the time and the next transition. */
+body.clock-only .datebox { display: none; }
+body.clock-only .topline { grid-template-columns: auto; justify-content: center; }
 
 /* Clock ---------------------------------------------------------------- */
 /* Clock face. The old default was a light serif at weight 300: elegant close up,
@@ -97,14 +132,20 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   letter-spacing: -0.01em;
   line-height: 0.9;
   text-align: center;
-  /* The vw ceiling is a width guard: the numerals are nowrap, the body clips,
-     and the widest face is about 2.9em across, so an unbounded vh-based size
-     would run off the side of a short, narrow window. */
+  /* The vw ceiling does two jobs: the numerals are nowrap and the body clips,
+     so an unbounded vh-based size would run off the side of a short narrow
+     window — and it reserves the side columns for the date boxes. The widest
+     face is about 2.9em across, so 22vw of font is about 64vw of numerals and
+     leaves roughly 18vw a side. */
   font-size: min(
-    calc(clamp(84px, 20vh, 210px) * var(--clock-scale) * var(--clock-fill)),
-    27vw);
-  padding: clamp(4px, 1.2vh, 16px) 0;
-  flex: 1 1 auto;
+    calc(clamp(88px, 23vh, 240px) * var(--clock-scale) * var(--clock-fill)),
+    var(--clock-cap));
+  /* Horizontal padding is symmetric on purpose. The suffix is a zero-width slot
+     that overflows to the right, so without this the grid column reserves none
+     of the room the meridiem and dial actually take and the right-hand date box
+     lands on top of them. Matching padding on the left keeps the numerals
+     centred in the element, which is the whole point of the zero-width slot. */
+  padding: clamp(4px, 1.2vh, 16px) 0.47em;
   min-height: 0;
   display: flex;
   align-items: center;
@@ -121,23 +162,26 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   flex-direction: column;
   align-items: flex-start;
   justify-content: space-between;
-  padding-left: 0.15em;
   align-self: center;
-  /* An explicit height, not stretch: .clock is flex: 1 1 auto and owns the
-     leftover column, so stretching would fling the meridiem and the dial to
-     opposite ends of the screen. This is roughly the cap height of the
-     numerals, which puts the meridiem on their cap line and the dial down by
-     the baseline instead of crowding both into the top corner. */
+  /* An explicit height, not stretch: .clock fills the whole band, so stretching
+     would fling the meridiem and the dial to opposite ends of it. This is
+     roughly the cap height of the numerals, which puts the meridiem on their
+     cap line and the dial down by the baseline instead of crowding both into
+     the top corner. */
   height: 0.74em;
 }
+/* The gap from the numerals lives on the children, not on .suffix: padding on a
+   width:0 box still occupies space under border-box, which pushed the numerals
+   off centre by half of it — the very thing the zero-width slot prevents. */
 .clock .mer {
   font-family: var(--sans);
+  margin-left: 0.15em;
   font-size: 0.155em;
   letter-spacing: 0.16em;
   color: var(--dim);
   line-height: 1;
 }
-.clock .dial { width: 0.32em; height: 0.32em; overflow: visible; }
+.clock .dial { width: 0.32em; height: 0.32em; margin-left: 0.15em; overflow: visible; }
 .clock .dial[hidden] { display: none; }
 .dial-ring { fill: none; stroke: var(--rule); stroke-width: 2.5; }
 .dial-tick line { stroke: var(--rule); stroke-width: 2; stroke-linecap: round; }
@@ -336,7 +380,12 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.1em 0.48em;
-  min-width: 0;
+  /* No min-width: 0 here. That let this track collapse to nothing while the
+     label column took its full max-content width, so a long label starved the
+     times and a single unbreakable "5:00am" ran off the card — 50px past the
+     edge in portrait. Leaving the automatic minimum in place makes the widest
+     single time the floor, and the label column gives way instead (it wraps,
+     via overflow-wrap below). The times are the content that matters. */
 }
 /* A separator so a run reads as a list of times rather than one long number.
    It hangs off the meridiem, not off the time: on the baseline it sat below and
@@ -392,7 +441,10 @@ body.clock-only .horizon,
 body.clock-only #freshness { display: none; }
 body.clock-only .footer { justify-content: flex-end; }
 body.clock-only .clock {
-  font-size: min(calc(clamp(120px, 36vh, 400px) * var(--clock-scale)), 28vw);
+  /* 24vw, not 28: the clock now carries ~0.94em of horizontal gutter for the
+     suffix, so the element is about 3.8x the font size at the widest time and
+     28vw ran off the side. */
+  font-size: min(calc(clamp(120px, 36vh, 400px) * var(--clock-scale)), 24vw);
   margin: auto 0;
 }
 

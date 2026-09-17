@@ -14,13 +14,15 @@
 </head>
 <body>
 <main id="screen">
-  <header class="masthead">
-    <div class="hebrew" id="hebrewDate"></div>
-    <div class="occasion" id="occasion"></div>
-    <div class="civil" id="civilDate"></div>
-  </header>
+  <!-- The clock owns the whole band. The dates sit in the dead space either
+       side of the numerals rather than in a bar of their own above them. -->
+  <div class="topline">
+    <aside class="datebox heb">
+      <div class="hebrew" id="hebrewDate"></div>
+      <div class="occasion" id="occasion"></div>
+    </aside>
 
-  <div class="clock" id="clock">
+    <div class="clock" id="clock">
     <span class="hm" id="clockTime">--:--</span><!--
     --><span class="suffix">
       <span class="mer" id="clockMer"></span>
@@ -48,6 +50,11 @@
         <circle class="dial-pin" cx="50" cy="50" r="3.4"/>
       </svg>
     </span>
+    </div>
+
+    <aside class="datebox civ">
+      <div class="civil" id="civilDate"></div>
+    </aside>
   </div>
 
   <!-- Horizon: the solar day, dawn on the left and nightfall on the right, with

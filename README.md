@@ -170,6 +170,11 @@ saved on the iPad.
 | Clock size | smaller, standard, larger |
 | Also | seconds, the day horizon, an extra zmanim strip |
 
+There is no bar across the top. The clock owns the whole upper band, and the
+Hebrew date with the parsha and the civil date sit in boxes in the space either
+side of the numerals. The boxes are a fixed width and the clock is capped to
+guarantee they fit, so nothing resizes as the time goes from 9:59 to 10:00.
+
 **Full board** is the clock and the shul cards, plus the horizon if you switch
 it on. **Clock only** drops
 everything but the time and the next candle lighting or havdalah, and makes the
