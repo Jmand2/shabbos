@@ -295,23 +295,30 @@ function renderShuls(now) {
         lines += 1;
       }
 
-      // Same tefillah on one line. The label is always the tefillah — never
-      // blanked, or Mincha and Maariv collapse into one unlabelled row.
-      const byLabel = new Map();
+      // Same tefillah on one line, but only while its times stay consecutive.
+      // Grouping every row that shares a label merges times that are hours
+      // apart and then places the row by the earliest of them: Beth Aaron
+      // lists Night Selichos at both 5:00 AM and 9:45 PM, which put the last
+      // minyan of the day above times sixteen hours earlier. Runs keep the
+      // board in the order things actually happen. The label is always the
+      // tefillah — never blanked, or Mincha and Maariv collapse into one
+      // unlabelled row.
+      const runs = [];
       for (const r of rows) {
         const label = r.label.toLowerCase() === r.group ? GROUPS[r.group] : r.label;
-        if (!byLabel.has(label)) byLabel.set(label, []);
-        byLabel.get(label).push(r);
+        const open = runs[runs.length - 1];
+        if (open && open.label === label) open.times.push(r);
+        else runs.push({ label, times: [r] });
       }
 
       // A run of times wraps, so count the lines it will actually occupy.
       // Narrower cards (more shuls across) fit fewer per line.
       const perLine = list.length <= 2 ? 4 : 3;
-      for (const [label, group] of byLabel) {
-        lines += Math.ceil(group.length / perLine);
+      for (const { label, times } of runs) {
+        lines += Math.ceil(times.length / perLine);
         body += `<span class="label">${esc(label)}</span>`
           + `<span class="times">`
-          + group.map((r) => `<span class="time${r === next ? ' next' : ''}">${esc(r.time)}</span>`).join('')
+          + times.map((r) => `<span class="time${r === next ? ' next' : ''}">${clockFace(r.time)}</span>`).join('')
           + `</span>`;
       }
     }
@@ -331,6 +338,17 @@ function renderShuls(now) {
   document.documentElement.style.setProperty('--clock-fill', fill);
 
   paintBoard(cards.join(''));
+}
+
+// The numerals carry the information and the meridiem only disambiguates them,
+// so they are separated and set at different weights rather than run together
+// as one string. Anything that does not parse is left exactly as it arrived —
+// these are real schedule times and are never reformatted into a guess.
+function clockFace(text) {
+  const m = /^(\d{1,2}):(\d{2})\s*([AP])M$/i.exec(String(text).trim());
+  if (!m) return esc(text);
+  return `<span class="hm">${m[1]}:${m[2]}</span>`
+    + `<span class="ap">${m[3].toLowerCase()}m</span>`;
 }
 
 const card = (name, body) => `<article class="card"><h2>${esc(name)}</h2><div class="body">${body}</div></article>`;

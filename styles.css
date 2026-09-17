@@ -176,14 +176,20 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.15em;
-  padding-left: 0.1em;
+  justify-content: space-between;
+  padding-left: 0.15em;
   align-self: center;
+  /* An explicit height, not stretch: .clock is flex: 1 1 auto and owns the
+     leftover column, so stretching would fling the meridiem and the dial to
+     opposite ends of the screen. This is roughly the cap height of the
+     numerals, which puts the meridiem on their cap line and the dial down by
+     the baseline instead of crowding both into the top corner. */
+  height: 0.74em;
 }
 .clock .mer {
   font-family: var(--sans);
-  font-size: 0.17em;
-  letter-spacing: 0.14em;
+  font-size: 0.155em;
+  letter-spacing: 0.16em;
   color: var(--dim);
   line-height: 1;
 }
@@ -335,9 +341,30 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.1em 0.7em;
+  gap: 0.1em 0.48em;
   min-width: 0;
 }
+/* A separator so a run reads as a list of times rather than one long number.
+   On ::after rather than in the gap, so where a long run wraps the comma
+   trails the line above instead of opening the next one. */
+.card .body .time:not(:last-child)::after {
+  content: ",";
+  color: var(--dim);
+  opacity: 0.75;
+  font-weight: 400;
+}
+/* Raised and small: the numerals are what gets read across the room, and the
+   meridiem only disambiguates them. Superscripting it keeps it available
+   without letting it take a share of the line. */
+.card .body .time .ap {
+  font-size: 0.44em;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  margin-left: 0.1em;
+  vertical-align: 0.62em;
+}
+.card .body .time.next .ap { color: color-mix(in srgb, var(--accent) 70%, var(--dim)); }
 .card .body .label {
   color: var(--dim);
   font-weight: 400;
