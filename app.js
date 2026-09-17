@@ -189,6 +189,7 @@ function render() {
     { weekday: 'long', month: 'long', day: 'numeric' });
 
   renderEdge(now, info);
+  renderZmanim(info);
   renderShuls(now);
   renderHorizon(now, info);
   renderFreshness();
@@ -233,17 +234,35 @@ function renderEdge(now, info) {
   } else if (restingNext && now < candles) {
     parts.push(`Candle lighting <b>${clockTime(candles)}</b>`);
   }
-  // Don't show shkiya/tzeis here - already displayed on horizon
-  if (settings.showZmanim) {
-    parts.push(`Netz ${clockTime(toDate(info.cal.getSunrise()))}`,
-      `Shema ${clockTime(toDate(info.cal.getSofZmanShmaGRA()))}`,
-      `Mincha gedola ${clockTime(toDate(info.cal.getMinchaGedola()))}`,
-      `Plag ${clockTime(toDate(info.cal.getPlagHamincha()))}`);
-  }
   // On an ordinary weekday there is no transition to announce. Hide the element
   // rather than leaving an empty one contributing a gap to the column.
   $('edge').innerHTML = parts.join(' &nbsp;·&nbsp; ');
   $('edge').hidden = !parts.length;
+}
+
+// Netz, shkiya and tzeis, in the tile beside the clock. They used to appear
+// only on the horizon, so turning that off — which is now the default — left
+// them nowhere. These are the three that pace the day; the setting adds the
+// rest for anyone who wants them.
+let lastZmanim = '';
+
+function renderZmanim(info) {
+  const cal = info.cal;
+  const rows = [['Netz', toDate(cal.getSunrise())]];
+  if (settings.showZmanim) {
+    rows.push(['Shema', toDate(cal.getSofZmanShmaGRA())],
+      ['Mincha ged.', toDate(cal.getMinchaGedola())],
+      ['Plag', toDate(cal.getPlagHamincha())]);
+  }
+  rows.push(['Shkiya', info.sunset], ['Tzeis', info.tzeis]);
+
+  const html = rows.filter(([, d]) => d).map(([name, d]) =>
+    `<div class="zrow"><span class="zname">${esc(name)}</span>`
+    + `<span class="ztime">${clockFace(clockTimeLong(d))}</span></div>`).join('');
+  if (html !== lastZmanim) {
+    lastZmanim = html;
+    $('zmanimList').innerHTML = html;
+  }
 }
 
 // One writer for the board, so every state updates the cache. Writing the DOM
@@ -264,16 +283,22 @@ function renderShuls(now) {
 
   const cap = Number(settings.perShul);
   const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  // Counted per card, not pooled. Averaging across the board let one heavy shul
+  // hide behind two light ones and clip its own times.
+  const perCardLines = [];
   let lines = 0;
 
   const cards = list.map((shul) => {
+    lines = 0;
     const s = scheduleFor(shul.slug, now);
     if (s.state === 'unavailable') {
       lines += 1;
+      perCardLines.push(lines);
       return card(shul.name, `<p class="unavailable">Times unavailable — check ${esc(shul.name)}'s own schedule.</p>`);
     }
     if (s.state === 'awaiting') {
       lines += 1;
+      perCardLines.push(lines);
       return card(shul.name, '<p class="unavailable">Done for today. Tomorrow\'s times not confirmed yet.</p>');
     }
 
@@ -324,13 +349,15 @@ function renderShuls(now) {
           + `</span>`;
       }
     }
+    perCardLines.push(lines);
     return card(shul.name, body || '<p class="none">Nothing further listed.</p>');
   });
 
-  // Scale on the number of LINES, which is what actually consumes height, and
-  // never below 0.8 — past that the times stop being readable across a room.
-  const perCard = lines / Math.max(1, list.length);
-  const scale = perCard <= 4 ? 1.15 : perCard <= 6 ? 1 : perCard <= 8 ? 0.9 : 0.8;
+  // Scale on LINES, which is what actually consumes height, and on the fullest
+  // card rather than the average of them.
+  const perCard = Math.max(1, ...perCardLines);
+  const scale = perCard <= 4 ? 1.15 : perCard <= 6 ? 1 : perCard <= 8 ? 0.9
+    : perCard <= 10 ? 0.82 : perCard <= 13 ? 0.72 : 0.64;
   document.documentElement.style.setProperty('--minyan-scale', scale);
 
   // Cards hug their content, so the clock inherits the rest of the column. A
@@ -340,6 +367,23 @@ function renderShuls(now) {
   document.documentElement.style.setProperty('--clock-fill', fill);
 
   paintBoard(cards.join(''));
+  fitBoard(scale);
+}
+
+// The line count is an estimate; this is the measurement. Cards fill their cell
+// now, so anything taller than the cell is clipped rather than merely ugly —
+// a hidden minyan time is the one thing this board must never do. Shrink until
+// the tallest card genuinely fits. In jsdom there is no layout and every
+// scrollHeight is 0, so this is a no-op there.
+function fitBoard(base) {
+  const cards = [...document.querySelectorAll('.card')];
+  if (!cards.length) return;
+  let scale = base;
+  for (let i = 0; i < 10; i += 1) {
+    if (!cards.some((c) => c.scrollHeight > c.clientHeight + 1)) return;
+    scale *= 0.93;
+    document.documentElement.style.setProperty('--minyan-scale', scale);
+  }
 }
 
 // The numerals carry the information and the meridiem only disambiguates them,

@@ -1,33 +1,44 @@
+/* Surfaces are a two-step hierarchy: a ground, and panels raised off it. At
+   night the ground goes near-black so the panels read as lit; by day the
+   ground is grey and the panels are white. Rules are alpha, not solid, so they
+   sit correctly on either. */
 :root {
-  --ink: #12141f;
-  --panel: #1a1e2c;
-  --rule: #2b3145;
-  --text: #e8e4da;
-  --dim: rgba(232, 228, 218, 0.5);
-  --accent: #c9a227;
+  --ink: #0A0A0C;
+  --panel: #17171B;
+  --rule: rgba(255, 255, 255, 0.09);
+  --text: #F5F5F7;
+  --dim: rgba(235, 235, 245, 0.55);
+  --mute: rgba(235, 235, 245, 0.38);
+  --lift: none;
+  --accent: #E0B740;
   --clock-scale: 1;
   --clock-fill: 1;
   --minyan-scale: 1;
   --minyan: calc(clamp(22px, 4.2vh, 44px) * var(--minyan-scale));
-  /* Ceiling on the clock so the two date boxes always fit beside it. The
+  --radius: 18px;
+  /* Ceiling on the clock so the two date tiles always fit beside it. The
      numerals plus their gutters run about 3.8x the font size at the widest
-     time, and the boxes want a fixed width, so this is what is left. */
-  --clock-cap: 17.5vw;
+     time, and the tiles want a fixed width, so this is what is left. */
+  --clock-cap: 16vw;
   --serif: ui-serif, "New York", Charter, Georgia, serif;
-  --sans: ui-sans-serif, -apple-system, "Avenir Next", sans-serif;
+  --sans: ui-sans-serif, -apple-system, "SF Pro Text", "Avenir Next", sans-serif;
 }
 
 /* Portrait has much less width to divide three ways. */
 @media (max-aspect-ratio: 1 / 1) {
-  :root { --clock-cap: 15.5vw; }
+  :root { --clock-cap: 14vw; }
 }
 
 body.day {
-  --ink: #dfe3ea;
-  --panel: #eef1f6;
-  --rule: #c2cad6;
-  --text: #1a2230;
-  --dim: rgba(26, 34, 48, 0.55);
+  --ink: #EFEFF2;
+  --panel: #FFFFFF;
+  --rule: rgba(0, 0, 0, 0.07);
+  --text: #16161A;
+  --dim: rgba(60, 60, 67, 0.62);
+  --mute: rgba(60, 60, 67, 0.42);
+  /* Panels lift off the ground rather than being outlined. */
+  --lift: 0 1px 2px rgba(0, 0, 0, 0.05), 0 10px 28px rgba(0, 0, 0, 0.05);
+  --accent: #A8791B;
 }
 
 body[data-accent="copper"] { --accent: #b4623a; }
@@ -68,47 +79,100 @@ body.locked .gear { visibility: hidden; }
 /* The clock band. Three columns: the dates take the dead space either side of
    the numerals, and the clock stays centred because the two 1fr tracks share
    whatever is left equally. ------------------------------------------------ */
+/* The board gets the larger share of whatever height is spare: a card with
+   times in it uses the room, a band of air does not. */
 .topline {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
+  /* Hug the content. Stretching made the tiles as tall as the band and left
+     them hollow, which reads worse than the gap it was meant to fill. */
   align-items: center;
   gap: clamp(8px, 1.4vw, 26px);
 }
 .datebox {
   background: var(--panel);
   border: 1px solid var(--rule);
-  border-radius: 12px;
-  padding: clamp(10px, 1.6vh, 18px) clamp(12px, 1.4vw, 20px);
-  /* Both boxes take their whole column, so they match each other instead of
-     shrink-wrapping to two different shapes. Capped so they do not sprawl when
-     a busy board shrinks the clock and leaves the side tracks wide. */
-  width: clamp(104px, 12.5vw, 230px);
+  border-radius: var(--radius);
+  box-shadow: var(--lift);
+  padding: clamp(14px, 2.2vh, 26px) clamp(12px, 1.4vw, 22px);
+  /* Fixed width, not a share of the track: on a wall display the tiles must not
+     resize as the numerals change width at 10:00 and again at 1:00. */
+  width: clamp(124px, 15vw, 260px);
   min-width: 0;
   overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   transition: background 1.2s ease, border-color 1.2s ease;
 }
 .datebox.heb { justify-self: start; }
 .datebox.civ { justify-self: end; }
+.datebox .edge {
+  margin-top: 0.9em;
+  padding-top: 0.9em;
+  border-top: 1px solid var(--rule);
+  font-size: clamp(12px, 1.7vh, 16px);
+  line-height: 1.4;
+  color: var(--dim);
+  text-align: left;
+  letter-spacing: 0;
+}
+.datebox .edge b { color: var(--accent); font-weight: 600; }
+
+/* The three zmanim that pace the day, in the tile beside the clock. */
+.zmanim {
+  margin-top: 0.9em;
+  padding-top: 0.9em;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 0.42em;
+}
+.zrow { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5em; }
+.zname {
+  font-size: clamp(9px, 1.25vh, 12px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.ztime {
+  font-size: clamp(13px, 1.85vh, 19px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.ztime .ap {
+  font-size: 0.6em;
+  font-weight: 500;
+  color: var(--mute);
+  margin-left: 0.1em;
+  vertical-align: 0.45em;
+}
 .hebrew {
-  font-family: var(--serif);
-  font-size: clamp(17px, 2.5vh, 30px);
-  line-height: 1.2;
+  font-size: clamp(18px, 2.7vh, 32px);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
 }
 .occasion {
-  font-size: clamp(10px, 1.4vh, 14px);
-  letter-spacing: 0.15em;
+  font-size: clamp(10px, 1.35vh, 13px);
+  font-weight: 600;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--accent);
-  margin-top: 0.5em;
-  line-height: 1.3;
+  margin-top: 0.7em;
+  line-height: 1.35;
 }
 .civil {
-  font-size: clamp(13px, 1.9vh, 20px);
-  letter-spacing: 0.04em;
+  font-size: clamp(14px, 2.1vh, 22px);
+  font-weight: 500;
+  letter-spacing: 0;
   color: var(--dim);
-  line-height: 1.35;
+  line-height: 1.3;
 }
 /* Clock only drops everything but the time and the next transition. */
 body.clock-only .datebox { display: none; }
@@ -145,7 +209,7 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
      of the room the meridiem and dial actually take and the right-hand date box
      lands on top of them. Matching padding on the left keeps the numerals
      centred in the element, which is the whole point of the zero-width slot. */
-  padding: clamp(4px, 1.2vh, 16px) 0.47em;
+  padding: clamp(4px, 1.2vh, 16px) 0.51em;
   min-height: 0;
   display: flex;
   align-items: center;
@@ -181,15 +245,25 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   color: var(--dim);
   line-height: 1;
 }
-.clock .dial { width: 0.32em; height: 0.32em; margin-left: 0.15em; overflow: visible; }
+.clock .dial { width: 0.36em; height: 0.36em; margin-left: 0.15em; overflow: visible; }
 .clock .dial[hidden] { display: none; }
-.dial-ring { fill: none; stroke: var(--rule); stroke-width: 2.5; }
-.dial-tick line { stroke: var(--rule); stroke-width: 2; stroke-linecap: round; }
-.dial-quarter line { stroke: var(--rule); stroke-width: 2.6; stroke-linecap: round; opacity: 0.75; }
+/* --rule is an alpha hairline meant for edges; on the dial it was invisible.
+   These are keyed off the text colour so the dial reads in both themes. */
+.dial-ring { fill: none; stroke: color-mix(in srgb, var(--text) 20%, transparent); stroke-width: 3; }
+.dial-tick line {
+  stroke: color-mix(in srgb, var(--text) 32%, transparent);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+.dial-quarter line {
+  stroke: color-mix(in srgb, var(--text) 52%, transparent);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+}
 .dial-pin { fill: var(--accent); }
 .dial-hand {
   stroke: var(--accent);
-  stroke-width: 3.2;
+  stroke-width: 4.2;
   stroke-linecap: round;
   /* view-box, not fill-box: the hand's own bounding box is a zero-width sliver,
      so a fill-box origin lands on the middle of the hand and it pivots about
@@ -307,32 +381,28 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 .sun[hidden] { display: none; }
 
 .edge[hidden] { display: none; }
-.edge {
-  text-align: center;
-  font-size: clamp(13px, 2vh, 20px);
-  letter-spacing: 0.04em;
-}
-.edge b { color: var(--accent); font-weight: 600; }
 
 /* Shul cards ----------------------------------------------------------- */
 .shuls {
-  flex: 0 0 auto;
+  flex: 1.9 1 auto;
   min-height: 0;
   display: grid;
   gap: clamp(10px, 1.6vw, 22px);
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  align-content: start;
-  grid-auto-rows: auto;
+  align-content: stretch;
+  grid-auto-rows: minmax(0, 1fr);
 }
 .card {
   background: var(--panel);
   border: 1px solid var(--rule);
-  border-radius: 10px;
-  padding: clamp(16px, 2.4vh, 28px);
+  border-radius: var(--radius);
+  box-shadow: var(--lift);
+  padding: clamp(18px, 2.6vh, 30px) clamp(18px, 2.2vw, 30px);
   min-height: 0;
   display: flex;
   flex-direction: column;
   animation: slide-in 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
   transition: background 1.2s ease, border-color 1.2s ease;
 }
 
@@ -346,23 +416,25 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
     transform: translateY(0);
   }
 }
+/* Sans, not serif. The clock carries the display face; everything else is one
+   family with weight doing the work, which is what keeps it calm. */
 .card h2 {
-  font-family: var(--serif);
-  font-weight: 500;
-  font-size: clamp(20px, 3.2vh, 36px);
-  padding-bottom: 0.35em;
-  margin-bottom: 0.5em;
+  font-weight: 600;
+  font-size: clamp(21px, 3.3vh, 38px);
+  letter-spacing: -0.015em;
+  padding-bottom: 0.4em;
+  margin-bottom: 0.55em;
   border-bottom: 1px solid var(--rule);
 }
 .group {
-  font-size: clamp(14px, 2.2vh, 22px);
-  letter-spacing: 0.15em;
+  font-size: clamp(11px, 1.55vh, 15px);
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--dim);
-  font-weight: 500;
-  margin: 0.7em 0 0.35em;
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--rule);
+  color: var(--mute);
+  font-weight: 600;
+  margin: 1.1em 0 0.55em;
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 .group:first-child {
   margin-top: 0;
@@ -373,6 +445,11 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   column-gap: 1.1em;
   row-gap: 0.45em;
   align-items: baseline;
+  /* The card fills its cell, so let the rows breathe into it instead of
+     stacking at the top with empty panel underneath. */
+  flex: 1 1 auto;
+  align-content: space-evenly;
+  min-height: 0;
 }
 .card .body .group { grid-column: 1 / -1; }
 .card .body .times {
@@ -410,17 +487,18 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 .card .body .time.next .ap { color: color-mix(in srgb, var(--accent) 70%, var(--dim)); }
 .card .body .label {
   color: var(--dim);
-  font-weight: 400;
-  font-size: calc(var(--minyan) * 0.45);
+  font-weight: 500;
+  font-size: calc(var(--minyan) * 0.42);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  line-height: 1.25;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
 .card .body .time {
   font-size: var(--minyan);
-  font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-weight: 600;
+  letter-spacing: -0.015em;
   line-height: 1.15;
   transition: color 0.8s ease;
 }
@@ -428,6 +506,7 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   color: var(--accent);
   font-weight: 700;
 }
+.card .body .time.next .ap { font-weight: 600; }
 .none, .unavailable {
   font-size: clamp(14px, 2.1vh, 20px);
   color: var(--dim);
@@ -453,18 +532,18 @@ body.clock-only .clock {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--dim);
+  font-size: clamp(11px, 1.35vh, 13px);
+  letter-spacing: 0;
+  color: var(--mute);
 }
 .gear {
-  background: none;
+  background: var(--panel);
   border: 1px solid var(--rule);
   color: var(--dim);
   font: inherit;
-  letter-spacing: 0.12em;
-  padding: 0.45em 1.1em;
+  font-weight: 500;
+  letter-spacing: 0;
+  padding: 0.5em 1.2em;
   border-radius: 999px;
   cursor: pointer;
 }

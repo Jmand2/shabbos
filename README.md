@@ -170,10 +170,19 @@ saved on the iPad.
 | Clock size | smaller, standard, larger |
 | Also | seconds, the day horizon, an extra zmanim strip |
 
-There is no bar across the top. The clock owns the whole upper band, and the
-Hebrew date with the parsha and the civil date sit in boxes in the space either
-side of the numerals. The boxes are a fixed width and the clock is capped to
+There is no bar across the top. The clock owns the upper band, with two tiles
+in the space either side of the numerals: the Hebrew date, the parsha and the
+next candle lighting or havdalah on the left; the civil date and netz, shkiya
+and tzeis on the right. The tiles are a fixed width and the clock is capped to
 guarantee they fit, so nothing resizes as the time goes from 9:59 to 10:00.
+
+Shkiya and tzeis live there because the horizon is off by default and they had
+nowhere else to appear.
+
+Cards fill the board rather than stacking at the top over a void, and their
+type is sized by the fullest card and then *measured*: if the tallest card
+still does not fit its cell, the board shrinks a step at a time until it does.
+A clipped minyan time is the one thing the display must never produce.
 
 **Full board** is the clock and the shul cards, plus the horizon if you switch
 it on. **Clock only** drops
