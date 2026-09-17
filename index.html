@@ -50,14 +50,18 @@
     </span>
   </div>
 
-  <!-- Horizon: the day from dawn to nightfall. Sun marks now, ticks mark minyanim. -->
+  <!-- Horizon: the solar day, dawn on the left and nightfall on the right, with
+       the real zmanim marked and the sun at now. It carries no minyan times —
+       the cards do that, in numerals big enough to read across a room. -->
   <figure class="horizon" aria-hidden="true">
-    <div class="horizon-track"><div class="horizon-elapsed" id="horizonElapsed"></div></div>
-    <div class="horizon-marks">
-      <span class="sun" id="sun"></span>
-      <span class="ticks" id="horizonMarks"></span>
+    <div class="arc">
+      <div class="arc-line">
+        <div class="arc-track"></div>
+        <div class="arc-elapsed" id="horizonElapsed"></div>
+        <div class="marks" id="horizonMarks"></div>
+        <span class="sun" id="sun"></span>
+      </div>
     </div>
-    <figcaption class="horizon-ends"><span id="horizonStart"></span><span id="horizonEnd"></span></figcaption>
   </figure>
 
   <p class="edge" id="edge"></p>

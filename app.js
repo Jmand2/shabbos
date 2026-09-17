@@ -169,7 +169,7 @@ function shownShuls() {
 
 const GROUPS = { shacharis: 'Shacharis', mincha: 'Mincha', maariv: 'Maariv' };
 let lastBoard = '';
-let lastTicks = '';
+let lastMarks = '';
 
 function render() {
   const now = new Date();
@@ -209,6 +209,9 @@ function hhmm(d) {
 }
 
 const clockTime = (d) => { const t = hhmm(d); return `${t.hour}:${t.minute}${t.meridiem[0]}`; };
+// The shape clockFace parses, so the horizon sets its meridiems exactly as the
+// cards do rather than inventing a second convention.
+const clockTimeLong = (d) => { const t = hhmm(d); return `${t.hour}:${t.minute} ${t.meridiem.toUpperCase()}`; };
 
 function renderEdge(now, info) {
   const jc = info.civil.jc;
@@ -354,43 +357,52 @@ function clockFace(text) {
 const card = (name, body) => `<article class="card"><h2>${esc(name)}</h2><div class="body">${body}</div></article>`;
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+// The strip is the solar day and nothing else: dawn to nightfall, the zmanim
+// that actually divide it, and the sun at now. It used to plot every upcoming
+// minyan as an unlabelled tick, which put two shuls davening at the same time
+// on top of each other, clipped the one labelled tick off the edge when it fell
+// near dawn, and disagreed with the cards after tzeis. The cards carry minyan
+// times in numerals that can be read across a room; this carries the day.
 function renderHorizon(now, info) {
   const figure = document.querySelector('.horizon');
   figure.hidden = !settings.showHorizon;
   if (figure.hidden) return;
 
-  // Past nightfall the day it describes is over. Roll to tomorrow's arc, which
-  // is also the day the cards below have already moved to.
+  // Past nightfall the day it describes is over, so it moves on to tomorrow's.
   const nightfall = now >= info.tzeis;
-  const arcDay = nightfall ? addDays(now, 1) : now;
-  const arcCal = nightfall ? zmanim(arcDay) : info.cal;
-  const start = toDate(arcCal.getAlos72());
-  const end = toDate(arcCal.getTzais());
+  const cal = nightfall ? zmanim(addDays(now, 1)) : info.cal;
+  const start = toDate(cal.getAlos72());
+  const end = toDate(cal.getTzais());
   const span = end - start;
   const at = (d) => Math.min(100, Math.max(0, ((d - start) / span) * 100));
 
   $('horizonElapsed').style.width = nightfall ? '0%' : `${at(now)}%`;
-  $('horizonStart').textContent = `${nightfall ? 'Tomorrow · ' : ''}Alos ${clockTime(start)}`;
-  $('horizonEnd').textContent = `Tzeis ${clockTime(end)}`;
 
-  const marks = shownShuls().flatMap((shul) => {
-    const s = scheduleFor(shul.slug, now);
-    return s.state === 'ok' ? s.rows : [];
-  }).filter((r) => r.at >= start && r.at <= end).sort((a, b) => a.at - b.at);
-
-  // The sun is its own node now: moved in place so its transition runs, and not
-  // destroyed every render along with the ticks.
+  // Its own node, moved in place so the transition runs rather than being
+  // destroyed and rebuilt on every render.
   const sun = $('sun');
   sun.hidden = nightfall;
   if (!nightfall) sun.style.left = `${at(now)}%`;
 
-  const next = marks.find((r) => r.at > now);
-  const ticks = marks.map((r) =>
-    `<span class="tick${r === next ? ' next' : ''}" style="left:${at(r.at)}%">`
-    + `${r === next ? esc(r.time) : ''}</span>`).join('');
-  if (ticks !== lastTicks) {
-    lastTicks = ticks;
-    $('horizonMarks').innerHTML = ticks;
+  // Split across two rows by what each mark is. The sun's own two moments go
+  // above the line, the halachic boundaries below it. That is not only tidy: it
+  // is what keeps them apart. Netz sits ~8% in and shkiya ~95%, so on one row
+  // each would crowd the end next to it — "Tomorrow · Alos" ran straight into
+  // Netz, and shkiya into tzeis. Split, each row spans almost the whole bar.
+  // The two ends anchor to their edges rather than centring on them, or half
+  // the label hangs off the screen.
+  const marks = [
+    { name: nightfall ? 'Tomorrow · Alos' : 'Alos', at: start, cls: 'first' },
+    { name: 'Netz', at: toDate(cal.getSunrise()), cls: 'up' },
+    { name: 'Chatzos', at: toDate(cal.getChatzos()) },
+    { name: 'Shkiya', at: toDate(cal.getSunset()), cls: 'up' },
+    { name: 'Tzeis', at: end, cls: 'last' },
+  ];
+  const html = marks.map((m) => `<span class="zman ${m.cls ?? ''}" style="left:${at(m.at)}%">`
+    + `<i></i><b>${esc(m.name)}</b><s>${clockFace(clockTimeLong(m.at))}</s></span>`).join('');
+  if (html !== lastMarks) {
+    lastMarks = html;
+    $('horizonMarks').innerHTML = html;
   }
 }
 

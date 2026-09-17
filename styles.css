@@ -215,58 +215,108 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   transition: transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Horizon: dawn on the left, nightfall on the right --------------------- */
-.horizon { position: relative; margin: 0 0 0.4em; }
+/* Horizon: the solar day, dawn on the left and nightfall on the right ----
+   Marks are zmanim, not minyanim: a fixed set of five, so nothing can pile up
+   on anything else the way the old minyan ticks did. */
+.horizon { position: relative; margin: 0 0 0.2em; }
 .horizon[hidden] { display: none; }
-.horizon-track {
-  height: 3px;
-  background: var(--rule);
-  border-radius: 2px;
-  overflow: hidden;
+.arc {
+  position: relative;
+  /* Room above for Shkiya, room below for the other four. */
+  padding: clamp(24px, 3.9vh, 40px) 0 clamp(30px, 4.7vh, 48px);
 }
-.horizon-elapsed { height: 100%; width: 0; background: var(--accent); opacity: 0.75; }
-.horizon-marks { position: relative; height: 22px; }
-.horizon-marks .ticks { position: absolute; inset: 0; display: block; }
-.sun[hidden] { display: none; }
-.tick {
+.arc-line { position: relative; height: clamp(4px, 0.7vh, 7px); }
+.arc-track {
   position: absolute;
+  inset: 0;
+  background: var(--rule);
+  border-radius: 999px;
+}
+.arc-elapsed {
+  position: absolute;
+  left: 0;
   top: 0;
+  bottom: 0;
+  width: 0;
+  background: var(--accent);
+  border-radius: 999px;
+  opacity: 0.9;
+  transition: width 1s ease-out;
+}
+.marks { position: absolute; inset: 0; }
+
+.zman {
+  position: absolute;
+  top: 100%;
   transform: translateX(-50%);
-  font-size: clamp(9px, 1.4vh, 14px);
-  letter-spacing: 0.06em;
-  color: var(--dim);
+  text-align: center;
   white-space: nowrap;
 }
-.tick::before {
-  content: "";
+/* The ends anchor to their edges instead of centring on them, or half the
+   label hangs off the screen. */
+.zman.first { transform: none; text-align: left; }
+.zman.last { transform: translateX(-100%); text-align: right; }
+.zman i {
   display: block;
   width: 1px;
-  height: 6px;
-  margin: 0 auto 3px;
+  height: clamp(7px, 1.1vh, 11px);
   background: var(--rule);
+  margin: 0 auto;
 }
-.tick.next { color: var(--accent); }
-.tick.next::before { background: var(--accent); height: 9px; width: 2px; }
-.sun {
-  position: absolute;
-  top: -8px;
-  width: 11px;
-  height: 11px;
-  margin-left: -5.5px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
-  transition: left 1s ease-out;
-}
-.horizon-ends {
-  display: flex;
-  justify-content: space-between;
-  font-size: clamp(11px, 1.6vh, 15px);
-  letter-spacing: 0.1em;
+.zman.first i { margin-left: 0; }
+.zman.last i { margin-left: auto; margin-right: 0; }
+.zman b {
+  display: block;
+  font-size: clamp(9px, 1.25vh, 12px);
+  font-weight: 600;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
   color: var(--dim);
-  font-weight: 500;
+  margin-top: 0.45em;
 }
+.zman s {
+  display: block;
+  text-decoration: none;
+  font-size: clamp(12px, 1.85vh, 18px);
+  font-weight: 500;
+  color: var(--text);
+  font-variant-numeric: tabular-nums lining-nums;
+  margin-top: 0.12em;
+}
+.zman s .ap {
+  font-size: 0.6em;
+  color: var(--dim);
+  margin-left: 0.12em;
+  vertical-align: 0.5em;
+  letter-spacing: 0.05em;
+}
+/* Shkiya lands within a few per cent of tzeis all year, so it goes above the
+   line rather than fighting it for the same strip of space. */
+.zman.up {
+  top: auto;
+  bottom: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.zman.up b { order: 1; margin-top: 0; }
+.zman.up s { order: 2; }
+.zman.up i { order: 3; margin-top: 0.4em; }
+
+.sun {
+  position: absolute;
+  top: 50%;
+  width: clamp(12px, 1.7vh, 18px);
+  height: clamp(12px, 1.7vh, 18px);
+  margin-left: calc(clamp(12px, 1.7vh, 18px) / -2);
+  margin-top: calc(clamp(12px, 1.7vh, 18px) / -2);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow:
+    0 0 0 clamp(3px, 0.5vh, 5px) color-mix(in srgb, var(--accent) 20%, transparent),
+    0 0 clamp(8px, 1.4vh, 18px) color-mix(in srgb, var(--accent) 45%, transparent);
+  transition: left 1s ease-out;
+}
+.sun[hidden] { display: none; }
 
 .edge[hidden] { display: none; }
 .edge {
@@ -488,8 +538,8 @@ body.clock-only .clock {
 input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
 
 @media (max-height: 560px) {
-  .horizon-marks { height: 16px; }
-  .tick { font-size: 8px; }
+  .arc { padding: 20px 0 24px; }
+  .zman s { font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, .clock, .card .body .time, .sun, .dial-hand, .flier, .card {

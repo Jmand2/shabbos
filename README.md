@@ -166,6 +166,7 @@ saved on the iPad.
 | Times shown per shul | next 2, 3 or 4 |
 | Theme | night after dark, always night, always day |
 | Accent | brass, copper, sage, ice |
+| Clock face | sturdy, classic, elegant, clean |
 | Clock size | smaller, standard, larger |
 | Also | seconds, the day horizon, an extra zmanim strip |
 
@@ -173,11 +174,23 @@ saved on the iPad.
 everything but the time and the next candle lighting or havdalah, and makes the
 clock roughly three times larger — for reading across a room.
 
+**The horizon** is the solar day: alos on the left, tzeis on the right, the sun
+at now, and five zmanim marked with their times — netz and shkiya above the
+line, alos, chatzos and tzeis below it. It carries no minyan times. It used to,
+as unlabelled ticks, but two shuls davening at the same minute landed on the
+same pixel and the one tick that did get a label was clipped off the edge
+whenever it fell near dawn. The cards say it better.
+
+Past tzeis the strip moves on to tomorrow's day, drops the sun and empties the
+bar, and its left end reads "Tomorrow · Alos".
+
 Only minyanim that are still ahead are listed, so the screen thins out as the day
 goes on rather than filling with times that have passed. The next one at each shul
-is set larger and in the accent colour. Everything is sized so that even the
-largest setting fits a 768px-tall iPad without scrolling, with the clock about five
-times the height of the times.
+is in the accent colour. A tefillah listed more than once in a day — Night
+Selichos at 5:00am and again at 9:45pm — gets a row at each end rather than one
+row spanning both, so a card always reads top to bottom in the order things
+happen. Everything is sized so that even the largest setting fits a 768px-tall
+iPad without scrolling.
 
 Pick more than three shuls and the display pages through them every 45 seconds.
 
