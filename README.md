@@ -196,6 +196,47 @@ iPad without scrolling.
 
 Pick more than three shuls and the display pages through them every 45 seconds.
 
+## Family flights
+
+Every few minutes a vehicle crosses the screen carrying family faces — a train
+with four, a plane with three, a balloon, a parachute, a rocket. It runs during
+Shabbos, which is the point: that is when the grandchildren are there.
+
+The photos live in this repo **encrypted**. `faces-src/` holds the plaintext
+crops and is gitignored; it must stay that way, because git history is
+permanent and one careless `git add -A` undoes the whole point.
+
+To set it up, choose a passphrase and run it yourself:
+
+```
+node scripts/encrypt-faces.mjs "four or more random words"
+```
+
+That writes `faces/<random-id>.bin` (AES-GCM-256, key from PBKDF2-SHA256 at
+600,000 iterations) and `faces/manifest.json`, which carries the salt, the
+random ids and the ring colours and **no names**. Commit `faces/`. Then on the
+iPad: Settings → Family flights → passphrase → Unlock. Only the derived key is
+kept, non-extractable, in IndexedDB; the passphrase itself is never stored.
+
+The script refuses anything under 16 characters, and it should: **this repo is
+public, so the ciphertext is public too.** Its whole security is the strength of
+that passphrase, and there is no way to unpublish bytes that have already been
+pushed. If the passphrase is lost the photos are gone with it.
+
+`robots.txt` is in the repo, but note that it does nothing here: robots.txt is
+only honoured at the origin root, and this is served under `/shabbos/`. It would
+take effect on a custom domain, or from a `jmand2.github.io` user-site repo.
+
+With no `faces/` committed or no passphrase entered, nothing flies and nothing
+breaks — the module does nothing at all.
+
+| | |
+| --- | --- |
+| Something crosses | Off / every 10 min / 20 min / hour |
+
+The clock is never covered: the flight layer takes no taps, affects no layout,
+and the outer lanes pick a side.
+
 ## Cost
 
 Nothing recurring. GitHub Pages and Actions are free on a **public** repo, the

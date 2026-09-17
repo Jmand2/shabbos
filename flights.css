@@ -1,0 +1,84 @@
+/* Family flights. Sits over everything, touches nothing: no layout, no taps. */
+.flyway {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.flight {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+.flight svg {
+  display: block;
+  overflow: visible;
+  fill: none;
+  stroke: var(--vc);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Faces sit in the seat slots, positioned as a percentage of the viewBox. */
+.flight img {
+  position: absolute;
+  border-radius: 50%;
+  border: 2.5px solid;
+  object-fit: cover;
+  background: var(--panel, #1a1e2c);
+}
+
+/* Secondary motion. Each is the thing that makes the vehicle read as itself. */
+.train svg, .car svg { animation: chug 260ms steps(2, end) infinite; }
+@keyframes chug { from { transform: translateY(0); } to { transform: translateY(-1.5px); } }
+
+.flight .wheel { animation: spin 600ms linear infinite; transform-origin: center; transform-box: fill-box; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.helicopter .rotor, .helicopter .tailrotor {
+  stroke: #C8D8F0; stroke-width: 4;
+  transform-box: fill-box; transform-origin: 50% 50%;
+  animation: spin 190ms linear infinite;
+}
+.helicopter .tailrotor { animation-duration: 90ms; }
+.helicopter .disc { stroke-opacity: 0.22; }
+
+.rocket .flame { stroke: none; animation: flicker 110ms ease-in-out infinite alternate; transform-box: fill-box; transform-origin: 50% 0; }
+.rocket .flame.outer { fill: #E0A030; opacity: 0.9; }
+.rocket .flame.inner { fill: #F7EDBE; }
+@keyframes flicker { from { transform: scaleY(0.72); } to { transform: scaleY(1.28); } }
+
+/* The burner fires for a beat, then goes quiet. */
+.balloon .burner { stroke: none; fill: #E0A030; animation: burn 4.2s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+@keyframes burn {
+  0%, 68% { opacity: 0; transform: scaleY(0.2); }
+  74%     { opacity: 0.95; transform: scaleY(1.15); }
+  86%     { opacity: 0.9; transform: scaleY(0.9); }
+  100%    { opacity: 0; transform: scaleY(0.2); }
+}
+
+.boat svg { animation: bob 2.4s ease-in-out infinite; }
+@keyframes bob { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-4px) rotate(3deg); } }
+
+/* The settings block this module injects. */
+.unlock { display: flex; gap: 0.6em; align-items: center; }
+.unlock input {
+  flex: 1;
+  font: inherit;
+  font-size: 16px;             /* below 16px, iOS zooms the page on focus */
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 0.55em 0.7em;
+}
+#flightStatus:empty { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .flyway { display: none; }
+}

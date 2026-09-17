@@ -13,14 +13,18 @@
 //
 // Bump VERSION on any change to the three coupled files: install re-fetches the
 // whole list into a fresh cache, so a half-updated cache cannot survive it.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `shabbos-clock-${VERSION}`;
 const FILES = ['./', 'index.html', 'styles.css', 'app.js',
+  'flights.css', 'flights.js',
   'vendor/kosher-zmanim.min.js', 'data/shuls.json', 'manifest.webmanifest',
   'icons/icon-180.png'];
 
-// The three that move together. A navigation request covers './' and index.html.
-const COUPLED = /\/(app\.js|styles\.css|index\.html)$/;
+// The files that move together. A navigation request covers './' and index.html.
+// flights.js and flights.css are a pair in the same way app.js and styles.css
+// are: the module builds the markup its stylesheet expects, so serving one
+// generation's script against another's styles breaks it the same way.
+const COUPLED = /\/(app\.js|styles\.css|index\.html|flights\.js|flights\.css)$/;
 // Long enough for a slow wifi handshake, short enough that a dead network never
 // leaves the wall blank: past this we show the cached generation instead.
 const NET_TIMEOUT = 4000;
