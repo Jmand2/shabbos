@@ -163,20 +163,22 @@ saved on the iPad.
 | --- | --- |
 | Shuls | any of the 23 Teaneck shuls |
 | Layout | Full board, or Clock only |
-| Times shown per shul | next 2, 3 or 4 |
+| Times shown per shul | next 4, 8 or 12 |
 | Theme | night after dark, always night, always day |
 | Accent | brass, copper, sage, ice |
 | Clock face | sturdy, classic, elegant, clean |
 | Clock size | smaller, standard, larger |
 | Also | seconds, the day horizon, an extra zmanim strip |
 
-**Full board** is the clock, the horizon and the shul cards. **Clock only** drops
+**Full board** is the clock and the shul cards, plus the horizon if you switch
+it on. **Clock only** drops
 everything but the time and the next candle lighting or havdalah, and makes the
 clock roughly three times larger — for reading across a room.
 
-**The horizon** is the solar day: alos on the left, tzeis on the right, the sun
-at now, and five zmanim marked with their times — netz and shkiya above the
-line, alos, chatzos and tzeis below it. It carries no minyan times. It used to,
+**The horizon** is off out of the box; switch it on under Settings. It is the
+solar day: alos on the left, tzeis on the right, the sun at now, and five
+zmanim marked with their times — netz and shkiya above the line, alos, chatzos
+and tzeis below it. It carries no minyan times. It used to,
 as unlabelled ticks, but two shuls davening at the same minute landed on the
 same pixel and the one tick that did get a label was clipped off the edge
 whenever it fell near dawn. The cards say it better.

@@ -10,12 +10,11 @@ const CACHE = 'shabbos-clock-minyanim';
 const STALE_HOURS = 36;
 const ROTATE_MS = 45000;
 const PER_PAGE = 3;
-const FLIGHT_MS = 15000;
 
 const DEFAULTS = {
   shuls: ['beth-aaron', 'ohr-saadya'],
   layout: 'board', perShul: '8', theme: 'auto', accent: 'brass', clockSize: '1',
-  face: 'sturdy', seconds: false, showHorizon: true, showZmanim: false,
+  face: 'sturdy', seconds: false, showHorizon: false, showZmanim: false,
 };
 
 const CHOICES = {
@@ -424,7 +423,11 @@ let handAngle = null;
 let handAt = -1;
 
 function paintDial(now) {
-  $('dial').hidden = !settings.seconds;
+  // hidden is a property of HTMLElement, and the dial is an <svg>. Assigning
+  // el.hidden there sets a plain expando: no attribute is reflected, the
+  // stylesheet's [hidden] never matches, and the dial stays on the screen
+  // whatever the setting says. toggleAttribute sets the real attribute.
+  $('dial').toggleAttribute('hidden', !settings.seconds);
   const second = now.getSeconds();
   if (second === handAt) return;
   const hand = $('dialHand');
@@ -443,91 +446,6 @@ function tick() {
   $('clockTime').textContent = `${t.hour}:${t.minute}`;
   $('clockMer').textContent = t.meridiem;
   paintDial(now);
-  checkFlight(now);
-}
-
-/* Something crosses on the hour ---------------------------------------- */
-
-// The grandchildren watch this wall. Once an hour something crosses it, and what
-// crosses depends on the hour, so waiting is worth it. Everything here is
-// decoration: it never moves a time, and it never blocks a tap.
-
-let lastFlight = -1;
-
-// Same hour always gives the same flight, so a reload mid-wait does not cheat
-// anyone out of the one they were promised.
-function flightSeed(d) {
-  const n = d.getFullYear() * 1e4 + (d.getMonth() + 1) * 100 + d.getDate() + d.getHours() * 7919;
-  const x = Math.sin(n) * 43758.5453;
-  return x - Math.floor(x);
-}
-
-const BIRD = '<svg viewBox="0 0 40 18"><path d="M2 11 Q10 2 20 10 Q30 2 38 11"/></svg>';
-const STAR = '<svg viewBox="0 0 60 18"><path d="M4 9 L52 9"/><circle cx="54" cy="9" r="3.5"/></svg>';
-
-function flier(html, { top, size, dur, delay, kind }) {
-  const el = document.createElement('span');
-  el.className = `flier ${kind}`;
-  el.innerHTML = html;
-  el.style.top = `${top}%`;
-  el.style.setProperty('--size', `${size}px`);
-  el.style.setProperty('--dur', `${dur}ms`);
-  el.style.animationDelay = `${delay}ms`;
-  // Timer rather than animationend: if the animation never fires, the node still
-  // goes away, and this display stays up for months.
-  setTimeout(() => el.remove(), dur + delay + 1000);
-  return el;
-}
-
-// Not every WebView has matchMedia. Treat its absence as "motion is fine"
-// rather than letting a missing API throw.
-function reducedMotion() {
-  return typeof window.matchMedia === 'function'
-    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
-function launchFlight(now) {
-  if (reducedMotion()) return;
-  const layer = $('flyway');
-  if (!layer) return;
-  const info = dayInfo(now);
-  const r = flightSeed(now);
-
-  const night = now >= info.tzeis || now < toDate(info.cal.getAlos72());
-  if (night) {
-    // After dark the sky gets a shooting star instead.
-    layer.appendChild(flier(STAR, {
-      top: 12 + r * 22, size: 46 + r * 20, dur: 2600, delay: 0, kind: 'star',
-    }));
-    return;
-  }
-
-  const candles = toDate(info.cal.getCandleLighting());
-  const rushing = info.civil.jc.isTomorrowShabbosOrYomTov()
-    && candles - now > 0 && candles - now < 5400000;
-
-  // Erev Shabbos, the last hour and a half: the whole flock, and in a hurry.
-  const count = rushing ? 5 : 1 + Math.floor(r * 3);
-  const glider = !rushing && r > 0.88;
-
-  for (let i = 0; i < count; i += 1) {
-    const spread = (i % 2 ? -1 : 1) * Math.ceil(i / 2);
-    layer.appendChild(flier(BIRD, {
-      top: 46 + spread * 3.5 + r * 8,
-      size: glider ? 90 : 34 + r * 14,
-      dur: glider ? FLIGHT_MS * 1.8 : rushing ? FLIGHT_MS * 0.55 : FLIGHT_MS,
-      delay: i * (rushing ? 220 : 700),
-      kind: glider ? 'glider' : 'bird',
-    }));
-  }
-}
-
-function checkFlight(now) {
-  const hourKey = now.getDate() * 100 + now.getHours();
-  if (now.getMinutes() !== 0 || hourKey === lastFlight) return;
-  lastFlight = hourKey;
-  // This is ornament, and it runs inside the one function that must never fail.
-  try { launchFlight(now); } catch (err) { console.error(err); }
 }
 
 /* Settings -------------------------------------------------------------- */

@@ -56,62 +56,6 @@ body.locked .gear { visibility: hidden; }
   gap: clamp(6px, 1.2vh, 16px);
 }
 
-/* The hourly crossing. Sits over everything, touches nothing. --------- */
-.flyway {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 2;
-}
-.flier {
-  position: absolute;
-  left: 0;
-  width: var(--size);
-  color: var(--dim);
-  animation: cross var(--dur) linear forwards;
-}
-.flier svg {
-  display: block;
-  width: 100%;
-  height: auto;
-  overflow: visible;
-}
-.flier path, .flier circle {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.4;
-  stroke-linecap: round;
-}
-
-/* Wings: squashing the two arcs reads as a flap without redrawing anything. */
-.bird svg, .glider svg {
-  transform-origin: 50% 40%;
-  animation: flap 620ms ease-in-out infinite alternate;
-}
-.glider {
-  color: color-mix(in srgb, var(--accent) 55%, var(--dim));
-}
-.glider svg { animation-duration: 2.4s; }
-
-.star {
-  color: var(--text);
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--text) 45%, transparent));
-}
-.star path, .star circle { stroke-width: 1.6; }
-.star circle { fill: currentColor; }
-
-@keyframes cross {
-  from { transform: translateX(-18vw) translateY(0); opacity: 0; }
-  8%   { opacity: 1; }
-  92%  { opacity: 1; }
-  to   { transform: translateX(116vw) translateY(-6vh); opacity: 0; }
-}
-@keyframes flap {
-  from { transform: scaleY(1); }
-  to   { transform: scaleY(0.45); }
-}
-
 /* Masthead ------------------------------------------------------------- */
 .masthead {
   display: flex;
@@ -395,13 +339,13 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   min-width: 0;
 }
 /* A separator so a run reads as a list of times rather than one long number.
-   On ::after rather than in the gap, so where a long run wraps the comma
-   trails the line above instead of opening the next one. */
-.card .body .time:not(:last-child)::after {
+   It hangs off the meridiem, not off the time: on the baseline it sat below and
+   to the right of the raised "am" with nothing to attach to, and read as a
+   stray mark. Riding with the meridiem it stays snug, including at the end of
+   a line where a long run wraps. */
+.card .body .time:not(:last-child) .ap::after {
   content: ",";
-  color: var(--dim);
-  opacity: 0.75;
-  font-weight: 400;
+  opacity: 0.8;
 }
 /* Raised and small: the numerals are what gets read across the room, and the
    meridiem only disambiguates them. Superscripting it keeps it available
@@ -542,7 +486,7 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent);
   .zman s { font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, .clock, .card .body .time, .sun, .dial-hand, .flier, .card {
+  *, .clock, .card .body .time, .sun, .dial-hand, .card {
     animation: none !important;
     transition: none !important;
   }
