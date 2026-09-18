@@ -105,6 +105,23 @@
 
   const A = (d, extra = '') => `<path d="${d}"/>${extra}`;
 
+  // Faces were 20-38px on a 1024-wide screen, which is nothing across a room.
+  // They are now drawn well outside their seat and cover part of the vehicle —
+  // the face is the point, the vehicle is only the frame. The one thing that
+  // still bounds them is each other: a face never grows past this share of the
+  // gap to the next seat, or a full train would be one smear.
+  const FACE = 2.1;
+  const NEIGHBOUR = 0.62;
+
+  function faceRadius(v, i) {
+    const [cx, cy, r] = v.slots[i];
+    let gap = Infinity;
+    v.slots.forEach(([ox, oy], j) => {
+      if (j !== i) gap = Math.min(gap, Math.hypot(ox - cx, oy - cy));
+    });
+    return Math.min(r * FACE, gap * NEIGHBOUR);
+  }
+
   const VEHICLES = {
     train: {
       vb: [210, 66], seats: 4, colour: '#D9544D', speed: 67, lane: 'horizon', dir: 1,
@@ -123,7 +140,7 @@
     },
     plane: {
       vb: [252, 62], seats: 3, colour: '#6E8BD6', speed: 98, lane: 'upper', dir: 1,
-      slots: [[40, 32, 15], [77, 32, 15], [114, 32, 15]],
+      slots: [[32, 32, 15], [80, 32, 15], [128, 32, 15]],
       art: `<rect x="2" y="12" width="150" height="40" rx="4"/>${A('M152 32 H172')}
         ${A('M176 38 C190 30 216 26 240 30 C248 31 248 36 240 38 C218 44 192 44 176 38 Z')}
         ${A('M182 30 L176 12 L196 28')}${A('M200 40 L192 54 L216 42')}`,
@@ -145,7 +162,7 @@
     },
     balloon: {
       vb: [128, 118], seats: 2, colour: '#A96FA0', speed: 24, lane: 'rise',
-      slots: [[52, 101, 9], [76, 101, 9]],
+      slots: [[42, 101, 9], [86, 101, 9]],
       art: `${A('M64 80 C14 56 16 22 64 6 C112 22 114 56 64 80 Z')}
         ${A('M64 6 Q42 42 64 80 M64 6 Q86 42 64 80')}${A('M44 72 L46 90 M84 72 L82 90')}
         <rect x="40" y="90" width="48" height="22" rx="3"/>
@@ -269,9 +286,10 @@
     el.innerHTML =
       `<svg viewBox="0 0 ${vw} ${vh}" width="${vw}" height="${vh}">${v.art}</svg>` +
       riders.map((f, i) => {
-        const [cx, cy, r] = v.slots[i];
-        return `<img src="${f.url}" style="left:${(cx - r) / vw * 100}%;top:${(cy - r) / vh * 100}%;`
-          + `width:${r * 2 / vw * 100}%;height:${r * 2 / vh * 100}%;border-color:${f.ring}">`;
+        const [cx, cy] = v.slots[i];
+        const R = faceRadius(v, i);
+        return `<img src="${f.url}" style="left:${(cx - R) / vw * 100}%;top:${(cy - R) / vh * 100}%;`
+          + `width:${R * 2 / vw * 100}%;height:${R * 2 / vh * 100}%;border-color:${f.ring}">`;
       }).join('');
     return el;
   }
@@ -291,7 +309,9 @@
     const jitter = 0.85 + Math.random() * 0.3;          // ±15%, so it never feels canned
     const ms = LENGTH[lane](W, H) / (v.speed * jitter) * 1000;
 
-    const scale = Math.min(1, W / 1024) * (v.seats > 1 ? 1.25 : 1);
+    // Everything flies larger now, and the multi-seat bonus is gone: the faces
+    // themselves already carry those vehicles.
+    const scale = Math.min(1, W / 1024) * 1.8;
     el.style.setProperty('--vs', scale);
     layer.appendChild(el);
 

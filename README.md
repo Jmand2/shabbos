@@ -267,6 +267,12 @@ the settings sheet says either "20 photos ready on this iPad" or "Locked",
 and **Send one** launches a flight immediately. One also flies the moment a
 passphrase is accepted.
 
+Faces are drawn at about three times their seat, deliberately spilling over the
+vehicle around them — the face is the point and the vehicle is the frame. The
+only thing that still bounds a face is the next face along: it never grows past
+about six tenths of the gap to the neighbouring seat, or a full train would be
+one smear.
+
 The clock is never covered: the flight layer takes no taps, affects no layout,
 and the outer lanes pick a side.
 
