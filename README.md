@@ -177,7 +177,14 @@ and tzeis on the right. The tiles are a fixed width and the clock is capped to
 guarantee they fit, so nothing resizes as the time goes from 9:59 to 10:00.
 
 Shkiya and tzeis live there because the horizon is off by default and they had
-nowhere else to appear.
+nowhere else to appear. Each is named in Hebrew and then by what it is for —
+`נץ החמה | Earliest Shacharis`, `שקיעה | Sunset`, `צאת הכוכבים | Nightfall` —
+because "Netz" on its own assumes you already know. Turning on the zmanim strip
+adds sof zman shema, mincha gedola and plag.
+
+Those English glosses are the common luach convention, not a psak. Netz is
+labelled earliest shacharis in the sense of the amidah at vasikin; if your
+practice labels them differently they are one line each in `renderZmanim`.
 
 Cards fill the board, and the type inside them is **fitted to the box in both
 directions**. The line count is only a first guess; the display then measures

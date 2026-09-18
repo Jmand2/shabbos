@@ -248,17 +248,24 @@ let lastZmanim = '';
 
 function renderZmanim(info) {
   const cal = info.cal;
-  const rows = [['Netz', toDate(cal.getSunrise()), 'netz']];
+  // Each zman by its own name, and then what it is for. "Netz" on its own
+  // assumes you already know; the pairing is how a luach reads.
+  const rows = [['נץ החמה', 'Earliest Shacharis', toDate(cal.getSunrise()), 'netz']];
   if (settings.showZmanim) {
-    rows.push(['Shema', toDate(cal.getSofZmanShmaGRA()), 'mid'],
-      ['Mincha ged.', toDate(cal.getMinchaGedola()), 'mid'],
-      ['Plag', toDate(cal.getPlagHamincha()), 'mid']);
+    rows.push(['סוף זמן שמע', 'Latest Shema', toDate(cal.getSofZmanShmaGRA()), 'mid'],
+      ['מנחה גדולה', 'Earliest Mincha', toDate(cal.getMinchaGedola()), 'mid'],
+      ['פלג המנחה', 'Early Maariv', toDate(cal.getPlagHamincha()), 'mid']);
   }
-  rows.push(['Shkiya', info.sunset, 'shkiya'], ['Tzeis', info.tzeis, 'tzeis']);
+  rows.push(['שקיעה', 'Sunset', info.sunset, 'shkiya'],
+    ['צאת הכוכבים', 'Nightfall', info.tzeis, 'tzeis']);
 
-  const html = rows.filter(([, d]) => d).map(([name, d, kind]) =>
-    `<div class="zrow ${kind}"><span class="zname">${esc(name)}</span>`
-    + `<span class="ztime">${clockFace(clockTimeLong(d))}</span></div>`).join('');
+  // dir on the Hebrew span, so the pipe and the English stay to its right
+  // instead of the bidi algorithm reordering the line.
+  const html = rows.filter(([, , d]) => d).map(([heb, eng, d, kind]) =>
+    `<div class="zrow ${kind}">`
+    + `<div class="zname"><span class="zheb" dir="rtl">${esc(heb)}</span>`
+    + `<span class="zsep">|</span><span class="zeng">${esc(eng)}</span></div>`
+    + `<div class="ztime">${clockFace(clockTimeLong(d))}</div></div>`).join('');
   if (html !== lastZmanim) {
     lastZmanim = html;
     $('zmanimList').innerHTML = html;
@@ -380,7 +387,10 @@ function renderShuls(now) {
 //
 // Binary search on the scale: find the largest value where the tallest card
 // still fits its cell, both ways.
-const MIN_SCALE = 0.45;
+// Low enough that the board can always shrink to fit. Six zmanim in portrait
+// makes the tile half the screen tall, and at a 0.45 floor the loop ran out of
+// room and clipped rather than shrinking further.
+const MIN_SCALE = 0.3;
 const MAX_SCALE = 2.6;
 
 function fitBoard() {
