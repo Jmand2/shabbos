@@ -165,7 +165,7 @@ saved on the iPad.
 | Layout | Full board, or Clock only |
 | Times shown per shul | next 4, 8 or 12 |
 | Theme | night after dark, always night, always day |
-| Accent | brass, copper, sage, ice |
+| Accent | brass, copper, sage, ice, purple |
 | Clock face | sturdy, classic, elegant, clean |
 | Clock size | smaller, standard, larger |
 | Also | seconds, the day horizon, an extra zmanim strip |
@@ -179,10 +179,18 @@ guarantee they fit, so nothing resizes as the time goes from 9:59 to 10:00.
 Shkiya and tzeis live there because the horizon is off by default and they had
 nowhere else to appear.
 
-Cards fill the board rather than stacking at the top over a void, and their
-type is sized by the fullest card and then *measured*: if the tallest card
-still does not fit its cell, the board shrinks a step at a time until it does.
-A clipped minyan time is the one thing the display must never produce.
+Cards fill the board, and the type inside them is **fitted to the box in both
+directions**. The line count is only a first guess; the display then measures
+and binary-searches for the largest size at which the fullest card still fits.
+On a quiet evening that means very large times, on a busy Friday smaller ones,
+and the card is always full either way.
+
+That is the rule the whole layout follows: spare room is spent on type size,
+not on gaps. On a wall read from across a room, empty panel is wasted
+legibility. Nothing is allowed to hoard leftover space — the clock band is
+sized by its contents and everything else goes to the board.
+
+Purple is more than an accent: it tints the ground and the panels too.
 
 **Full board** is the clock and the shul cards, plus the horizon if you switch
 it on. **Clock only** drops

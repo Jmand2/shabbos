@@ -21,7 +21,7 @@ const CHOICES = {
   layout: ['board', 'clock'],
   perShul: ['4', '8', '12'],
   theme: ['auto', 'night', 'day'],
-  accent: ['brass', 'copper', 'sage', 'ice'],
+  accent: ['brass', 'copper', 'sage', 'ice', 'purple'],
   clockSize: ['0.8', '1', '1.25'],
   face: ['sturdy', 'classic', 'elegant', 'clean'],
 };
@@ -367,23 +367,50 @@ function renderShuls(now) {
   document.documentElement.style.setProperty('--clock-fill', fill);
 
   paintBoard(cards.join(''));
-  fitBoard(scale);
+  fitBoard();
 }
 
-// The line count is an estimate; this is the measurement. Cards fill their cell
-// now, so anything taller than the cell is clipped rather than merely ugly —
-// a hidden minyan time is the one thing this board must never do. Shrink until
-// the tallest card genuinely fits. In jsdom there is no layout and every
-// scrollHeight is 0, so this is a no-op there.
-function fitBoard(base) {
+// Fit to the box, in both directions.
+//
+// The line count is only a first guess. This measures, and — the part that was
+// missing — it GROWS as well as shrinks. Cards fill their cells, so any room
+// left over is legibility left on the table: on a wall display read across a
+// room, empty panel is worse than large numerals. Shrink-only sizing is why
+// every card was a small table floating in a large blank rectangle.
+//
+// Binary search on the scale: find the largest value where the tallest card
+// still fits its cell, both ways.
+const MIN_SCALE = 0.45;
+const MAX_SCALE = 2.6;
+
+function fitBoard() {
   const cards = [...document.querySelectorAll('.card')];
   if (!cards.length) return;
-  let scale = base;
-  for (let i = 0; i < 10; i += 1) {
-    if (!cards.some((c) => c.scrollHeight > c.clientHeight + 1)) return;
-    scale *= 0.93;
-    document.documentElement.style.setProperty('--minyan-scale', scale);
+  // No layout (jsdom, or a hidden board) reports 0 for everything, and a search
+  // against zeros would settle on nonsense. Leave the heuristic value alone.
+  if (!cards.some((c) => c.clientHeight > 0)) return;
+
+  // Measure the body, not just the card. The card clips (overflow: hidden), so
+  // the rows can spill out of the body while the card itself still reports no
+  // overflow — the test would pass on content that is already being cut off.
+  const boxes = cards.flatMap((c) => [c, c.querySelector('.body')]).filter(Boolean);
+  const root = document.documentElement;
+  const fits = (v) => {
+    root.style.setProperty('--minyan-scale', v);
+    return boxes.every((b) => b.scrollHeight <= b.clientHeight + 1
+      && b.scrollWidth <= b.clientWidth + 1);
+  };
+
+  if (fits(MAX_SCALE)) return;          // everything fits at the ceiling
+  if (!fits(MIN_SCALE)) return;         // cannot fit even at the floor
+
+  let lo = MIN_SCALE;
+  let hi = MAX_SCALE;
+  for (let i = 0; i < 9; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) lo = mid; else hi = mid;
   }
+  fits(lo);
 }
 
 // The numerals carry the information and the meridiem only disambiguates them,

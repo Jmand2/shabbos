@@ -41,9 +41,34 @@ body.day {
   --accent: #A8791B;
 }
 
-body[data-accent="copper"] { --accent: #b4623a; }
-body[data-accent="sage"]   { --accent: #6f8f6a; }
-body[data-accent="ice"]    { --accent: #7fa8c9; }
+/* Night values. The day set below needs its own: a hue bright enough to read
+   on near-black is too pale on white. */
+body[data-accent="brass"]  { --accent: #E0B740; }
+body[data-accent="copper"] { --accent: #E08A5F; }
+body[data-accent="sage"]   { --accent: #7FC98A; }
+body[data-accent="ice"]    { --accent: #7FB2F0; }
+/* Purple carries into the surfaces, not just the accent. */
+body[data-accent="purple"] {
+  --accent: #B08BFF;
+  --ink: #0B0812;
+  --panel: #1A1426;
+  --rule: rgba(196, 168, 255, 0.13);
+  --dim: rgba(232, 224, 250, 0.58);
+  --mute: rgba(232, 224, 250, 0.40);
+}
+
+body.day[data-accent="brass"]  { --accent: #9A6E15; }
+body.day[data-accent="copper"] { --accent: #AE4F26; }
+body.day[data-accent="sage"]   { --accent: #3C7548; }
+body.day[data-accent="ice"]    { --accent: #2A68B0; }
+body.day[data-accent="purple"] {
+  --accent: #6A2FC4;
+  --ink: #F0EBF9;
+  --panel: #FFFFFF;
+  --rule: rgba(80, 40, 150, 0.10);
+  --dim: rgba(52, 40, 75, 0.64);
+  --mute: rgba(52, 40, 75, 0.44);
+}
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -79,10 +104,10 @@ body.locked .gear { visibility: hidden; }
 /* The clock band. Three columns: the dates take the dead space either side of
    the numerals, and the clock stays centred because the two 1fr tracks share
    whatever is left equally. ------------------------------------------------ */
-/* The board gets the larger share of whatever height is spare: a card with
-   times in it uses the room, a band of air does not. */
+/* Sized by its contents, full stop. Every spare pixel goes to the board, where
+   it is spent on bigger type rather than on air above the numerals. */
 .topline {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -384,7 +409,7 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 
 /* Shul cards ----------------------------------------------------------- */
 .shuls {
-  flex: 1.9 1 auto;
+  flex: 1 1 auto;
   min-height: 0;
   display: grid;
   gap: clamp(10px, 1.6vw, 22px);
@@ -456,6 +481,9 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
+  /* Flush right. Left-aligned short rows left a ragged void down the right of
+     every card; ending them on a common edge reads as a table instead. */
+  justify-content: flex-end;
   gap: 0.1em 0.48em;
   /* No min-width: 0 here. That let this track collapse to nothing while the
      label column took its full max-content width, so a long label starved the
