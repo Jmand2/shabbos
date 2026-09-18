@@ -182,6 +182,11 @@ nowhere else to appear. Each is named in Hebrew and then by what it is for —
 because "Netz" on its own assumes you already know. Turning on the zmanim strip
 adds sof zman shema, mincha gedola and plag.
 
+Name and time share a line, the time flush right. The two tiles are sized for
+what each holds rather than matched to one another, and the clock is capped so
+that the wider of them always fits inside its own grid track — let the track
+grow to fit the tile instead and the clock is pushed off centre.
+
 Those English glosses are the common luach convention, not a psak. Netz is
 labelled earliest shacharis in the sense of the amidah at vasikin; if your
 practice labels them differently they are one line each in `renderZmanim`.
