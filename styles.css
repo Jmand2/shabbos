@@ -27,7 +27,7 @@
   /* Ceiling on the clock so the two date tiles always fit beside it. The
      numerals plus their gutters run about 3.8x the font size at the widest
      time, and the tiles want a fixed width, so this is what is left. */
-  --clock-cap: 12vw;
+  --clock-cap: 14.5vw;
   --serif: ui-serif, "New York", Charter, Georgia, serif;
   --sans: ui-sans-serif, -apple-system, "SF Pro Text", "Avenir Next", sans-serif;
 }
@@ -36,7 +36,7 @@
    shrinks with it — at 21vw of a 768-wide screen the zman names no longer fit
    on their line. The tiles take a larger share here and the clock a smaller. */
 @media (max-aspect-ratio: 1 / 1) {
-  :root { --clock-cap: 10vw; }
+  :root { --clock-cap: 11.5vw; }
 }
 
 body.day {
@@ -150,13 +150,13 @@ body.locked .gear { visibility: hidden; }
   justify-content: center;
   transition: background 1.2s ease, border-color 1.2s ease;
 }
-.datebox.heb { justify-self: start; width: clamp(126px, 15vw, 240px); }
-.datebox.civ { justify-self: end;   width: clamp(150px, 21vw, 330px); }
+.datebox.civ { justify-self: start; width: clamp(150px, 21vw, 330px); }
+.datebox.heb { justify-self: end;   width: clamp(126px, 15vw, 240px); }
 /* After the base rules, not before: same specificity, so source order decides.
    A tile measured in vw shrinks with the viewport, and at 21vw of a 768-wide
    portrait screen the zman names no longer fit their line. */
 @media (max-aspect-ratio: 1 / 1) {
-  .datebox.heb { width: clamp(126px, 20vw, 240px); }
+  .datebox.heb { width: clamp(126px, 18vw, 240px); }
   .datebox.civ { width: clamp(150px, 29vw, 330px); }
   /* Portrait is taller, so a vh-based label is bigger here while the tile is
      narrower — the one line stops fitting. Let it take two rather than clip;
@@ -282,12 +282,13 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   font-size: min(
     calc(clamp(88px, 23vh, 240px) * var(--clock-scale) * var(--clock-fill)),
     var(--clock-cap));
-  /* Horizontal padding is symmetric on purpose. The suffix is a zero-width slot
-     that overflows to the right, so without this the grid column reserves none
-     of the room the meridiem and dial actually take and the right-hand date box
-     lands on top of them. Matching padding on the left keeps the numerals
-     centred in the element, which is the whole point of the zero-width slot. */
-  padding: clamp(4px, 1.2vh, 16px) 0.62em;
+  /* No horizontal gutter. It used to carry 0.62em a side: the right reserved
+     room for the meridiem and dial, and the left existed only to keep the
+     NUMERALS screen-centred against it. That left half was dead space and it
+     was what held the clock down. The suffix now takes real width and the whole
+     cluster — numerals plus suffix — is what gets centred, which is what the
+     eye reads as centred anyway. */
+  padding: clamp(4px, 1.2vh, 16px) 0;
   min-height: 0;
   display: flex;
   align-items: center;
@@ -298,7 +299,8 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
    numerals off the centre of the screen. */
 .clock .hm { white-space: nowrap; }
 .clock .suffix {
-  width: 0;
+  width: auto;
+  flex: 0 0 auto;
   overflow: visible;
   display: inline-flex;
   flex-direction: column;

@@ -171,9 +171,11 @@ saved on the iPad.
 | Also | seconds, the day horizon, an extra zmanim strip |
 
 There is no bar across the top. The clock owns the upper band, with two tiles
-in the space either side of the numerals: the Hebrew date, the parsha and the
-next candle lighting or havdalah on the left; the civil date and netz, shkiya
-and tzeis on the right. The tiles are a fixed width and the clock is capped to
+in the space either side of the numerals: the civil date and netz, shkiya and
+tzeis on the left; the Hebrew date, the parsha and the next candle lighting or
+havdalah on the right. The Hebrew tile sits on the right because its content
+reads that way, and because it is the narrower of the two — which leaves the
+meridiem and the seconds dial room to breathe beside it. The tiles are a fixed width and the clock is capped to
 guarantee they fit, so nothing resizes as the time goes from 9:59 to 10:00.
 
 Shkiya and tzeis live there because the horizon is off by default and they had
@@ -186,6 +188,11 @@ Name and time share a line, the time flush right. The two tiles are sized for
 what each holds rather than matched to one another, and the clock is capped so
 that the wider of them always fits inside its own grid track — let the track
 grow to fit the tile instead and the clock is pushed off centre.
+
+What gets centred is the whole clock — numerals, meridiem and dial together —
+not the numerals alone. Centring the numerals meant carrying a matching empty
+gutter on their left to balance the suffix on their right, and that dead half
+was the single thing holding the clock size down.
 
 Those English glosses are the common luach convention, not a psak. Netz is
 labelled earliest shacharis in the sense of the amidah at vasikin; if your
