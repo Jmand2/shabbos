@@ -27,7 +27,7 @@
   /* Ceiling on the clock so the two date tiles always fit beside it. The
      numerals plus their gutters run about 3.8x the font size at the widest
      time, and the tiles want a fixed width, so this is what is left. */
-  --clock-cap: 14.5vw;
+  --clock-cap: 15vw;
   --serif: ui-serif, "New York", Charter, Georgia, serif;
   --sans: ui-sans-serif, -apple-system, "SF Pro Text", "Avenir Next", sans-serif;
 }
@@ -36,7 +36,7 @@
    shrinks with it — at 21vw of a 768-wide screen the zman names no longer fit
    on their line. The tiles take a larger share here and the clock a smaller. */
 @media (max-aspect-ratio: 1 / 1) {
-  :root { --clock-cap: 11.5vw; }
+  :root { --clock-cap: 12.5vw; }
 }
 
 body.day {
@@ -150,7 +150,7 @@ body.locked .gear { visibility: hidden; }
   justify-content: center;
   transition: background 1.2s ease, border-color 1.2s ease;
 }
-.datebox.civ { justify-self: start; width: clamp(150px, 21vw, 330px); }
+.datebox.civ { justify-self: start; width: clamp(164px, 22.5vw, 350px); }
 .datebox.heb { justify-self: end;   width: clamp(126px, 15vw, 240px); }
 /* After the base rules, not before: same specificity, so source order decides.
    A tile measured in vw shrinks with the viewport, and at 21vw of a 768-wide
@@ -193,14 +193,14 @@ body.locked .gear { visibility: hidden; }
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.7em;
+  gap: 0.55em;
 }
 .zname {
   display: flex;
   align-items: baseline;
-  gap: 0.34em;
+  gap: 0.26em;
   min-width: 0;
-  font-size: clamp(9px, 1.15vh, 11px);
+  font-size: clamp(10px, 1.35vh, 13px);
   line-height: 1.3;
   color: var(--mute);
   white-space: nowrap;
@@ -217,7 +217,7 @@ body.locked .gear { visibility: hidden; }
 .zrow.shkiya .ztime { color: var(--dusk); }
 .zrow.tzeis  .ztime { color: var(--night); }
 .ztime {
-  font-size: clamp(13px, 1.85vh, 19px);
+  font-size: clamp(15px, 2.2vh, 23px);
   font-weight: 600;
   font-variant-numeric: tabular-nums lining-nums;
   letter-spacing: -0.01em;
@@ -246,7 +246,7 @@ body.locked .gear { visibility: hidden; }
   line-height: 1.35;
 }
 .civil {
-  font-size: clamp(14px, 2.1vh, 22px);
+  font-size: clamp(15px, 2.3vh, 24px);
   font-weight: 500;
   letter-spacing: 0;
   color: var(--dim);
