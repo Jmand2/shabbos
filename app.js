@@ -225,18 +225,24 @@ function renderEdge(now, info) {
     const intoShabbos = now.getDay() === 5;
     const lightAt = intoShabbos ? candles : info.tzeis;
     if (now < lightAt) {
-      parts.push(`Candle lighting ${intoShabbos ? '' : 'after '}<b>${clockTime(lightAt)}</b>`);
+      parts.push(`Candles ${intoShabbos ? '' : 'after '}<b>${clockTime(lightAt)}</b>`,
+        `Havdalah <b>${clockTime(restEndsAt(now))}</b>`);
     } else {
       parts.push(`Havdalah <b>${clockTime(restEndsAt(now))}</b>`);
     }
   } else if (isLocked(now, info)) {
     parts.push(`Havdalah <b>${clockTime(restEndsAt(now))}</b>`);
   } else if (restingNext && now < candles) {
-    parts.push(`Candle lighting <b>${clockTime(candles)}</b>`);
+    // Both ends, not just the one about to happen. Knowing Shabbos is in at
+    // 6:41 is half the question; the other half is when it is out.
+    parts.push(`Candles <b>${clockTime(candles)}</b>`,
+      `Havdalah <b>${clockTime(restEndsAt(now))}</b>`);
   }
   // On an ordinary weekday there is no transition to announce. Hide the element
   // rather than leaving an empty one contributing a gap to the column.
-  $('edge').innerHTML = parts.join(' &nbsp;·&nbsp; ');
+  // One line per end. The tile is only as wide as the Hebrew date, so an inline
+  // separator always wrapped anyway and left the dot dangling off the first line.
+  $('edge').innerHTML = parts.map((p) => `<span>${p}</span>`).join('');
   $('edge').hidden = !parts.length;
 }
 

@@ -39,6 +39,13 @@
   :root { --clock-cap: 12.5vw; }
 }
 
+/* On a narrow window the tiles stop shrinking — their clamp floors take over —
+   while a vw-based clock keeps growing, and the meridiem and dial run into the
+   Hebrew tile. Below this width the clock yields instead. */
+@media (max-width: 1000px) and (min-aspect-ratio: 1 / 1) {
+  :root { --clock-cap: 13vw; }
+}
+
 body.day {
   --ink: #EFEFF2;
   --panel: #FFFFFF;
@@ -176,6 +183,7 @@ body.locked .gear { visibility: hidden; }
   text-align: left;
   letter-spacing: 0;
 }
+.datebox .edge span { display: block; }
 .datebox .edge b { color: var(--accent); font-weight: 600; }
 
 /* The three zmanim that pace the day, in the tile beside the clock. */
@@ -282,12 +290,12 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   font-size: min(
     calc(clamp(88px, 23vh, 240px) * var(--clock-scale) * var(--clock-fill)),
     var(--clock-cap));
-  /* No horizontal gutter. It used to carry 0.62em a side: the right reserved
-     room for the meridiem and dial, and the left existed only to keep the
-     NUMERALS screen-centred against it. That left half was dead space and it
-     was what held the clock down. The suffix now takes real width and the whole
-     cluster — numerals plus suffix — is what gets centred, which is what the
-     eye reads as centred anyway. */
+  /* The suffix is taken out of flow (below), so this element is exactly as wide
+     as the numerals and the grid centres THEM — not the numerals-plus-suffix
+     cluster, which left the digits sitting visibly left of the centre line. It
+     costs no width either way: out of flow reserves nothing, where the old
+     symmetric gutter reserved twice what the suffix needed. */
+  position: relative;
   padding: clamp(4px, 1.2vh, 16px) 0;
   min-height: 0;
   display: flex;
@@ -299,14 +307,19 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
    numerals off the centre of the screen. */
 .clock .hm { white-space: nowrap; }
 .clock .suffix {
-  width: auto;
-  flex: 0 0 auto;
+  /* Out of flow, hanging off the right edge of the numerals. The right-hand
+     track has slack — the Hebrew tile is the narrower of the two and pinned to
+     its far edge — so this lands in empty space rather than on anything. */
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 0.15em;
   overflow: visible;
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: space-between;
-  align-self: center;
   /* An explicit height, not stretch: .clock fills the whole band, so stretching
      would fling the meridiem and the dial to opposite ends of it. This is
      roughly the cap height of the numerals, which puts the meridiem on their
