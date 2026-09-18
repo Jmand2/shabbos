@@ -248,16 +248,16 @@ let lastZmanim = '';
 
 function renderZmanim(info) {
   const cal = info.cal;
-  const rows = [['Netz', toDate(cal.getSunrise())]];
+  const rows = [['Netz', toDate(cal.getSunrise()), 'netz']];
   if (settings.showZmanim) {
-    rows.push(['Shema', toDate(cal.getSofZmanShmaGRA())],
-      ['Mincha ged.', toDate(cal.getMinchaGedola())],
-      ['Plag', toDate(cal.getPlagHamincha())]);
+    rows.push(['Shema', toDate(cal.getSofZmanShmaGRA()), 'mid'],
+      ['Mincha ged.', toDate(cal.getMinchaGedola()), 'mid'],
+      ['Plag', toDate(cal.getPlagHamincha()), 'mid']);
   }
-  rows.push(['Shkiya', info.sunset], ['Tzeis', info.tzeis]);
+  rows.push(['Shkiya', info.sunset, 'shkiya'], ['Tzeis', info.tzeis, 'tzeis']);
 
-  const html = rows.filter(([, d]) => d).map(([name, d]) =>
-    `<div class="zrow"><span class="zname">${esc(name)}</span>`
+  const html = rows.filter(([, d]) => d).map(([name, d, kind]) =>
+    `<div class="zrow ${kind}"><span class="zname">${esc(name)}</span>`
     + `<span class="ztime">${clockFace(clockTimeLong(d))}</span></div>`).join('');
   if (html !== lastZmanim) {
     lastZmanim = html;
@@ -318,7 +318,7 @@ function renderShuls(now) {
       // Tomorrow is always announced. Without this, a board late at night shows
       // tomorrow's 5:10 AM with nothing saying it is not tonight.
       if (day === 'tomorrow' || byDay.size > 1) {
-        body += `<p class="group">${day === 'tomorrow' ? 'Tomorrow' : 'Today'}</p>`;
+        body += `<p class="group ${day}">${day === 'tomorrow' ? 'Tomorrow' : 'Today'}</p>`;
         lines += 1;
       }
 
@@ -343,8 +343,8 @@ function renderShuls(now) {
       const perLine = list.length <= 2 ? 4 : 3;
       for (const { label, times } of runs) {
         lines += Math.ceil(times.length / perLine);
-        body += `<span class="label">${esc(label)}</span>`
-          + `<span class="times">`
+        body += `<span class="label ${day}">${esc(label)}</span>`
+          + `<span class="times ${day}">`
           + times.map((r) => `<span class="time${r === next ? ' next' : ''}">${clockFace(r.time)}</span>`).join('')
           + `</span>`;
       }

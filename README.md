@@ -254,7 +254,16 @@ breaks — the module does nothing at all.
 
 | | |
 | --- | --- |
-| Something crosses | Off / every 10 min / 20 min / hour |
+| Something crosses | Off / twice every 5 min / 5 / 10 / 20 min / hour |
+
+The gap between flights is jittered — drawn between half and one and a half
+times the setting — so two flights in five minutes still arrive at
+unpredictable moments rather than on a metronome.
+
+Two things make it possible to tell whether it is working without waiting:
+the settings sheet says either "20 photos ready on this iPad" or "Locked",
+and **Send one** launches a flight immediately. One also flies the moment a
+passphrase is accepted.
 
 The clock is never covered: the flight layer takes no taps, affects no layout,
 and the outer lanes pick a side.

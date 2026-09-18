@@ -9,8 +9,16 @@
   --text: #F5F5F7;
   --dim: rgba(235, 235, 245, 0.55);
   --mute: rgba(235, 235, 245, 0.38);
+  /* One step back from --text, for tomorrow's times: still meant to be read
+     across a room, just not competing with today's. */
+  --text-2: rgba(235, 235, 245, 0.78);
   --lift: none;
   --accent: #E0B740;
+  /* Each moment of the day gets its own hue. Sunrise warm, sunset hotter,
+     nightfall cool — so the tile reads as a day rather than three grey rows. */
+  --dawn: #E8B473;
+  --dusk: #E07E58;
+  --night: #8AA4E6;
   --clock-scale: 1;
   --clock-fill: 1;
   --minyan-scale: 1;
@@ -19,14 +27,14 @@
   /* Ceiling on the clock so the two date tiles always fit beside it. The
      numerals plus their gutters run about 3.8x the font size at the widest
      time, and the tiles want a fixed width, so this is what is left. */
-  --clock-cap: 16vw;
+  --clock-cap: 15.5vw;
   --serif: ui-serif, "New York", Charter, Georgia, serif;
   --sans: ui-sans-serif, -apple-system, "SF Pro Text", "Avenir Next", sans-serif;
 }
 
 /* Portrait has much less width to divide three ways. */
 @media (max-aspect-ratio: 1 / 1) {
-  :root { --clock-cap: 14vw; }
+  :root { --clock-cap: 13.5vw; }
 }
 
 body.day {
@@ -36,9 +44,13 @@ body.day {
   --text: #16161A;
   --dim: rgba(60, 60, 67, 0.62);
   --mute: rgba(60, 60, 67, 0.42);
+  --text-2: rgba(28, 28, 34, 0.74);
   /* Panels lift off the ground rather than being outlined. */
   --lift: 0 1px 2px rgba(0, 0, 0, 0.05), 0 10px 28px rgba(0, 0, 0, 0.05);
   --accent: #A8791B;
+  --dawn: #B0702A;
+  --dusk: #BF5530;
+  --night: #3B5CA8;
 }
 
 /* Night values. The day set below needs its own: a hue bright enough to read
@@ -55,6 +67,7 @@ body[data-accent="purple"] {
   --rule: rgba(196, 168, 255, 0.13);
   --dim: rgba(232, 224, 250, 0.58);
   --mute: rgba(232, 224, 250, 0.40);
+  --text-2: rgba(232, 224, 250, 0.78);
 }
 
 body.day[data-accent="brass"]  { --accent: #9A6E15; }
@@ -68,6 +81,7 @@ body.day[data-accent="purple"] {
   --rule: rgba(80, 40, 150, 0.10);
   --dim: rgba(52, 40, 75, 0.64);
   --mute: rgba(52, 40, 75, 0.44);
+  --text-2: rgba(38, 28, 58, 0.76);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -124,7 +138,7 @@ body.locked .gear { visibility: hidden; }
   padding: clamp(14px, 2.2vh, 26px) clamp(12px, 1.4vw, 22px);
   /* Fixed width, not a share of the track: on a wall display the tiles must not
      resize as the numerals change width at 10:00 and again at 1:00. */
-  width: clamp(124px, 15vw, 260px);
+  width: clamp(118px, 14vw, 250px);
   min-width: 0;
   overflow-wrap: anywhere;
   display: flex;
@@ -163,6 +177,9 @@ body.locked .gear { visibility: hidden; }
   text-transform: uppercase;
   color: var(--mute);
 }
+.zrow.netz   .ztime { color: var(--dawn); }
+.zrow.shkiya .ztime { color: var(--dusk); }
+.zrow.tzeis  .ztime { color: var(--night); }
 .ztime {
   font-size: clamp(13px, 1.85vh, 19px);
   font-weight: 600;
@@ -234,7 +251,7 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
      of the room the meridiem and dial actually take and the right-hand date box
      lands on top of them. Matching padding on the left keeps the numerals
      centred in the element, which is the whole point of the zero-width slot. */
-  padding: clamp(4px, 1.2vh, 16px) 0.51em;
+  padding: clamp(4px, 1.2vh, 16px) 0.62em;
   min-height: 0;
   display: flex;
   align-items: center;
@@ -270,7 +287,7 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   color: var(--dim);
   line-height: 1;
 }
-.clock .dial { width: 0.36em; height: 0.36em; margin-left: 0.15em; overflow: visible; }
+.clock .dial { width: 0.46em; height: 0.46em; margin-left: 0.15em; overflow: visible; }
 .clock .dial[hidden] { display: none; }
 /* --rule is an alpha hairline meant for edges; on the dial it was invisible.
    These are keyed off the text colour so the dial reads in both themes. */
@@ -451,6 +468,14 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   margin-bottom: 0.55em;
   border-bottom: 1px solid var(--rule);
 }
+/* Today is what matters now; tomorrow steps back a tone so the two are told
+   apart at a glance rather than by reading the heading. */
+.group.today { color: var(--text); }
+.group.tomorrow { color: var(--mute); }
+.card .body .times.tomorrow .time { color: var(--text-2); }
+.card .body .label.tomorrow { color: var(--mute); }
+/* but the next minyan stays the next minyan, whichever day it falls on */
+.card .body .times.tomorrow .time.next { color: var(--accent); }
 .group {
   font-size: clamp(11px, 1.55vh, 15px);
   letter-spacing: 0.16em;
@@ -470,10 +495,13 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   column-gap: 1.1em;
   row-gap: 0.45em;
   align-items: baseline;
-  /* The card fills its cell, so let the rows breathe into it instead of
-     stacking at the top with empty panel underneath. */
+  /* align-content: start, deliberately. space-evenly distributed the rows into
+     the cell, but alignment overflow is not scroll overflow — rows pushed past
+     the bottom edge without scrollHeight ever growing, so the fit loop could
+     not see the clipping it was there to prevent. Starting at the top keeps
+     overflow measurable, and the fit loop fills the cell by growing the type. */
   flex: 1 1 auto;
-  align-content: space-evenly;
+  align-content: start;
   min-height: 0;
 }
 .card .body .group { grid-column: 1 / -1; }

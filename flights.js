@@ -13,8 +13,10 @@
   const STORE = 'shabbos-flights';
   const FACE_DB = 'shabbos-clock-faces';
   const KEY_ID = 'face-key';
-  const DEFAULTS = { every: '10' };            // minutes; 'off' disables
-  const EVERY = ['off', '10', '20', '60'];
+  // Mean minutes between flights; 'off' disables. The gap is jittered around
+  // the mean rather than fixed, so it never feels metronomic.
+  const DEFAULTS = { every: '2.5' };
+  const EVERY = ['off', '2.5', '5', '10', '20', '60'];
 
   let settings = { ...DEFAULTS, ...read(STORE) };
   let faces = [];
@@ -306,10 +308,14 @@
     try { fly(vehicleBag()[0]); } catch (err) { console.error(err); }
   }
 
+  // Self-rescheduling rather than a fixed interval: each gap is drawn somewhere
+  // between half and one and a half times the mean, so two flights in five
+  // minutes still arrive at unpredictable moments.
   function schedule() {
-    clearInterval(timer);
-    if (settings.every === 'off') return;
-    timer = setInterval(tick, Number(settings.every) * 60000);
+    clearTimeout(timer);
+    if (settings.every === 'off' || !faces.length) return;
+    const mean = Number(settings.every) * 60000;
+    timer = setTimeout(() => { tick(); schedule(); }, mean * (0.5 + Math.random()));
   }
 
   /* Settings -------------------------------------------------------------- */
@@ -331,10 +337,15 @@
       <label class="row"><span>Something crosses</span>
         <select id="flightEvery">
           <option value="off">Off</option>
+          <option value="2.5">Twice every 5 min</option>
+          <option value="5">Every 5 min</option>
           <option value="10">Every 10 min</option>
           <option value="20">Every 20 min</option>
           <option value="60">Every hour</option>
         </select>
+      </label>
+      <label class="row"><span>Try one now</span>
+        <button class="gear" id="flightNow" type="button">Send one</button>
       </label>`;
     host.appendChild(block);
 
@@ -343,6 +354,14 @@
     every.addEventListener('change', () => {
       settings.every = EVERY.includes(every.value) ? every.value : DEFAULTS.every;
       save(); schedule();
+    });
+
+    // Waiting several minutes to find out whether anything is set up correctly
+    // is no way to check it.
+    block.querySelector('#flightNow').addEventListener('click', () => {
+      const status = block.querySelector('#flightStatus');
+      if (!faces.length) { status.textContent = 'Nothing to send — unlock the photos first.'; return; }
+      tick();
     });
 
     block.querySelector('#flightUnlock').addEventListener('click', async () => {
@@ -356,12 +375,27 @@
         status.textContent = r.ok
           ? `${r.count} face${r.count === 1 ? '' : 's'} unlocked on this iPad.`
           : `Could not unlock — ${r.why}.`;
-        if (r.ok) { faceBag = bag(faces); schedule(); }
+        if (r.ok) {
+          faceBag = bag(faces);
+          schedule();
+          tick();                     // one straight away, so you can see it worked
+        }
       } catch (err) {
         console.error(err);
         status.textContent = 'Could not unlock — no faces found in the repo.';
       }
     });
+  }
+
+  // The settings sheet said nothing until you tried to unlock, so a display that
+  // was never unlocked looked identical to one that was working and simply had
+  // not flown yet.
+  function announce() {
+    const status = document.getElementById('flightStatus');
+    if (!status) return;
+    status.textContent = faces.length
+      ? `${faces.length} photo${faces.length === 1 ? '' : 's'} ready on this iPad.`
+      : 'Locked — enter the passphrase to show the photos.';
   }
 
   /* Start ----------------------------------------------------------------- */
@@ -375,6 +409,7 @@
     try { faces = await loadFaces(); } catch { faces = []; }
     faceBag = bag(faces);
     schedule();
+    announce();
   }
 
   if (document.readyState === 'loading') {
