@@ -267,6 +267,11 @@ the settings sheet says either "20 photos ready on this iPad" or "Locked",
 and **Send one** launches a flight immediately. One also flies the moment a
 passphrase is accepted.
 
+Each vehicle carries its own size on top of that. A flat scale left the long
+ones — plane, train — 2.3x the width of a parachute or a car, so the compact
+ones read as afterthoughts; lifting the small ones brings the spread down to
+about 1.5x.
+
 Faces are drawn at about three times their seat, deliberately spilling over the
 vehicle around them — the face is the point and the vehicle is the frame. The
 only thing that still bounds a face is the next face along: it never grows past

@@ -113,6 +113,15 @@
   const FACE = 2.1;
   const NEIGHBOUR = 0.62;
 
+  // Per-vehicle size. A flat scale made the long ones — plane, train — 2.3x the
+  // width of the compact ones, so a parachute or a car read as an afterthought
+  // beside them. These even the footprints out by lifting the small ones rather
+  // than shrinking the large, since bigger is the point.
+  const SIZE = {
+    plane: 1, train: 1.05, helicopter: 1.2, boat: 1.35,
+    balloon: 1.4, rocket: 1.35, parachute: 1.5, car: 1.6,
+  };
+
   function faceRadius(v, i) {
     const [cx, cy, r] = v.slots[i];
     let gap = Infinity;
@@ -311,7 +320,7 @@
 
     // Everything flies larger now, and the multi-seat bonus is gone: the faces
     // themselves already carry those vehicles.
-    const scale = Math.min(1, W / 1024) * 1.8;
+    const scale = Math.min(1, W / 1024) * 1.8 * (SIZE[name] ?? 1);
     el.style.setProperty('--vs', scale);
     layer.appendChild(el);
 
