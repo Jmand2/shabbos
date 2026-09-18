@@ -101,17 +101,19 @@ function isLocked(now, info) {
 }
 
 // Walks forward to the end of the current rest period, so Friday night shows
-// havdalah and a three-day Yom Tov shows the day it actually ends.
-function restEndsAt(now) {
+// havdalah and a three-day Yom Tov shows the day it actually ends. Returns the
+// day as well: a shul's havdalah is read off that day's maariv, not off tzeis.
+function restEnd(now) {
   for (let i = 0; i < 4; i += 1) {
     const day = addDays(now, i);
     const jc = new JewishDay(day).jc;
     if (!jc.isAssurBemelacha() || jc.isTomorrowShabbosOrYomTov()) continue;
     const tzeis = toDate(zmanim(day).getTzais());
-    if (tzeis > now) return tzeis;
+    if (tzeis > now) return { day, tzeis };
   }
-  return now;
+  return null;
 }
+const restEndsAt = (now) => restEnd(now)?.tzeis ?? now;
 
 /* Minyan data ----------------------------------------------------------- */
 
@@ -213,6 +215,41 @@ const clockTime = (d) => { const t = hhmm(d); return `${t.hour}:${t.minute}${t.m
 // cards do rather than inventing a second convention.
 const clockTimeLong = (d) => { const t = hhmm(d); return `${t.hour}:${t.minute} ${t.meridiem.toUpperCase()}`; };
 
+// Nightfall is a fact; havdalah is a practice, and the two shuls that have one
+// hold by their own motzei Shabbos maariv plus a fixed few minutes. That is the
+// number their members actually wait on, so it beats a computed tzeis — but it
+// only exists for a shul we have both an offset and a maariv time for.
+function havdalahFor(slug, endDay) {
+  const mins = shuls.find((s) => s.slug === slug)?.havdalahAfterMaariv;
+  if (!mins) return null;
+  const times = (minyanim.days?.[isoOf(endDay)]?.[slug]?.maariv ?? [])
+    .map((row) => timeToDate(endDay, row.time)).filter(Boolean)
+    .sort((a, b) => a - b);
+  // The maariv that ends the day, not an earlier one sharing the slot.
+  const sunset = toDate(zmanim(endDay).getSunset());
+  const maariv = times.find((t) => t >= sunset) ?? times[0];
+  return maariv ? new Date(maariv.getTime() + mins * 60000) : null;
+}
+
+// One time when the shuls on screen agree, one line each when they do not —
+// which is the whole point, since they end Shabbos minutes apart. With nothing
+// shul-specific to show we fall back to tzeis, the town-wide answer.
+function havdalahLines(now) {
+  const end = restEnd(now);
+  if (!end) return [];
+  const shown = shownShuls();
+  const per = shown.map((s) => ({ name: s.name, at: havdalahFor(s.slug, end.day) }))
+    .filter((r) => r.at);
+  if (!per.length) return [`Havdalah <b>${clockTime(end.tzeis)}</b>`];
+  const distinct = new Set(per.map((r) => clockTime(r.at)));
+  // An unlabelled time has to speak for every shul on screen, so it is only
+  // safe when they all agree AND none of them is missing from the list.
+  if (distinct.size === 1 && per.length === shown.length) {
+    return [`Havdalah <b>${[...distinct][0]}</b>`];
+  }
+  return ['Havdalah', ...per.map((r) => `${r.name} <b>${clockTime(r.at)}</b>`)];
+}
+
 function renderEdge(now, info) {
   const jc = info.civil.jc;
   const candles = toDate(info.cal.getCandleLighting());
@@ -225,24 +262,21 @@ function renderEdge(now, info) {
     const intoShabbos = now.getDay() === 5;
     const lightAt = intoShabbos ? candles : info.tzeis;
     if (now < lightAt) {
-      parts.push(`Candles ${intoShabbos ? '' : 'after '}<b>${clockTime(lightAt)}</b>`,
-        `Havdalah <b>${clockTime(restEndsAt(now))}</b>`);
-    } else {
-      parts.push(`Havdalah <b>${clockTime(restEndsAt(now))}</b>`);
+      parts.push(`Candles ${intoShabbos ? '' : 'after '}<b>${clockTime(lightAt)}</b>`);
     }
+    parts.push(...havdalahLines(now));
   } else if (isLocked(now, info)) {
-    parts.push(`Havdalah <b>${clockTime(restEndsAt(now))}</b>`);
+    parts.push(...havdalahLines(now));
   } else if (restingNext && now < candles) {
     // Both ends, not just the one about to happen. Knowing Shabbos is in at
     // 6:41 is half the question; the other half is when it is out.
-    parts.push(`Candles <b>${clockTime(candles)}</b>`,
-      `Havdalah <b>${clockTime(restEndsAt(now))}</b>`);
+    parts.push(`Candles <b>${clockTime(candles)}</b>`, ...havdalahLines(now));
   }
   // On an ordinary weekday there is no transition to announce. Hide the element
   // rather than leaving an empty one contributing a gap to the column.
-  // One line per end. The tile is only as wide as the Hebrew date, so an inline
+  // One line per fact. The tile is only as wide as the Hebrew date, so an inline
   // separator always wrapped anyway and left the dot dangling off the first line.
-  $('edge').innerHTML = parts.map((p) => `<span>${p}</span>`).join('');
+  $('edge').innerHTML = parts.map((p) => `<span class="line">${p}</span>`).join('');
   $('edge').hidden = !parts.length;
 }
 

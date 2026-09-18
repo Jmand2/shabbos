@@ -183,7 +183,7 @@ body.locked .gear { visibility: hidden; }
   text-align: left;
   letter-spacing: 0;
 }
-.datebox .edge span { display: block; }
+.datebox .edge .line { display: block; }
 .datebox .edge b { color: var(--accent); font-weight: 600; }
 
 /* The three zmanim that pace the day, in the tile beside the clock. */

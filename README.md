@@ -24,14 +24,23 @@ Two-day Yom Tov, Chol HaMoed, Hoshana Rabbah, the fasts and Chanukah all name
 themselves in the header, and the screen locks for Yom Tov exactly as it does for
 Shabbos.
 
-The line under the clock knows which transition is coming:
+The tile beside the clock carries both ends of the rest period — when it comes
+in is half the question, when it goes out is the other half:
 
-| Moment | Line |
+| Moment | Tile |
 | --- | --- |
-| Erev Rosh Hashana | Candle lighting 6:53p |
-| Rosh Hashana day 1 | Candle lighting **after** 7:51p |
+| Erev Rosh Hashana | Candles 6:53p, then havdalah |
+| Rosh Hashana day 1 | Candles **after** 7:51p, then havdalah |
 | Rosh Hashana day 2 | Havdalah 7:49p |
-| Yom Tov running into Shabbos | Candle lighting, at the usual time |
+| Yom Tov running into Shabbos | Candles, at the usual time |
+
+Candle lighting is town-wide, but havdalah is a practice, not a fact: a shul that
+holds by a fixed number of minutes after its own maariv gets a
+`havdalahAfterMaariv` in `data/shuls.json`, and the tile reads that shul's maariv
+off the same schedule the cards use. When the shuls on screen disagree — they
+usually do, by a few minutes — each is named. A shul with no entry is left out
+rather than handed someone else's minhag; if none of the shuls on screen has one,
+the tile falls back to computed tzeis, unnamed.
 
 Minyan times on Yom Tov come from the same pull as any other day, and the scraper
 reaches four days out so a three-day Yom Tov is covered even if a run is missed.

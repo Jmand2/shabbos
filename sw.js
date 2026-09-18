@@ -13,7 +13,9 @@
 //
 // Bump VERSION on any change to the three coupled files: install re-fetches the
 // whole list into a fresh cache, so a half-updated cache cannot survive it.
-const VERSION = 'v3';
+// Bump it for data/shuls.json too — that one is cache-first, so an edit to it
+// (a new shul, a havdalah offset) reaches the wall no other way.
+const VERSION = 'v4';
 const CACHE = `shabbos-clock-${VERSION}`;
 const FILES = ['./', 'index.html', 'styles.css', 'app.js',
   'flights.css', 'flights.js',
