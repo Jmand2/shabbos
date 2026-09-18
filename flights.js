@@ -13,12 +13,18 @@
   const STORE = 'shabbos-flights';
   const FACE_DB = 'shabbos-clock-faces';
   const KEY_ID = 'face-key';
-  // Mean minutes between flights; 'off' disables. The gap is jittered around
-  // the mean rather than fixed, so it never feels metronomic.
-  const DEFAULTS = { every: '2.5' };
-  const EVERY = ['off', '2.5', '5', '10', '20', '60'];
+  // A RANGE of minutes, not a mean: each gap is drawn uniformly between the two
+  // bounds. Stating it as a range is also the honest label — the gap has been
+  // random since it stopped being a fixed interval, so "every 10 min" was never
+  // what happened.
+  const DEFAULTS = { every: '2-5' };
+  const EVERY = ['off', '2-5', '5-10', '10-20', '20-40', '45-90'];
 
   let settings = { ...DEFAULTS, ...read(STORE) };
+  // A value saved by an older build is not in the list any more. Without this
+  // the menu shows blank and the schedule runs on a stale number that no option
+  // corresponds to.
+  if (!EVERY.includes(String(settings.every))) settings.every = DEFAULTS.every;
   let faces = [];
   let layer = null;
   let timer = null;
@@ -308,14 +314,19 @@
     try { fly(vehicleBag()[0]); } catch (err) { console.error(err); }
   }
 
-  // Self-rescheduling rather than a fixed interval: each gap is drawn somewhere
-  // between half and one and a half times the mean, so two flights in five
-  // minutes still arrive at unpredictable moments.
+  // Uniform inside the chosen range, redrawn after every flight, so the next one
+  // is never predictable from the last.
+  function nextGap() {
+    const [lo, hi] = String(settings.every).split('-').map(Number);
+    if (!Number.isFinite(lo)) return Number(DEFAULTS.every.split('-')[0]) * 60000;
+    const top = Number.isFinite(hi) ? hi : lo;
+    return (lo + Math.random() * (top - lo)) * 60000;
+  }
+
   function schedule() {
     clearTimeout(timer);
     if (settings.every === 'off' || !faces.length) return;
-    const mean = Number(settings.every) * 60000;
-    timer = setTimeout(() => { tick(); schedule(); }, mean * (0.5 + Math.random()));
+    timer = setTimeout(() => { tick(); schedule(); }, nextGap());
   }
 
   /* Settings -------------------------------------------------------------- */
@@ -337,11 +348,11 @@
       <label class="row"><span>Something crosses</span>
         <select id="flightEvery">
           <option value="off">Off</option>
-          <option value="2.5">Twice every 5 min</option>
-          <option value="5">Every 5 min</option>
-          <option value="10">Every 10 min</option>
-          <option value="20">Every 20 min</option>
-          <option value="60">Every hour</option>
+          <option value="2-5">Every 2–5 min</option>
+          <option value="5-10">Every 5–10 min</option>
+          <option value="10-20">Every 10–20 min</option>
+          <option value="20-40">Every 20–40 min</option>
+          <option value="45-90">Every 45–90 min</option>
         </select>
       </label>
       <label class="row"><span>Try one now</span>

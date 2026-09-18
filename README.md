@@ -254,11 +254,13 @@ breaks — the module does nothing at all.
 
 | | |
 | --- | --- |
-| Something crosses | Off / twice every 5 min / 5 / 10 / 20 min / hour |
+| Something crosses | Off / every 2–5, 5–10, 10–20, 20–40 or 45–90 min |
 
-The gap between flights is jittered — drawn between half and one and a half
-times the setting — so two flights in five minutes still arrive at
-unpredictable moments rather than on a metronome.
+Each setting is a **range**, and the gap is drawn uniformly inside it and
+redrawn after every flight, so the next one is never predictable from the last.
+Ranges rather than single numbers because that is what actually happens: once
+the gap became random, a label saying "every 10 minutes" was describing
+something the display had never done.
 
 Two things make it possible to tell whether it is working without waiting:
 the settings sheet says either "20 photos ready on this iPad" or "Locked",
