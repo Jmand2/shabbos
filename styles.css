@@ -328,20 +328,23 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   justify-self: end;
   display: inline-flex;
   align-items: center;
-  gap: 0.12em;
-  /* Tight under the baseline and flush with the last digit, so it reads as
-     hanging off the numerals rather than as a second line of its own. */
-  margin-top: -0.08em;
+  gap: 0.1em;
+  /* Up into the dead space at the bottom of the line box, but not into the
+     digits. line-height is 0.9, so the ink stops about 0.086em above the box's
+     bottom edge; -0.05em takes back most of that and still leaves a hair of
+     clearance on every face. At 0.46em and no pull-up the dial hung a third of
+     the font size below the digits and read as a separate widget. */
+  margin-top: -0.05em;
   margin-right: 0.02em;
 }
 .clock .mer {
   font-family: var(--sans);
-  font-size: 0.155em;
-  letter-spacing: 0.16em;
+  font-size: 0.13em;
+  letter-spacing: 0.14em;
   color: var(--dim);
   line-height: 1;
 }
-.clock .dial { width: 0.46em; height: 0.46em; overflow: visible; }
+.clock .dial { width: 0.36em; height: 0.36em; overflow: visible; }
 .clock .dial[hidden] { display: none; }
 /* --rule is an alpha hairline meant for edges; on the dial it was invisible.
    These are keyed off the text colour so the dial reads in both themes. */
