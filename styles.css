@@ -548,7 +548,13 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 }
 .card .body {
   display: grid;
-  grid-template-columns: minmax(0, max-content) 1fr;
+  /* The label column floors at min-content — the longest single word — not at
+     0. At 0 a card with only two rows scaled up until the column was narrower
+     than "SHACHARIS" and broke it across lines as "SHACH / ARIS". Nothing
+     overflowed, so the fit loop saw no problem. Now the word is the floor: if
+     label and times together no longer fit, scrollWidth grows and the loop
+     shrinks the type, which is the right thing to give up. */
+  grid-template-columns: minmax(min-content, max-content) 1fr;
   column-gap: 1.1em;
   row-gap: 0.45em;
   align-items: baseline;
@@ -605,9 +611,19 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   text-transform: uppercase;
   letter-spacing: 0.06em;
   line-height: 1.3;
-  overflow-wrap: anywhere;
+  /* break-word, not anywhere: both break a word as a last resort, but only
+     "anywhere" lets a mid-word break shrink the column's min-content size,
+     which is what allowed the break to happen in the first place. */
+  overflow-wrap: break-word;
 }
 .card .body .time {
+  /* Never shrink, never break. As a shrinkable flex item this was squeezed
+     narrower than "6:00am" and the meridiem painted outside its own box —
+     getBoundingClientRect reports the clamped box, not the ink, so neither
+     scrollWidth nor a rect check could see the clipping. Atomic, it overflows
+     .times honestly instead, and the fit loop shrinks the type. */
+  flex: 0 0 auto;
+  white-space: nowrap;
   font-size: var(--minyan);
   font-variant-numeric: tabular-nums lining-nums;
   font-weight: 600;

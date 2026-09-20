@@ -431,7 +431,10 @@ function renderShuls(now) {
 // makes the tile half the screen tall, and at a 0.45 floor the loop ran out of
 // room and clipped rather than shrinking further.
 const MIN_SCALE = 0.3;
-const MAX_SCALE = 2.6;
+// 2.6 let a card with two rows blow its times up to 86px against a 36px label
+// — top-heavy, and wide enough to run to the card's clip edge. A card with
+// little to say should read as a calm card, not a billboard.
+const MAX_SCALE = 1.8;
 
 function fitBoard() {
   const cards = [...document.querySelectorAll('.card')];
@@ -444,11 +447,26 @@ function fitBoard() {
   // the rows can spill out of the body while the card itself still reports no
   // overflow — the test would pass on content that is already being cut off.
   const boxes = cards.flatMap((c) => [c, c.querySelector('.body')]).filter(Boolean);
+  // Scroll metrics are not enough. A time that is wider than its grid track
+  // overflows and is clipped by the card, and the browser still reports
+  // scrollWidth === clientWidth to the pixel — the same blindness that let
+  // alignment overflow through before. So compare the rows' own rectangles
+  // against the body they are supposed to sit in.
+  const rows = cards.map((c) => [c.querySelector('.body'),
+    [...c.querySelectorAll('.time, .label, .group')]]).filter(([b]) => b);
   const root = document.documentElement;
   const fits = (v) => {
     root.style.setProperty('--minyan-scale', v);
-    return boxes.every((b) => b.scrollHeight <= b.clientHeight + 1
-      && b.scrollWidth <= b.clientWidth + 1);
+    if (!boxes.every((b) => b.scrollHeight <= b.clientHeight + 1
+      && b.scrollWidth <= b.clientWidth + 1)) return false;
+    return rows.every(([body, els]) => {
+      const box = body.getBoundingClientRect();
+      return els.every((el) => {
+        const r = el.getBoundingClientRect();
+        return r.right <= box.right + 1 && r.bottom <= box.bottom + 1
+          && r.left >= box.left - 1;
+      });
+    });
   };
 
   if (fits(MAX_SCALE)) return;          // everything fits at the ceiling
