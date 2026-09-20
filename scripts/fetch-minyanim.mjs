@@ -46,6 +46,88 @@ export function renderedDate(lines, year) {
   return null;
 }
 
+// ---- A shul's own site (ShulCloud) --------------------------------------
+//
+// Preferred over the aggregator wherever a shul has one: it is the shul's own
+// publication, and it carries what teaneckminyanim leaves out — Kol Nidrei,
+// Neila, and the shul's own candle lighting and fast-end times.
+//
+// Access: the platform's WAF answers 406 to a blank or tokenless user-agent
+// (curl and a headless browser are both refused), and 200 to one that names
+// itself and gives a contact URL. Nothing is spoofed here. robots.txt allows
+// "/" and disallows /calendar*, /cal.php* and /zmanim.php*, so we read only the
+// home page, and it asks for Crawl-delay: 10, which SITE_DELAY honours.
+const SHUL_UA = 'shabbos-clock/1.0 (+https://github.com/Jmand2/shabbos)';
+const SITE_DELAY = 10000;
+
+// The widget mixes services with zmanim, the fast's edges, and shul events —
+// a children's lunch sat in it at noon on Yom Kippur. Naming the things to
+// exclude cannot keep up with whatever a shul schedules next, so this names the
+// things to include instead: a row reaches the board only if it reads as a
+// service. "minyan" is in the list so an unusual one (youth, teen, Sephardic)
+// still counts.
+const IS_A_SERVICE = /shacharis|shachris|shacharit|mincha|maariv|arvit|selichos|selichot|selicot|slichos|kol ?nidre|neila|ne'?ilah?|musaf|mussaf|vasikin|vosikin|hashkama|minyan|davening/i;
+
+// The widget prints no date, so the two sections are read as today and tomorrow
+// in the shul's own timezone — the same zone TODAY is computed in.
+function parseShulSite(html) {
+  const heads = [...html.matchAll(/<h2[^>]*>([\s\S]*?)<\/h2>/gi)]
+    .map((m) => ({ at: m.index, end: m.index + m[0].length,
+      text: m[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim() }));
+  const want = { "Today's Calendar": 'today', "Tomorrow's Calendar": 'tomorrow' };
+  const out = {};
+  for (let i = 0; i < heads.length; i += 1) {
+    const key = want[heads[i].text];
+    if (!key) continue;
+    // A section runs to the next heading of any kind: "Tomorrow's Calendar" is
+    // followed by "Friday Night", whose rows are a different day entirely.
+    const seg = html.slice(heads[i].end, heads[i + 1] ? heads[i + 1].at : html.length);
+    const sections = { shacharis: [], mincha: [], maariv: [] };
+    const edge = {};
+    // The label is sometimes wrapped in a link to the event page.
+    const ROW = /<bdi>([\s\S]*?)<\/bdi>\s*(?:<\/a>\s*)?<div class="right_calendar_widget_time">\s*:?\s*([^<]+)<\/div>/g;
+    for (const m of seg.matchAll(ROW)) {
+      const label = m[1].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&')
+        .replace(/&#39;|&apos;/g, "'").replace(/\s+/g, ' ').trim();
+      const t = /^(\d{1,2}):(\d{2})\s*([ap])m$/i.exec(m[2].trim());
+      if (!label || !t) continue;
+      const time = `${Number(t[1])}:${t[2]} ${t[3].toUpperCase()}M`;
+      // The fast's edges are the shul's own, and worth keeping even though they
+      // are not services; everything else unrecognised is dropped.
+      if (/^candle ?lighting/i.test(label)) edge.candles ??= time;
+      if (/^(havdalah|fast ends)/i.test(label)) edge.havdalah ??= time;
+      if (!IS_A_SERVICE.test(label)) continue;
+      let h = Number(t[1]) % 12;
+      if (t[3].toLowerCase() === 'p') h += 12;
+      sections[serviceGroup(label, h * 60 + Number(t[2]))].push({ label, time });
+    }
+    out[key] = { ...sections, source: 'shul', ...(Object.keys(edge).length ? { edge } : {}) };
+  }
+  // Both sections or nothing: half a widget means the page is not what we think
+  // it is, and a wrong day is worse than no day.
+  return out.today && out.tomorrow ? out : null;
+}
+
+export function serviceGroup(label, minutes) {
+  if (/shacharis|shachris|shacharit|vasikin|vosikin|hashkama|netz minyan/i.test(label)) return 'shacharis';
+  if (/mincha/i.test(label)) return 'mincha';
+  if (/maariv|arvit|kol ?nidre|neila|ne'?ilah?/i.test(label)) return 'maariv';
+  // Otherwise place it by the clock, cutting the day at 3am rather than
+  // midnight so that night selichos at 12:45am sits with the evening.
+  if (minutes >= 180 && minutes < 720) return 'shacharis';
+  if (minutes >= 720 && minutes < 1080) return 'mincha';
+  return 'maariv';
+}
+
+async function grabShulSite(url) {
+  const res = await fetch(url, {
+    headers: { 'user-agent': SHUL_UA },
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) return null;
+  return parseShulSite(await res.text());
+}
+
 export function parseSections(lines) {
   const out = {};
   let current = null;
@@ -124,9 +206,32 @@ async function main() {
 
   let dateParamWorks = false;
   let fetched = 0;
+
+  // A shul that publishes its own schedule is the authority on it. Its site
+  // reaches only today and tomorrow, which is exactly what the board shows, and
+  // it carries the services the aggregator omits. Only if it cannot be read do
+  // we fall back to teaneckminyanim for that shul.
+  const ownSite = new Set();
+  const tomorrow = isoDate(1);
+  for (const shul of SHULS.filter((x) => x.site)) {
+    const parsed = await grabShulSite(shul.site).catch(() => null);
+    await new Promise((r) => setTimeout(r, SITE_DELAY));
+    if (!parsed) {
+      console.warn(`${shul.slug}: own site unreadable, falling back to ${new URL(ORG_URL.replace('{slug}', shul.slug)).host}`);
+      continue;
+    }
+    ownSite.add(shul.slug);
+    fetched += 1;
+    for (const [date, entry] of [[today, parsed.today], [tomorrow, parsed.tomorrow]]) {
+      days[date] ??= {};
+      days[date][shul.slug] = entry;
+    }
+  }
+
   for (const date of wanted) {
     const useDateParam = date !== today;
     for (const shul of SHULS) {
+      if (ownSite.has(shul.slug)) continue;
       const parsed = await grab(shul.slug, date, useDateParam).catch(() => null);
       await new Promise((r) => setTimeout(r, 250));
       if (!parsed) continue;

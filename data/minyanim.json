@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-20T18:09:28.213Z",
+  "generated_at": "2026-09-20T20:16:19.971Z",
   "source": "teaneckminyanim.com",
   "days": {
     "2026-09-17": {
@@ -1626,7 +1626,20 @@
             "time": "3:45 PM"
           }
         ],
-        "maariv": []
+        "maariv": [
+          {
+            "label": "Selicot",
+            "time": "12:50 AM"
+          },
+          {
+            "label": "Kol Nidre",
+            "time": "6:45 PM"
+          }
+        ],
+        "source": "shul",
+        "edge": {
+          "candles": "6:39 PM"
+        }
       },
       "beth-abraham": {
         "shacharis": [
@@ -1826,7 +1839,7 @@
       "ohr-saadya": {
         "shacharis": [
           {
-            "label": "Selichos & Shacharis",
+            "label": "Selichos/Shacharis",
             "time": "8:00 AM"
           }
         ],
@@ -1838,10 +1851,18 @@
         ],
         "maariv": [
           {
-            "label": "Night Selichos",
+            "label": "Selichos",
             "time": "12:45 AM"
+          },
+          {
+            "label": "Kol Nidrei",
+            "time": "6:35 PM"
           }
-        ]
+        ],
+        "source": "shul",
+        "edge": {
+          "candles": "6:39 PM"
+        }
       },
       "one500": {
         "shacharis": [
@@ -2148,7 +2169,8 @@
           }
         ],
         "mincha": [],
-        "maariv": []
+        "maariv": [],
+        "source": "shul"
       },
       "beth-abraham": {
         "shacharis": [
@@ -2260,7 +2282,16 @@
             "time": "5:20 PM"
           }
         ],
-        "maariv": []
+        "maariv": [
+          {
+            "label": "Neila",
+            "time": "6:35 PM"
+          }
+        ],
+        "source": "shul",
+        "edge": {
+          "havdalah": "7:45 PM"
+        }
       },
       "one500": {
         "shacharis": [],

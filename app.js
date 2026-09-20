@@ -220,9 +220,18 @@ const clockTimeLong = (d) => { const t = hhmm(d); return `${t.hour}:${t.minute} 
 // number their members actually wait on, so it beats a computed tzeis — but it
 // only exists for a shul we have both an offset and a maariv time for.
 function havdalahFor(slug, endDay) {
+  const day = minyanim.days?.[isoOf(endDay)]?.[slug];
+  // If the shul publishes when its fast or Shabbos ends, that is the answer and
+  // no arithmetic can improve on it.
+  const published = timeToDate(endDay, day?.edge?.havdalah ?? '');
+  if (published) return published;
+
   const mins = shuls.find((s) => s.slug === slug)?.havdalahAfterMaariv;
   if (!mins) return null;
-  const times = (minyanim.days?.[isoOf(endDay)]?.[slug]?.maariv ?? [])
+  const times = (day?.maariv ?? [])
+    // Neila and Kol Nidrei sit in the evening bucket but neither is the maariv
+    // the practice counts from; measuring off Neila put havdalah an hour early.
+    .filter((row) => !/neila|ne'?ilah?|kol ?nidre/i.test(row.label ?? ''))
     .map((row) => timeToDate(endDay, row.time)).filter(Boolean)
     .sort((a, b) => a - b);
   // The maariv that ends the day, not an earlier one sharing the slot.
@@ -548,9 +557,15 @@ function renderFreshness() {
   const stamp = minyanim.generated_at ? new Date(minyanim.generated_at) : null;
   if (!stamp) { $('freshness').textContent = 'No minyan data yet'; return; }
   const hours = (Date.now() - stamp) / 3.6e6;
+  // Credit where the times on screen actually came from: a shul that publishes
+  // its own schedule is read from its own site, not from the aggregator.
+  const own = shownShuls().filter((s) => minyanim.days?.[isoOf(new Date())]?.[s.slug]?.source === 'shul');
+  const source = own.length === 0 ? 'teaneckminyanim.com'
+    : own.length === shownShuls().length ? 'each shul’s own website'
+      : 'the shuls’ websites and teaneckminyanim.com';
   $('freshness').textContent = hours > STALE_HOURS
     ? `Times last confirmed ${stamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-    : 'Times from teaneckminyanim.com';
+    : `Times from ${source}`;
 }
 
 // The hand's angle only ever increases. Feeding it seconds * 6 would send it
