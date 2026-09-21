@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-20T20:16:19.971Z",
+  "generated_at": "2026-09-21T00:01:36.812Z",
   "source": "teaneckminyanim.com",
   "days": {
     "2026-09-17": {
@@ -1594,52 +1594,10 @@
         "maariv": []
       },
       "beth-aaron": {
-        "shacharis": [
-          {
-            "label": "Selichos & Shacharis",
-            "time": "6:15 AM"
-          },
-          {
-            "label": "Selichos & Shacharis",
-            "time": "7:00 AM"
-          },
-          {
-            "label": "Selichos & Shacharis",
-            "time": "7:45 AM"
-          },
-          {
-            "label": "Selichos & Shacharis",
-            "time": "8:30 AM"
-          }
-        ],
-        "mincha": [
-          {
-            "label": "Mincha",
-            "time": "1:45 PM"
-          },
-          {
-            "label": "Mincha",
-            "time": "2:45 PM"
-          },
-          {
-            "label": "Mincha",
-            "time": "3:45 PM"
-          }
-        ],
-        "maariv": [
-          {
-            "label": "Selicot",
-            "time": "12:50 AM"
-          },
-          {
-            "label": "Kol Nidre",
-            "time": "6:45 PM"
-          }
-        ],
-        "source": "shul",
-        "edge": {
-          "candles": "6:39 PM"
-        }
+        "shacharis": [],
+        "mincha": [],
+        "maariv": [],
+        "source": "shul"
       },
       "beth-abraham": {
         "shacharis": [
