@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-22T13:17:10.676Z",
+  "generated_at": "2026-09-22T18:41:09.659Z",
   "source": "teaneckminyanim.com",
   "days": {
     "2026-09-19": {
@@ -1313,24 +1313,7 @@
         "maariv": []
       },
       "beth-aaron": {
-        "shacharis": [
-          {
-            "label": "Shacharis",
-            "time": "5:50 AM"
-          },
-          {
-            "label": "Shacharit",
-            "time": "6:30 AM"
-          },
-          {
-            "label": "Shacharit",
-            "time": "7:15 AM"
-          },
-          {
-            "label": "Shacharit",
-            "time": "8:00 AM"
-          }
-        ],
+        "shacharis": [],
         "mincha": [
           {
             "label": "Mincha/Maariv",
