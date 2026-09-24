@@ -13,7 +13,18 @@ const SPORTS_CACHE = 'shabbos-clock-sports';
 // One league per pass, in rotation. Each scoreboard is about 280KB and there
 // are four of them; fetching all four every time is a megabyte an hour of wifi
 // for something nobody is waiting on.
+//
+// But a round-robin over four leagues at ten minutes refreshes any one of them
+// only every forty, and the strip can now be set to appear every two. Showing a
+// live score eight times from data three quarters of an hour old is worse than
+// not showing it: it looks current and is not. So when something is actually
+// being played the loop tightens and spends its fetches where the numbers are
+// changing.
 const SPORTS_REFRESH_MS = 600000;
+const SPORTS_LIVE_REFRESH_MS = 120000;
+// Every fourth fetch goes round the rotation regardless, so a game starting in
+// another league is noticed rather than waiting for the live one to finish.
+const SPORTS_SWEEP_EVERY = 4;
 // Long enough to read four or five games from across a room, short enough that
 // nobody waiting on a minyan time is kept waiting.
 const SPORTS_SHOW_MS = 30000;
@@ -36,6 +47,7 @@ const LEAGUES = [
 
 let sports = readJSON(SPORTS_CACHE) ?? { leagues: {} };
 let sportsLeague = 0;
+let sportsPass = 0;
 // When the strip last took the band, and when it may next.
 let sportsAt = 0;
 let sportsNext = 0;
@@ -73,10 +85,47 @@ function sportsPick(event, league) {
   }];
 }
 
-async function refreshSports() {
-  if (settings.sports === 'off') return;
+// Function declarations rather than const arrows, deliberately: these are the
+// two facts worth asserting about the refresh loop, and a const does not escape
+// the eval that declared it, so the harness could not see one.
+function sportsLive(tag) {
+  return (sports.leagues?.[tag]?.games ?? []).some((g) => g.state === 'in');
+}
+
+function sportsAnyLive() {
+  return LEAGUES.some((l) => sportsLive(l.tag));
+}
+
+// How long before the next fetch. Short while something is being played,
+// because that is when the numbers move.
+function sportsWait() {
+  return sportsAnyLive() ? SPORTS_LIVE_REFRESH_MS : SPORTS_REFRESH_MS;
+}
+
+// Which league this pass should spend its fetch on.
+function sportsNextLeague() {
+  sportsPass += 1;
+  const live = LEAGUES.filter((l) => sportsLive(l.tag));
+  if (live.length && sportsPass % SPORTS_SWEEP_EVERY !== 0) {
+    return live[sportsPass % live.length];
+  }
   const league = LEAGUES[sportsLeague % LEAGUES.length];
   sportsLeague += 1;
+  return league;
+}
+
+// Self-scheduling rather than a fixed interval, so the cadence can follow
+// whether anything is being played right now.
+function scheduleSports() {
+  setTimeout(async () => {
+    await refreshSports();
+    scheduleSports();
+  }, sportsWait());
+}
+
+async function refreshSports() {
+  if (settings.sports === 'off') return;
+  const league = sportsNextLeague();
   try {
     const res = await fetch(
       `https://site.api.espn.com/apis/site/v2/sports/${league.id}/scoreboard`,

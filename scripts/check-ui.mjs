@@ -1173,5 +1173,60 @@ console.log('\n=== SP5: nothing to say, nothing said ===');
   ok($(off.w, 'weather').querySelector('.sgame') === null, 'and Off means off');
 }
 
+console.log('\n=== SP6: the fetch follows the game that is actually being played ===');
+{
+  // A round-robin over four leagues at ten minutes refreshes any one of them
+  // only every forty, and the strip can be set to appear every two. Showing a
+  // live score eight times from three-quarter-hour-old data is worse than not
+  // showing it, so a live league gets the fetches.
+  const when = '2026-09-22T20:00:00-04:00';
+  const { w } = await withScores(when, {
+    'hockey/nhl': [game('NJ', 2, 'NYR', 1, { state: 'in', detail: '2nd' })],
+    'baseball/mlb': [game('NYY', 5, 'BOS', 2, { state: 'post' })],
+  });
+
+  const picks = await w.eval(
+    '(() => { const out = []; for (let i = 0; i < 8; i += 1) out.push(sportsNextLeague().tag); return out; })()');
+  const nhl = picks.filter((t) => t === 'NHL').length;
+  ok(nhl >= 4, `the live league takes most of the passes (${picks.join(' ')})`);
+  // But not all of them, or a game starting elsewhere would never be noticed.
+  ok(new Set(picks).size > 1, 'and the rotation still sweeps the others');
+  ok(picks.filter((t) => t !== 'NHL').length >= 2,
+    'often enough to pick up a game that has not started yet');
+}
+
+console.log('\n=== SP7: and the cadence tightens while something is live ===');
+{
+  const when = '2026-09-22T20:00:00-04:00';
+  const quiet = await withScores(when, {
+    'baseball/mlb': [game('NYY', 5, 'BOS', 2, { state: 'post' })],
+  });
+  ok(await quiet.w.eval('sportsAnyLive()') === false, 'nothing being played');
+
+  const busy = await withScores(when, {
+    'hockey/nhl': [game('NJ', 2, 'NYR', 1, { state: 'in', detail: '2nd' })],
+  });
+  ok(await busy.w.eval('sportsAnyLive()') === true, 'something is');
+  const quietWait = await quiet.w.eval('sportsWait()');
+  const busyWait = await busy.w.eval('sportsWait()');
+  ok(busyWait < quietWait,
+    `and it waits less while a game is on (${busyWait / 1000}s against ${quietWait / 1000}s)`);
+}
+
+console.log('\n=== SP8: every interval offered is one the app accepts ===');
+{
+  const { w } = await boot('2026-09-22T14:05:00-04:00');
+  const offered = [...w.document.querySelectorAll('#sports option')].map((o) => o.value);
+  ok(offered.join(',') === 'off,2,5,10,20,30', `the menu reads ${offered.join(', ')}`);
+  for (const value of offered) {
+    const { w: v } = await boot('2026-09-22T14:05:00-04:00', { settings: { sports: value } });
+    const kept = JSON.parse(v.localStorage.getItem('shabbos-clock-settings')).sports;
+    ok(kept === value || value === 'off',
+      `${value} survives sanitise (kept ${kept})`);
+    ok(v.document.getElementById('sports').value === value,
+      `and the select shows ${value} rather than blanking`);
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

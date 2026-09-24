@@ -22,7 +22,7 @@ const CHOICES = {
   clockSize: ['0.8', '1', '1.25'],
   face: ['sturdy', 'classic', 'elegant', 'clean'],
   units: ['F', 'C'],
-  sports: ['off', '10', '20', '30'],
+  sports: ['off', '2', '5', '10', '20', '30'],
 };
 
 // A stored value outside the allowed set blanks its select, and for perShul it

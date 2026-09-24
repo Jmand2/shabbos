@@ -601,9 +601,9 @@ at all.
 ## Scores
 
 The least important thing on the board, and built to behave like it. It owns no
-space: it borrows the weather band for half a minute at a set interval — Off, 10,
-20 or 30 minutes, default 20 — so there is a moment to look for rather than a
-tile to ignore. When there is nothing worth showing it does not take the band at
+space: it borrows the weather band for half a minute at a set interval — Off, 2,
+5, 10, 20 or 30 minutes, default 20 — so there is a moment to look for rather
+than a tile to ignore. When there is nothing worth showing it does not take the band at
 all.
 
 It follows the NY/NJ teams, plus **any** postseason game whoever is playing —
@@ -622,6 +622,15 @@ is ignored rather than cached, and a feed that disappears costs a half minute of
 borrowed band and nothing else. One league per pass in rotation, because each
 scoreboard is about 280KB and all four every ten minutes is a megabyte an hour
 for something nobody is waiting on.
+
+**The fetch follows the game.** A round-robin over four leagues at ten minutes
+refreshes any one of them only every forty, and the strip can be set to appear
+every two — showing a live score eight times from three-quarter-hour-old data is
+worse than not showing it, because it looks current and is not. So while
+something is actually being played the loop tightens to two minutes and spends
+its fetches on the leagues where the numbers are moving. Every fourth pass goes
+round the rotation regardless, or a game starting elsewhere would never be
+noticed.
 
 The band carries a floor so it is the same height either way. Without one it
 would shrink when the scores arrive and grow back when they leave, and every
