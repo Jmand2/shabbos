@@ -1,23 +1,30 @@
 // The wall display must never go blank, and it is never relaunched by hand.
 //
-// index.html, the app scripts and styles.css are one generation and must be
-// served as one. There are seven scripts now rather than one, which makes this
-// more important than it was, not less: a new display.js against an old
-// calendar.js is exactly the half-updated state described below. Refreshing them independently in the background can hand the page a new
-// stylesheet against an old script, which is worse than serving either
-// generation whole: the CSS scopes its rules to markup the old script does not
-// emit, so the times lose their columns and their colour. Those three are
-// network-first, on a timeout, falling back together to the last cached set.
+// THE MODEL: one VERSION is exactly one immutable app-shell generation.
 //
-// Everything else keeps the old behaviour. The zmanim library is 228KB and
-// never changes, so it stays cache-first and instant. Minyan times stay
-// network-first with the last confirmed copy behind them.
+// install downloads the complete shell into a cache of its own. From then on
+// those files are served from that cache and never individually refetched, so
+// the page cannot assemble itself out of two generations. A deploy publishes a
+// new VERSION, whose worker installs a new complete shell beside the old one
+// and takes over only once every file of it has landed. If the network dies
+// half way through an install, the new generation simply never activates and
+// the old one goes on serving — whole.
 //
-// Bump VERSION on any change to the three coupled files: install re-fetches the
-// whole list into a fresh cache, so a half-updated cache cannot survive it.
-// Bump it for data/shuls.json too — that one is cache-first, so an edit to it
-// (a new shul, a havdalah offset) reaches the wall no other way.
-const VERSION = 'v18';
+// This used to be network-first per coupled file with a cache fallback, which
+// is a weaker promise than the comments here were making. Under the wrong
+// timing a reload could take index.html and display.js from the network and
+// calendar.js and styles.css from cache: the CSS scopes its rules to markup the
+// old script does not emit, so the times lose their columns and their colour.
+//
+// VERSION IS NOT TYPED BY HAND. .github/workflows/stamp.yml rewrites the line
+// below with the commit being deployed. Cache-first is only safe if the version
+// always changes when the code does, and "remember to bump it" is exactly the
+// kind of promise that gets broken on the one commit where it matters.
+//
+// Data is not part of the shell: minyan times stay network-first with the last
+// confirmed copy behind them, and the forecast and version.json are not touched
+// at all.
+const VERSION = 'dev';   // rewritten on deploy by .github/workflows/stamp.yml
 // caches.keys() is ORIGIN-wide, not per-worker. This is served from
 // jmand2.github.io/shabbos/, so every other project page on that account shares
 // the origin — and an activate that deleted everything it did not recognise
@@ -40,6 +47,9 @@ const COUPLED = new RegExp(`/(${[...APP, 'styles.css', 'index.html', 'flights.js
 // leaves the wall blank: past this we show the cached generation instead.
 const NET_TIMEOUT = 4000;
 
+// addAll is atomic by contract: one failed request rejects the whole thing, the
+// cache is left untouched and this worker never activates. That is the property
+// the model rests on, so it is deliberately not softened with per-file catches.
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
@@ -84,9 +94,19 @@ self.addEventListener('fetch', (e) => {
   // which build this is would be the most misleading thing on the screen.
   if (url.pathname.endsWith('version.json')) return;
 
-  const freshFirst = url.pathname.includes('minyanim.json')
-    || e.request.mode === 'navigate'
-    || COUPLED.test(url.pathname);
+  // The shell: served from this generation's cache, full stop. No timeout, no
+  // background refresh, no per-file staleness — the whole point is that these
+  // cannot disagree with one another. A miss can only mean install did not
+  // precache that request, so the network answers for that one alone.
+  const isShell = e.request.mode === 'navigate' || COUPLED.test(url.pathname)
+    || /\/(vendor\/kosher-zmanim\.min\.js|data\/shuls\.json|manifest\.webmanifest)$/
+      .test(url.pathname);
+
+  if (isShell) {
+    e.respondWith(caches.match(cacheKey(e.request))
+      .then((hit) => hit ?? fetch(e.request).catch(() => Response.error())));
+    return;
+  }
 
   // Started and registered synchronously: waitUntil keeps the worker alive long
   // enough for the background refresh to finish writing to the cache.
@@ -102,7 +122,6 @@ self.addEventListener('fetch', (e) => {
     // No ignoreSearch: the keys are normalised above, so there is exactly one
     // entry per path and no oldest-match to fall into.
     const cached = await caches.match(cacheKey(e.request));
-    if (!freshFirst) return cached ?? await network ?? Response.error();
     // Nothing cached yet: the network is the only answer, so wait for it.
     if (!cached) return await network ?? Response.error();
     const timeout = new Promise((r) => { setTimeout(() => r(null), NET_TIMEOUT); });

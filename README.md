@@ -564,9 +564,39 @@ visible to `weather.js`. Separate `eval()` calls do **not** — each gets its ow
 scope. The suites therefore concatenate the files and evaluate them as one
 program, which is the faithful equivalent.
 
-All seven are in the service worker's coupled set, so they are cached and
-replaced as one generation. A new `display.js` against an old `calendar.js` is
-exactly the half-updated state that is designed against.
+All seven are in the service worker's shell, cached and replaced as one
+generation — see below.
+
+## Updates are all-or-nothing
+
+**One `VERSION` is exactly one immutable app-shell generation.** `install`
+downloads the complete shell into a cache of its own; from then on those files
+are served from that cache and never individually refetched. A deploy publishes
+a new version, whose worker installs a whole new shell beside the old one and
+takes over only once every file has landed. If the network dies half way through
+an install, the new generation never activates and the old one goes on serving —
+whole.
+
+It used to be network-first per file with a cache fallback, which is a weaker
+promise than the comments were making. A reload on a bad connection could take
+`index.html` and `display.js` from the network and `calendar.js` and
+`styles.css` from cache, and the CSS scopes its rules to markup the old script
+does not emit, so the times lose their columns and their colour.
+
+**The version is not typed by hand.** `stamp.yml` rewrites it with the commit
+being deployed, and fails the build if the rewrite did not take. Cache-first is
+only safe if the version changes whenever the code does, and "remember to bump
+it" is exactly the kind of promise that gets broken on the one commit where it
+matters.
+
+`scripts/check-sw.mjs` holds it to that: install one generation, publish a
+second, reload through a network that only half works, and assert the page is
+never built out of both. Run against the previous worker it reproduces the
+failure exactly — `index.html` from B, `calendar.js` and `styles.css` from A.
+
+Data is not part of the shell. Minyan times stay network-first with the last
+confirmed copy behind them; the forecast and `version.json` are not cached here
+at all.
 
 ## Checking a change
 

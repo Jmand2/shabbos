@@ -19,8 +19,8 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci
-      # WebKit, because that is what the iPad runs. The layout suite is the only
-      # thing here that can see a real box.
+      # WebKit, because that is what the iPad runs. The jsdom suites need none
+      # of this; check:sw does, because a service worker needs a real browser.
       - run: npx playwright install --with-deps webkit
 
       # Behaviour over time: the board repainting, the horizon rolling over at
@@ -33,6 +33,12 @@ jobs:
       # the failure modes, the normalisation rules, and a full year of renders.
       - name: check
         run: npm run check
+
+      # The worker's one real promise: install a generation, publish a second,
+      # reload through a half-working network, and assert the page is never
+      # built out of both. Fonts cannot matter here, so it runs on Linux.
+      - name: check:sw
+        run: npm run check:sw
 
       # Real WebKit at real iPad sizes. Asserts that nothing overflows its box
       # and that the numerals stay large enough to read across a room — the one

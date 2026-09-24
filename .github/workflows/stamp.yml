@@ -22,19 +22,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Write version.json
+      - name: Stamp the build into version.json and sw.js
         run: |
+          SHA="$(git rev-parse --short HEAD)"
           printf '{\n  "commit": "%s",\n  "built_at": "%s"\n}\n' \
-            "$(git rev-parse --short HEAD)" \
-            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > version.json
+            "$SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > version.json
+
+          # The worker's cache is now generation-scoped and cache-first, so the
+          # version MUST change whenever the code does or an iPad would sit on
+          # an old shell forever. Deriving it from the commit is the only way
+          # that promise survives a tired evening.
+          perl -pi -e "s/^const VERSION = '[^']*';/const VERSION = '\Q$SHA\E';/" sw.js
+
+          grep -n "^const VERSION" sw.js
           cat version.json
+          # A stamp that did not take would be silent and would break updates.
+          grep -q "^const VERSION = '$SHA';" sw.js || { echo "sw.js was not stamped"; exit 1; }
+
       - name: Commit if changed
         run: |
           git config user.name  "shabbos-clock-bot"
           git config user.email "actions@github.com"
-          git add version.json
+          git add version.json sw.js
           git diff --staged --quiet && exit 0
           # Skips CI on purpose: this commit is a stamp, not a change to test.
-          git commit -m "Stamp version [skip ci]"
+          git commit -m "Stamp build [skip ci]"
           git pull --rebase --autostash
           git push
