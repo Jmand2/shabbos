@@ -400,6 +400,16 @@ overlap becomes a darker patch, which reads as three humps rather than one cloud
 After dark a clear sky is a moon, not a sun; `is_day` comes back per hour, so
 every column knows which it is.
 
+One line of interpretation sits at the end of the heading, and only when there
+is something to interpret: `Rain likely 4pm–7pm`, `Heavy rain likely around
+6pm`, `Feels below freezing from 8pm`, `Warming to 74° by 2pm`. Ranked, and
+only ever one of them, because two notes is a forecast and the strip is already
+that. Rain outranks cold because it is the one that changes what you carry.
+
+Most days it says nothing, which is the point. A line that appears every day is
+furniture, and furniture is not read — so it lives at the end of an existing
+row rather than in one of its own, and the band does not keep height for it.
+
 Open-Meteo is free under CC-BY, which asks for attribution — that is the
 "weather from open-meteo.com" in the footer, and why it is there.
 

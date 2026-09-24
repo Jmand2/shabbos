@@ -173,6 +173,7 @@ function hoursWithin(now, span) {
     rows.push({
       at,
       temp: h.temperature_2m?.[i],
+      feels: h.apparent_temperature?.[i],
       pop: h.precipitation_probability?.[i],
       sky: skyOf(h.weather_code?.[i], h.is_day?.[i] !== 0),
     });
@@ -219,6 +220,79 @@ function todayRange(now) {
 // unknown rather than fresh.
 const weatherAge = () => (weather?.observed_at ? Date.now() - weather.observed_at : null);
 
+/* The one useful sentence ------------------------------------------------
+   Data is what the strip already shows. This is the reading of it, and it earns
+   its place only by being absent nearly always — a line that appears every day
+   is furniture, and furniture is not read.
+
+   So: nothing at all unless something would change what you put on or when you
+   leave. Ranked, and only the first one shown, because two notes is a forecast
+   and the strip is already that. */
+
+// Rain worth planning around, not worth mentioning.
+const NOTE_WET = 50;
+const NOTE_SOAKING = 80;
+// Fahrenheit throughout — the thresholds are facts about weather, not about the
+// unit the person happens to be reading it in.
+const NOTE_FREEZING = 32;
+const NOTE_SWING = 15;
+
+const noteHour = (d) => `${d.getHours() % 12 || 12}${d.getHours() < 12 ? 'am' : 'pm'}`;
+
+// The longest unbroken stretch matching a test, so "rain 5-7pm" describes one
+// spell rather than the outer bounds of two.
+function longestRun(rows, test) {
+  let best = [];
+  let run = [];
+  for (const r of rows) {
+    if (test(r)) { run.push(r); if (run.length > best.length) best = run; }
+    else run = [];
+  }
+  return best;
+}
+
+function spanLabel(run) {
+  const from = noteHour(run[0].at);
+  // The hour a spell ENDS is the hour after its last wet reading.
+  const to = noteHour(new Date(run.at(-1).at.getTime() + 3600000));
+  return run.length === 1 ? `around ${from}` : `${from}\u2013${to}`;
+}
+
+function weatherNote(rows) {
+  if (rows.length < 2) return '';
+
+  // Rain first. It is the one that changes whether you carry something.
+  const wet = longestRun(rows, (r) => Number(r.pop) >= NOTE_WET);
+  if (wet.length) {
+    const heavy = Math.max(...wet.map((r) => Number(r.pop))) >= NOTE_SOAKING;
+    return `${heavy ? 'Heavy rain' : 'Rain'} likely ${spanLabel(wet)}`;
+  }
+
+  // Then cold, which is the other thing you dress for. Measured on the
+  // apparent temperature, because that is the one you feel on the walk.
+  const cold = rows.find((r) => r.feels != null && Number(r.feels) <= NOTE_FREEZING);
+  if (cold && cold !== rows[0]) return `Feels below freezing from ${noteHour(cold.at)}`;
+
+  // Then a swing large enough that the hour you leave matters.
+  const temps = rows.map((r) => Number(r.temp)).filter((t) => !Number.isNaN(t));
+  if (temps.length > 2) {
+    const hi = Math.max(...temps);
+    const lo = Math.min(...temps);
+    if (hi - lo >= NOTE_SWING) {
+      const peak = rows.find((r) => Number(r.temp) === hi);
+      const trough = rows.find((r) => Number(r.temp) === lo);
+      // Whichever comes later is the one worth naming: it is the change still
+      // ahead of you rather than the one you already felt.
+      return peak.at > trough.at
+        ? `Warming to ${degrees(hi)}\u00b0 by ${noteHour(peak.at)}`
+        : `Dropping to ${degrees(lo)}\u00b0 by ${noteHour(trough.at)}`;
+    }
+  }
+
+  // Most days, nothing. That is the point.
+  return '';
+}
+
 let lastWeather = '';
 
 function renderWeather(now, info) {
@@ -248,10 +322,12 @@ function renderWeather(now, info) {
   const heading = span.name && span.until
     ? `${esc(span.name)}<span class="wuntil"> &middot; through ${clockTime(span.until)}</span>`
     : `<span class="wuntil">Next ${rows.length} hours</span>`;
+  const note = weatherNote(rows);
+  const noted = note ? `<span class="wnote">${esc(note)}</span>` : '';
 
   // The hour, not the whole time: twelve columns of "2:00 PM" is a wall of
   // punctuation, and every column is on the hour by construction.
-  const hourOf = (d) => `${d.getHours() % 12 || 12}${d.getHours() < 12 ? 'a' : 'p'}`;
+  const hourOf = (d) => `${d.getHours() % 12 || 12}${d.getHours() < 12 ? 'am' : 'pm'}`;
 
   const cols = rows.map((r, i) => {
     const t = degrees(r.temp);
@@ -273,7 +349,8 @@ function renderWeather(now, info) {
     + `<span class="wlabel">${esc(sky.label)}</span>`
     + (range ? `<span class="wrange">${range.hi}° / ${range.lo}°</span>` : '')
     + `${feelsLine}</div></div>`
-    + `<div class="whours"><p class="whead">${heading}</p><div class="wcols">${cols}</div></div>`;
+    + `<div class="whours"><p class="whead">${heading}${noted}</p>`
+    + `<div class="wcols">${cols}</div></div>`;
 
   if (html !== lastWeather) {
     lastWeather = html;

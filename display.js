@@ -104,7 +104,9 @@ function hhmm(d) {
     meridiem: d.getHours() < 12 ? 'am' : 'pm' };
 }
 
-const clockTime = (d) => { const t = hhmm(d); return `${t.hour}:${t.minute}${t.meridiem[0]}`; };
+// The full meridiem. It was a single letter to save width back when the tile
+// was narrow enough for that to matter; "6:41p" reads as a typo on a wall.
+const clockTime = (d) => { const t = hhmm(d); return `${t.hour}:${t.minute}${t.meridiem}`; };
 // The shape clockFace parses, so the horizon sets its meridiems exactly as the
 // cards do rather than inventing a second convention.
 const clockTimeLong = (d) => { const t = hhmm(d); return `${t.hour}:${t.minute} ${t.meridiem.toUpperCase()}`; };

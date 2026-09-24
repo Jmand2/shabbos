@@ -977,5 +977,73 @@ console.log('\n=== N: the NEXT countdown is written in place, not rendered in ==
     'six renders across three minutes replace no card node');
 }
 
+console.log('\n=== WN: the weather says something only when there is something ===');
+{
+  const when = '2026-09-22T14:05:00-04:00';
+  const base = () => {
+    const f = forecastFrom(when);
+    // A flat, dry, mild window: nothing to say about it.
+    f.hourly.precipitation_probability = f.hourly.precipitation_probability.map(() => 5);
+    f.hourly.temperature_2m = f.hourly.temperature_2m.map(() => 60);
+    f.hourly.apparent_temperature = f.hourly.apparent_temperature.map(() => 60);
+    return f;
+  };
+  const noteOn = async (edit) => {
+    const f = base();
+    edit(f);
+    const { w } = await boot(when, { forecast: f });
+    return $(w, 'weather').querySelector('.wnote')?.textContent ?? '';
+  };
+
+  ok(await noteOn(() => {}) === '', 'an unremarkable afternoon says nothing at all');
+
+  // Hours 2, 3 and 4 of the window are wet: 4pm, 5pm, 6pm, ending at 7pm.
+  const rain = await noteOn((f) => {
+    for (const i of [2, 3, 4]) f.hourly.precipitation_probability[i] = 65;
+  });
+  ok(/^Rain likely 4pm\u20137pm$/.test(rain), `one spell, named by its span (${rain})`);
+
+  const heavy = await noteOn((f) => {
+    for (const i of [2, 3]) f.hourly.precipitation_probability[i] = 90;
+  });
+  ok(/^Heavy rain likely/.test(heavy), `a soaking is called one (${heavy})`);
+
+  const single = await noteOn((f) => { f.hourly.precipitation_probability[3] = 70; });
+  ok(/around 5pm$/.test(single), `a single wet hour is "around", not a range (${single})`);
+
+  const freeze = await noteOn((f) => {
+    for (let i = 6; i < 12; i += 1) f.hourly.apparent_temperature[i] = 28;
+  });
+  ok(/^Feels below freezing from 8pm$/.test(freeze), `the cold is named by when (${freeze})`);
+
+  // Rain outranks cold: it is the one that changes what you carry.
+  const both = await noteOn((f) => {
+    for (const i of [2, 3]) f.hourly.precipitation_probability[i] = 65;
+    for (let i = 6; i < 12; i += 1) f.hourly.apparent_temperature[i] = 28;
+  });
+  ok(/^Rain/.test(both), `rain is ranked above cold (${both})`);
+
+  const warming = await noteOn((f) => {
+    f.hourly.temperature_2m = f.hourly.temperature_2m.map((_, i) => 55 + i * 2);
+  });
+  ok(/^Warming to \d+\u00b0 by /.test(warming), `a big climb is worth a line (${warming})`);
+
+  const dropping = await noteOn((f) => {
+    f.hourly.temperature_2m = f.hourly.temperature_2m.map((_, i) => 75 - i * 2);
+  });
+  ok(/^Dropping to \d+\u00b0 by /.test(dropping), `and so is a big fall (${dropping})`);
+}
+
+console.log('\n=== AP: meridiems are am and pm, not a and p ===');
+{
+  const when = '2026-09-25T14:05:00-04:00';
+  const { w } = await boot(when, { forecast: forecastFrom(when) });
+  const hours = [...w.document.querySelectorAll('.whour')].map((n) => n.textContent);
+  ok(hours.every((h) => h === 'Now' || /^\d{1,2}(am|pm)$/.test(h)),
+    `weather hours read 3pm, not 3p (${hours.slice(0, 4).join(' ')})`);
+  const edge = $(w, 'edge').textContent;
+  ok(!/\d[ap](?![m])/.test(edge), `and so do the candle/havdalah times (${edge.slice(0, 40)})`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
