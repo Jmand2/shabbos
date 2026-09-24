@@ -1,0 +1,32 @@
+# The regression suites, on every push and pull request.
+#
+# They existed and nothing ran them, so a break only showed up when somebody
+# thought to run them by hand — which is how four assertions sat red for a week.
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm i --no-save jsdom
+
+      # Behaviour over time: the board repainting, the horizon rolling over at
+      # nightfall, the weather window, the Yom Tov span. Reads its minyan times
+      # from scripts/fixtures/, so a scraper run cannot turn it red.
+      - name: check-ui
+        run: TZ=America/New_York node scripts/check-ui.mjs
+
+      # One frozen moment, many of them: every Shabbos and Yom Tov transition,
+      # the failure modes, and a full year of renders.
+      - name: check
+        run: TZ=America/New_York node scripts/check.mjs

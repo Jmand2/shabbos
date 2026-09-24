@@ -286,8 +286,10 @@ function render() {
   // next render corrected it thirty seconds later.
   renderHorizon(now, info);
   renderWeather(now, info);
-  renderShuls(now, info);
-  renderFreshness(now);
+  // One list, so the footer describes the same span the cards do.
+  const days = daysShown(now, info);
+  renderShuls(now, days);
+  renderFreshness(now, days);
 }
 
 function themeIsDay(now, info) {
@@ -423,7 +425,7 @@ function paintBoard(html) {
   $('shuls').innerHTML = html;
 }
 
-function renderShuls(now, info) {
+function renderShuls(now, days) {
   const list = shownShuls();
   if (!list.length) {
     paintBoard('<p class="none">No shuls chosen. Open Settings to pick some.</p>');
@@ -431,7 +433,6 @@ function renderShuls(now, info) {
   }
 
   const cap = Number(settings.perShul);
-  const days = daysShown(now, info);
   // Counted per card, not pooled. Averaging across the board let one heavy shul
   // hide behind two light ones and clip its own times.
   const perCardLines = [];
@@ -839,9 +840,19 @@ function todayRange(now) {
   return hi == null || lo == null ? null : { hi, lo };
 }
 
-// null when we have never recorded one — a cache written before this field
-// existed, which is treated as unknown rather than fresh.
-const weatherAge = () => (weather?.fetched_at ? Date.now() - weather.fetched_at : null);
+// Age is measured from the observation the payload carries, never from the clock
+// at the moment we parsed it.
+//
+// Date.now() looked right and was not: the service worker can hand back a
+// CACHED response — that is the whole point of it — and a cached response is
+// res.ok like any other. Every replay of an hours-old forecast was therefore
+// stamped as freshly fetched, which defeated exactly the staleness this was
+// added to expose. `current.time` travels with the data and cannot be
+// re-stamped by anything downstream.
+//
+// null when there is no observation to measure from, which is treated as
+// unknown rather than fresh.
+const weatherAge = () => (weather?.observed_at ? Date.now() - weather.observed_at : null);
 
 let lastWeather = '';
 
@@ -908,21 +919,22 @@ async function refreshWeather() {
     // Anything without an hourly series is not a forecast, and overwriting a
     // good cache with it would blank the strip until the next fetch.
     if (!Array.isArray(data?.hourly?.time)) return;
-    // Stamped on arrival. Without this a cached forecast is indistinguishable
-    // from a fresh one for as long as the network stays down, and the strip
-    // goes on quietly presenting an old sky as the current one.
-    data.fetched_at = Date.now();
+    // Read off the payload, not the clock. A missing or unparseable observation
+    // time leaves this null, and null reads as unknown — which routes through
+    // the same path as a dead forecast rather than through the fresh one.
+    data.observed_at = localHour(data.current?.time)?.getTime() ?? null;
     weather = data;
     localStorage.setItem(WEATHER_CACHE, JSON.stringify(data));
     const now = new Date();
-    renderWeather(now, dayInfo(now));
+    const info = dayInfo(now);
+    renderWeather(now, info);
     // The strip appearing for the first time takes a band off the cards, so
     // they have to be re-measured against what is left of the board.
     fitBoard();
     // The footer credits open-meteo only once there is something to credit, so
     // it has to be repainted with the strip rather than waiting for the next
     // thirty-second render.
-    renderFreshness();
+    renderFreshness(now, daysShown(now, info));
   } catch { /* keep the last sky: a forecast an hour old beats an empty band */ }
 }
 
@@ -933,21 +945,30 @@ async function refreshWeather() {
 // showing yesterday's schedule sat under a line claiming the data was confirmed
 // minutes ago. Each entry now carries its own stamp, and the line describes the
 // worst of the ones actually displayed.
-function shownStamp(now) {
+function shownStamp(now, days) {
   const file = minyanim.generated_at ? new Date(minyanim.generated_at) : null;
-  const today = isoOf(now);
-  const stamps = shownShuls()
-    .map((s) => minyanim.days?.[today]?.[s.slug]?.fetched_at)
-    // No per-shul stamp means data written before they existed; the file-level
-    // one is the only thing left to fall back on.
-    .map((t) => (t ? new Date(t) : file))
-    .filter(Boolean);
-  if (!stamps.length) return file;
-  return new Date(Math.min(...stamps.map((t) => t.getTime())));
+  const stamps = [];
+  // Every day the board reaches, not just today. Once the window widened to
+  // cover a three-day Yom Tov this still asked about today alone, so a Shabbos
+  // entry retained from an older run sat two columns away from a line calling
+  // the board current.
+  for (const day of days) {
+    const iso = isoOf(day);
+    for (const s of shownShuls()) {
+      const entry = minyanim.days?.[iso]?.[s.slug];
+      if (!entry) continue;
+      // No per-shul stamp means data written before they existed; the
+      // file-level one is the only thing left to fall back on.
+      stamps.push(entry.fetched_at ? new Date(entry.fetched_at) : file);
+    }
+  }
+  const known = stamps.filter(Boolean);
+  if (!known.length) return file;
+  return new Date(Math.min(...known.map((t) => t.getTime())));
 }
 
-function renderFreshness(now = new Date()) {
-  const stamp = shownStamp(now);
+function renderFreshness(now = new Date(), days = [now]) {
+  const stamp = shownStamp(now, days);
   if (!stamp) { $('freshness').textContent = 'No minyan data yet'; return; }
   const hours = (Date.now() - stamp) / 3.6e6;
   // Credit where the times on screen actually came from: a shul that publishes

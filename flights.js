@@ -75,7 +75,10 @@
     for (const f of m.faces) {
       const buf = await fetch(`faces/${f.file}`).then((r) => r.arrayBuffer());
       const plain = await openBlob(k, buf);
-      out.push({ ring: f.ring, url: URL.createObjectURL(new Blob([plain], { type: 'image/jpeg' })) });
+      // The type the crop actually was. Faces encrypted before the manifest
+      // carried one are jpegs, which is what the old hard-coded value assumed.
+      const type = f.type ?? 'image/jpeg';
+      out.push({ ring: f.ring, url: URL.createObjectURL(new Blob([plain], { type })) });
     }
     return out;
   }

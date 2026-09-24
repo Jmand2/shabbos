@@ -452,7 +452,7 @@ function forecastFrom(startIso, hours = 96) {
     // Stamped fresh, because that is what almost every test here wants. The
     // ones about staleness override it, and one deletes it to stand in for a
     // cache written before the field existed.
-    fetched_at: base.getTime(),
+    observed_at: base.getTime(),
   };
 }
 
@@ -595,19 +595,19 @@ console.log('\n=== R2: an old forecast says so instead of passing as current ===
   const when = '2026-09-22T14:05:00-04:00';
   const fresh = forecastFrom(when);
 
-  const now = await boot(when, { forecast: { ...fresh, fetched_at: new Date(when).getTime() } });
+  const now = await boot(when, { forecast: { ...fresh, observed_at: new Date(when).getTime() } });
   ok(!/old|age unknown/.test($(now.w, 'freshness').textContent),
     `a forecast just fetched is not labelled ("${$(now.w, 'freshness').textContent}")`);
 
   const old = await boot(when, {
-    forecast: { ...fresh, fetched_at: new Date(when).getTime() - 3 * 3600 * 1000 },
+    forecast: { ...fresh, observed_at: new Date(when).getTime() - 3 * 3600 * 1000 },
   });
   const line = $(old.w, 'freshness').textContent;
   ok(/3h old/.test(line), `three hours on shows its age ("${line}")`);
 
   // A cache written before the field existed. Unknown is not fresh.
   const unstamped = { ...fresh };
-  delete unstamped.fetched_at;
+  delete unstamped.observed_at;
   const legacy = await boot(when, { forecast: unstamped });
   ok(/age unknown/.test($(legacy.w, 'freshness').textContent),
     `a cache with no stamp reads as unknown ("${$(legacy.w, 'freshness').textContent}")`);
@@ -621,12 +621,12 @@ console.log('\n=== R3: past six hours the "now" block stops being an observation
   // one the block is reading.
   fresh.current = { temperature_2m: 99, apparent_temperature: 99, weather_code: 0, is_day: 1 };
 
-  const live = await boot(when, { forecast: { ...fresh, fetched_at: new Date(when).getTime() } });
+  const live = await boot(when, { forecast: { ...fresh, observed_at: new Date(when).getTime() } });
   ok($(live.w, 'weather').querySelector('.wbig').textContent === '99°',
     'a fresh observation is used as-is');
 
   const dead = await boot(when, {
-    forecast: { ...fresh, fetched_at: new Date(when).getTime() - 8 * 3600 * 1000 },
+    forecast: { ...fresh, observed_at: new Date(when).getTime() - 8 * 3600 * 1000 },
   });
   const shown = $(dead.w, 'weather').querySelector('.wbig').textContent;
   ok(shown !== '99°', `an eight-hour-old observation is dropped (shows ${shown})`);
@@ -706,6 +706,142 @@ console.log('\n=== F: freshness describes the oldest shul on screen ===');
     { minyanim: schedule(PESACH), settings: { shuls: ['beth-aaron'] } });
   ok(!/last confirmed/.test($(fresh.w, 'freshness').textContent),
     `and a board where everything is current says so ("${$(fresh.w, 'freshness').textContent}")`);
+}
+
+/* S — the second review round -------------------------------------------- */
+
+console.log('\n=== S1: a replayed cached forecast cannot pass as freshly fetched ===');
+{
+  // The service worker hands back cached responses by design, and a cached
+  // response is res.ok like any other. Stamping on arrival therefore re-dated
+  // every replay as current — so the age has to come off the payload.
+  const when = '2026-09-22T14:05:00-04:00';
+  const stale = forecastFrom(when);
+  delete stale.observed_at;
+  // What the worker would replay: a body observed five hours ago, handed over
+  // now, indistinguishable from a live fetch at the response level.
+  stale.current = { ...stale.current, time: '2026-09-22T09:00' };
+
+  const { w } = await boot(when, { forecast: null });
+  w.eval(`(async () => {
+    window.fetch = async (u) => String(u).includes('open-meteo')
+      ? { ok: true, json: async () => (${JSON.stringify(stale)}) }
+      : { ok: false };
+    await refreshWeather();
+  })()`);
+  await new Promise((r) => setTimeout(r, 60));
+  const line = $(w, 'freshness').textContent;
+  ok(/5h old/.test(line), `the five-hour-old observation is reported ("${line}")`);
+}
+
+console.log('\n=== S2: the age is read from current.time, not the clock ===');
+{
+  const when = '2026-09-22T14:05:00-04:00';
+  const live = forecastFrom(when);
+  delete live.observed_at;
+  live.current = { ...live.current, time: '2026-09-22T14:00' };
+  const { w } = await boot(when, { forecast: null });
+  w.eval(`(async () => {
+    window.fetch = async (u) => String(u).includes('open-meteo')
+      ? { ok: true, json: async () => (${JSON.stringify(live)}) }
+      : { ok: false };
+    await refreshWeather();
+  })()`);
+  await new Promise((r) => setTimeout(r, 60));
+  ok(!/old|age unknown/.test($(w, 'freshness').textContent),
+    `an observation from this hour is not labelled ("${$(w, 'freshness').textContent}")`);
+}
+
+console.log('\n=== S3: freshness covers every day on the board, not only today ===');
+{
+  // Today confirmed minutes ago; the last day of the chag retained from a run
+  // a day and a half back. The footer has to describe the worst of them.
+  const data = schedule(PESACH, 'beth-aaron', '2027-04-21T18:00:00Z');
+  data.days['2027-04-24']['beth-aaron'].fetched_at = '2027-04-20T06:00:00Z';
+  const { w } = await boot('2027-04-21T15:00:00-04:00',
+    { minyanim: data, settings: { shuls: ['beth-aaron'] } });
+  const groups = [...w.document.querySelectorAll('.card .body .group')].length;
+  ok(groups === 4, `the board is showing all four days (${groups})`);
+  ok(/last confirmed/.test($(w, 'freshness').textContent),
+    `a stale Saturday two columns away is reported ("${$(w, 'freshness').textContent}")`);
+}
+
+console.log('\n=== S4: the worker keeps one entry per path, and it is the newest ===');
+{
+  // No jsdom here — sw.js runs in a worker scope, so it gets a fake one. The
+  // point is the cache-busting query app.js appends: it used to mint a new key
+  // on every fetch, so nothing was replaced and the ignoreSearch lookup
+  // returned the FIRST match, which is the oldest copy ever stored.
+  // Modelled on the real Cache API, because the bug lives in its exact
+  // semantics: put() keys by the request's URL (query included), and match()
+  // with ignoreSearch returns the FIRST entry in insertion order whose path
+  // matches — the oldest, not the newest.
+  const entries = new Map();
+  const keyOf = (k) => (typeof k === 'string' ? k : k.url);
+  const bareOf = (u) => u.split('?')[0];
+  const find = (k, opts) => {
+    const want = keyOf(k);
+    if (!opts?.ignoreSearch) return entries.get(want);
+    for (const [have, v] of entries) if (bareOf(have) === bareOf(want)) return v;
+    return undefined;
+  };
+  const cacheApi = {
+    open: async () => ({
+      put: async (k, v) => { entries.set(keyOf(k), v); },
+      match: async (k, o) => find(k, o),
+    }),
+    keys: async () => ['shabbos-clock-v9'],
+    delete: async () => true,
+    match: async (k, o) => find(k, o),
+  };
+  const handlers = {};
+  const scope = {
+    self: {
+      addEventListener: (t, f) => { handlers[t] = f; },
+      skipWaiting: async () => {}, clients: { claim: async () => {} },
+    },
+    caches: cacheApi,
+    URL, Promise, setTimeout, console,
+    Response: { error: () => ({ ok: false, body: 'ERR' }) },
+  };
+  let served = null;
+  scope.fetch = async () => served;
+
+  const src = readFileSync(new URL('sw.js', ROOT), 'utf8');
+  // eslint-disable-next-line no-new-func
+  new Function(...Object.keys(scope), src)(...Object.values(scope));
+  ok(typeof handlers.fetch === 'function', 'the worker registered a fetch handler');
+
+  const run = async (url) => {
+    let out;
+    const e = {
+      request: { url, method: 'GET', mode: 'no-cors' },
+      waitUntil: () => {},
+      respondWith: (p) => { out = p; },
+    };
+    handlers.fetch(e);
+    return out;
+  };
+
+  const base = 'https://x.test/shabbos/data/minyanim.json';
+  served = { ok: true, body: 'OLD', clone: () => ({ ok: true, body: 'OLD' }) };
+  await run(`${base}?t=1`);
+  await new Promise((r) => setTimeout(r, 10));
+  served = { ok: true, body: 'NEW', clone: () => ({ ok: true, body: 'NEW' }) };
+  await run(`${base}?t=2`);
+  await new Promise((r) => setTimeout(r, 10));
+
+  ok(entries.size === 1, `two cache-busted fetches leave one entry, not two (${entries.size})`);
+  ok([...entries.keys()][0] === base, `stored under the bare path ("${[...entries.keys()][0]}")`);
+  ok(entries.get(base)?.body === 'NEW',
+    `and it is the newest copy, not the first (${entries.get(base)?.body ?? 'nothing under that key'})`);
+
+  // Offline, with a third cache-busting query it has never seen before.
+  served = null;
+  scope.fetch = async () => { throw new Error('offline'); };
+  const res = await run(`${base}?t=3`);
+  ok(res ? (await res)?.body === 'NEW' : false,
+    'an unseen query still finds the cached copy when the network is gone');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

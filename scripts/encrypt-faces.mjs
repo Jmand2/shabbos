@@ -25,6 +25,11 @@ const SRC = new URL('../faces-src/', import.meta.url);
 const OUT = new URL('../faces/', import.meta.url);
 const ITERATIONS = 600_000;          // OWASP guidance for PBKDF2-SHA256
 const EXT = /\.(jpe?g|png|webp)$/i;
+// The crop's real type, carried in the manifest. The reader used to rebuild
+// every face as image/jpeg regardless of what went in, so a PNG or WebP source
+// came back mislabelled and survived only on the browser's willingness to sniff.
+const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+const mimeOf = (name) => MIME[name.split('.').pop().toLowerCase()] ?? 'image/jpeg';
 
 // Ring colours, handed out in order. A face keeps its colour across every
 // vehicle it rides, so each person effectively has one.
@@ -104,7 +109,9 @@ async function add(passphrase, names) {
     await writeFile(new URL(file, OUT), await seal(key, bytes));
     // Carry on round the ring from where the last run stopped, so the new face
     // does not land on the colour of the one before it.
-    manifest.faces.push({ id: id(), file, ring: RING[(start + i) % RING.length] });
+    manifest.faces.push({
+      id: id(), file, type: mimeOf(name), ring: RING[(start + i) % RING.length],
+    });
     const kb = Math.round(bytes.length / 1024);
     console.log(`  ${name.padEnd(24)} -> ${file}  (${kb} KB)`);
   }
@@ -157,7 +164,7 @@ async function main() {
     const bytes = await readFile(new URL(name, SRC));
     const file = `${id()}.bin`;
     await writeFile(new URL(file, OUT), await seal(key, bytes));
-    faces.push({ id: id(), file, ring: RING[i % RING.length] });
+    faces.push({ id: id(), file, type: mimeOf(name), ring: RING[i % RING.length] });
     const kb = Math.round((await stat(new URL(name, SRC))).size / 1024);
     console.log(`  ${name.padEnd(24)} -> ${file}  (${kb} KB)`);
   }

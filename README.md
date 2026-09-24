@@ -17,7 +17,10 @@ teaneckminyanim.com and writes `data/minyanim.json`. The iPad only reads that
 file. Nothing derives a minyan time from sunset or from last week's schedule. If
 a day was not confirmed, the shul shows "Times unavailable" instead of a number.
 
-**Fetched live** — the weather, from open-meteo.com, every twenty minutes. No key
+**Fetched live** — the weather, from open-meteo.com, every twenty minutes. Its
+age is read from the observation time inside the payload rather than from the
+clock when it arrived: the service worker replays cached responses by design,
+and a replay is indistinguishable from a live fetch at the response level. No key
 and no account; it is the only request the display makes off its own origin. The
 last forecast is kept on the iPad, so a wifi drop shows an hour-old sky rather
 than an empty band, and a forecast that never arrives hides the strip instead of
@@ -285,7 +288,8 @@ drops the furthest day rather than quietly showing five.
 
 ## When the times were last confirmed
 
-The footer describes the oldest shul on screen, not the newest thing in the file.
+The footer describes the oldest shul on screen, across every day the board
+reaches — not the newest thing in the file, and not today alone.
 
 `generated_at` goes fresh if **any** shul was fetched successfully, while the
 scraper deliberately retains the previous entry for any that failed. A shul
@@ -457,6 +461,12 @@ back on its own after havdalah. The lock uses the same calculation as the displa
 so it also covers two-day Yom Tov and a Yom Tov that runs into Shabbos.
 
 ## Checking a change
+
+Both suites run in GitHub Actions on every push and pull request
+(`.github/workflows/check.yml`). They existed for a while with nothing running
+them, which is how four assertions sat red for a week.
+
+To run them by hand:
 
 ```
 npm i --no-save jsdom

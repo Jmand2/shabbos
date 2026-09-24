@@ -15,7 +15,7 @@
 // whole list into a fresh cache, so a half-updated cache cannot survive it.
 // Bump it for data/shuls.json too — that one is cache-first, so an edit to it
 // (a new shul, a havdalah offset) reaches the wall no other way.
-const VERSION = 'v8';
+const VERSION = 'v9';
 // caches.keys() is ORIGIN-wide, not per-worker. This is served from
 // jmand2.github.io/shabbos/, so every other project page on that account shares
 // the origin — and an activate that deleted everything it did not recognise
@@ -48,6 +48,21 @@ self.addEventListener('activate', (e) => {
     .then(() => self.clients.claim()));
 });
 
+// One cache entry per path, with the query stripped.
+//
+// app.js asks for `data/minyanim.json?t=<now>` to defeat the HTTP cache, which
+// made every single fetch a NEW cache key. Nothing was ever replaced, the cache
+// grew without bound, and the lookup below used ignoreSearch — which returns
+// the FIRST match in insertion order, i.e. the OLDEST copy ever stored. A slow
+// network past the timeout therefore served the oldest schedule on file rather
+// than the newest. Normalising the key means one entry per path, always the
+// most recent, and it lines up with the precache, which stores by plain URL.
+const cacheKey = (req) => {
+  const u = new URL(req.url);
+  u.search = '';
+  return u.toString();
+};
+
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
@@ -64,14 +79,16 @@ self.addEventListener('fetch', (e) => {
   // enough for the background refresh to finish writing to the cache.
   const network = fetch(e.request)
     .then(async (res) => {
-      if (res.ok) (await caches.open(CACHE)).put(e.request, res.clone());
+      if (res.ok) (await caches.open(CACHE)).put(cacheKey(e.request), res.clone());
       return res;
     })
     .catch(() => null);
   e.waitUntil(network);
 
   e.respondWith((async () => {
-    const cached = await caches.match(e.request, { ignoreSearch: true });
+    // No ignoreSearch: the keys are normalised above, so there is exactly one
+    // entry per path and no oldest-match to fall into.
+    const cached = await caches.match(cacheKey(e.request));
     if (!freshFirst) return cached ?? await network ?? Response.error();
     // Nothing cached yet: the network is the only answer, so wait for it.
     if (!cached) return await network ?? Response.error();
