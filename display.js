@@ -83,7 +83,11 @@ function render() {
   // 15vh to the weather, and a portrait card clipped its own times until the
   // next render corrected it thirty seconds later.
   renderHorizon(now, info);
-  renderWeather(now, info);
+  // The scores borrow this band for half a minute at a time. Both painters own
+  // the same element, so each clears the other's memo on the way in or the
+  // swap back would be skipped as "nothing changed".
+  if (sportsUp()) { lastWeather = ''; renderSports(now); }
+  else { lastSports = ''; $('weather').className = 'weather'; renderWeather(now, info); }
   // One list, so the footer describes the same span the cards do.
   const days = daysShown(now, info);
   renderShuls(now, days);
@@ -648,4 +652,5 @@ function tick() {
   $('clockMer').textContent = t.meridiem;
   paintDial(now);
   paintCountdowns(now);
+  sportsTick();
 }

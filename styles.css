@@ -558,6 +558,11 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
      instead, which looks exactly like a working strip. It is made short by
      being compact (see the portrait rules below), not by being cropped. */
   flex: 0 1 auto;
+  /* The scores borrow this band, and they have less to say than twelve hours of
+     weather do. Without a floor the band would shrink when they arrive and grow
+     back when they leave, and every card below would jump twice an hour — on a
+     display nobody is touching, movement is the one thing that gets noticed. */
+  min-height: clamp(96px, 15vh, 156px);
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
@@ -743,6 +748,100 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
      painting over another. */
   .zmanim { gap: 0.5em; margin-top: 0.7em; padding-top: 0.7em; }
   .datebox .edge { margin-top: 0.7em; padding-top: 0.7em; }
+}
+
+/* Scores ---------------------------------------------------------------
+   Borrowed space, so it dresses as the band it borrows: same panel, same
+   radius, same two-part shape with a label on the left. It is only ever up for
+   half a minute, and it is the one thing here nobody needs, so it is the
+   quietest surface of the three. */
+.weather.sports {
+  background:
+    linear-gradient(to bottom,
+      color-mix(in srgb, var(--accent) 6%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent)),
+    var(--panel);
+  border-color: color-mix(in srgb, var(--rule) 70%, var(--accent));
+}
+.snow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+  padding-right: clamp(12px, 1.6vw, 26px);
+  border-right: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.slabel {
+  font-size: clamp(13px, 2vh, 22px);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.ssub {
+  font-size: clamp(9px, 1.25vh, 13px);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.sgames {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: clamp(8px, 1.2vw, 20px);
+  min-width: 0;
+  align-items: center;
+}
+.sgame {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18em;
+  min-width: 0;
+}
+.sleague {
+  font-size: clamp(8px, 1.05vh, 11px);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Two rows, away over home, so the eye reads a result rather than a sentence. */
+.steam {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5em;
+  color: var(--text-2);
+}
+/* The winner keeps full weight; the other steps back. Nothing is coloured —
+   this is a scoreboard, not a result anybody here is invested in. */
+.steam.lead { color: var(--text); font-weight: 700; }
+.sabbr {
+  font-size: clamp(12px, 1.8vh, 21px);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.sscore {
+  font-size: clamp(15px, 2.2vh, 26px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.sstate {
+  font-size: clamp(8px, 1.05vh, 11px);
+  color: var(--mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 0.15em;
+}
+/* A game actually being played is the only thing here worth an accent. */
+.sgame.live .sstate { color: var(--accent); font-weight: 600; }
+
+@media (max-aspect-ratio: 1 / 1) {
+  .snow { padding-right: clamp(8px, 1.2vw, 14px); }
+  .slabel { font-size: clamp(12px, 1.7vh, 18px); }
 }
 
 /* Shul cards ----------------------------------------------------------- */

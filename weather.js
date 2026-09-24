@@ -299,7 +299,10 @@ function renderWeather(now, info) {
   const el = $('weather');
   const { span, rows } = weatherWindow(now, info);
   el.hidden = !settings.showWeather || !rows.length;
-  if (el.hidden) { lastWeather = ''; return; }
+  // Emptied, not just hidden. The scores borrow this element, so a hidden band
+  // that still holds the last scoreboard is a stale one waiting to be shown
+  // again by anything that unhides it.
+  if (el.hidden) { lastWeather = ''; el.innerHTML = ''; return; }
 
   const age = weatherAge();
   // An observation has a moment attached to it and goes wrong as that moment

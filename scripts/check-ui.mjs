@@ -22,7 +22,7 @@
 import { JSDOM } from 'jsdom';
 
 const APP_FILES = [
-  'util.js', 'calendar.js', 'settings.js', 'minyanim.js', 'weather.js', 'display.js', 'app.js',
+  'util.js', 'calendar.js', 'settings.js', 'minyanim.js', 'weather.js', 'sports.js', 'display.js', 'app.js',
 ];
 import { readFileSync } from 'node:fs';
 
@@ -36,7 +36,7 @@ const ok = (cond, msg, extra = '') => {
 };
 
 // A clock that advances: each `new Date()` returns base + however far we've stepped.
-async function boot(startIso, { settings = null, killMatchMedia = false, forecast = null, minyanim = null } = {}) {
+async function boot(startIso, { settings = null, killMatchMedia = false, forecast = null, minyanim = null, scores = null } = {}) {
   const dom = new JSDOM(file('index.html'),
     { runScripts: 'outside-only', url: 'https://x.test/', pretendToBeVisual: true });
   const w = dom.window;
@@ -56,6 +56,11 @@ async function boot(startIso, { settings = null, killMatchMedia = false, forecas
   if (forecast) w.localStorage.setItem('shabbos-clock-weather', JSON.stringify(forecast));
   w.fetch = async (u) => {
     if (String(u).includes('open-meteo')) throw new Error('offline');
+    if (String(u).includes('espn.com')) {
+      const league = /sports\/([a-z]+\/[a-z]+)\//.exec(String(u))?.[1];
+      if (!scores || !scores[league]) return { ok: true, json: async () => ({ events: [] }) };
+      return { ok: true, json: async () => scores[league] };
+    }
     let path = String(u).replace(/^.*?(data\/[^?]+).*$/, '$1');
     // Minyan times come from the frozen fixture, never from data/minyanim.json.
     // That file is rewritten three times a day by the scraper and keeps only a
@@ -1043,6 +1048,129 @@ console.log('\n=== AP: meridiems are am and pm, not a and p ===');
     `weather hours read 3pm, not 3p (${hours.slice(0, 4).join(' ')})`);
   const edge = $(w, 'edge').textContent;
   ok(!/\d[ap](?![m])/.test(edge), `and so do the candle/havdalah times (${edge.slice(0, 40)})`);
+}
+
+/* SP — scores ------------------------------------------------------------ */
+// An ESPN-shaped event, reduced to the fields this actually reads.
+function game(away, aScore, home, hScore, { state = 'post', detail = 'Final', post = false,
+  at = '2026-09-22T23:00Z' } = {}) {
+  return {
+    date: at,
+    season: { type: post ? 3 : 2 },
+    status: { type: { state, shortDetail: detail } },
+    competitions: [{ competitors: [
+      { homeAway: 'away', score: String(aScore), team: { abbreviation: away } },
+      { homeAway: 'home', score: String(hScore), team: { abbreviation: home } },
+    ] }],
+  };
+}
+const feed = (map) => Object.fromEntries(
+  Object.entries(map).map(([k, v]) => [k, { events: v }]));
+
+async function withScores(when, map, extra = {}) {
+  const boots = await boot(when, { scores: feed(map), ...extra });
+  // Four passes, because the feed is fetched one league at a time in rotation.
+  await boots.w.eval('(async () => { for (let i = 0; i < 4; i += 1) await refreshSports(); })()');
+  await new Promise((r) => setTimeout(r, 60));
+  return boots;
+}
+
+// The band is driven through the real scheduler, never by poking state.
+// `let` bindings do not escape the eval that declared them, so assigning
+// sportsAt from a later eval creates a NEW global and leaves the module's own
+// unchanged — the assertion then passes or fails for reasons unconnected to the
+// app. tick() is a function declaration, which does leak, so this is the path
+// the clock itself uses.
+function runSportsClock({ w, advance }, minutes = 21) {
+  w.eval('tick()');                 // arms the interval
+  advance(minutes * 60000);
+  w.eval('tick()');                 // due now
+}
+
+console.log('\n=== SP1: abbreviations are scoped per league ===');
+{
+  // The trap this is built around. "Rangers" is NYR in hockey and TEX in
+  // baseball; "Giants" is NYG in football and SF in baseball; "Jets" is NYJ and
+  // WPG. A flat list of names would follow three wrong teams.
+  const when = '2026-09-22T20:00:00-04:00';
+  const { w } = await withScores(when, {
+    'baseball/mlb': [game('TEX', 3, 'SEA', 1), game('SF', 2, 'LAD', 4), game('NYY', 5, 'BOS', 2)],
+    'hockey/nhl': [game('WPG', 1, 'CGY', 2)],
+  });
+  const kept = await w.eval('sportsGames().map((g) => `${g.a}@${g.h}`)');
+  ok(kept.length === 1 && kept[0] === 'NYY@BOS',
+    `only the real local game is kept (${kept.join(', ') || 'none'})`);
+}
+
+console.log('\n=== SP2: playoffs anywhere, regular season only at home ===');
+{
+  const when = '2026-09-22T20:00:00-04:00';
+  const { w } = await withScores(when, {
+    'baseball/mlb': [
+      game('HOU', 2, 'CLE', 3, { post: true }),     // no local team, but postseason
+      game('MIA', 1, 'PIT', 0),                     // neither, regular season
+      game('NYM', 4, 'ATL', 3),                     // local
+    ],
+  });
+  const kept = await w.eval('sportsGames().map((g) => `${g.a}@${g.h}`)');
+  ok(kept.includes('NYM@ATL'), 'the local game is in');
+  ok(kept.includes('HOU@CLE'), 'so is a playoff game between two others');
+  ok(!kept.includes('MIA@PIT'), `and an unrelated regular-season game is not (${kept.join(', ')})`);
+}
+
+console.log('\n=== SP3: in progress first, then finals, then what is coming ===');
+{
+  const when = '2026-09-22T20:00:00-04:00';
+  const { w } = await withScores(when, {
+    'baseball/mlb': [
+      game('NYY', 0, 'TB', 0, { state: 'pre', detail: '9:05 PM', at: '2026-09-23T01:05Z' }),
+      game('NYM', 4, 'ATL', 3, { state: 'post', detail: 'Final' }),
+    ],
+    'hockey/nhl': [game('NJ', 2, 'NYR', 1, { state: 'in', detail: '2nd 8:24' })],
+  });
+  const order = await w.eval('sportsGames().map((g) => g.state)');
+  ok(order[0] === 'in', `a game being played leads (${order.join(' ')})`);
+  ok(order[1] === 'post' && order[2] === 'pre', 'then the final, then the one still to come');
+}
+
+console.log('\n=== SP4: the band is borrowed, then given back ===');
+{
+  const when = '2026-09-22T20:00:00-04:00';
+  const boots = await withScores(when,
+    { 'hockey/nhl': [game('NJ', 2, 'NYR', 1, { state: 'in', detail: '2nd' })] });
+  const { w, advance } = boots;
+  const band = $(w, 'weather');
+  ok(band.querySelector('.sgame') === null, 'the band starts as the weather');
+
+  runSportsClock(boots);
+  ok(band.querySelector('.sgame') !== null, 'the scores take it when the interval comes round');
+  ok(/NYR/.test(band.textContent), `and they are the right ones (${band.textContent.trim().slice(0, 40)})`);
+
+  // Past the half minute it is given back, without waiting out a real timeout.
+  advance(31000);
+  w.eval('render()');
+  ok(band.querySelector('.sgame') === null,
+    'and it goes back to the weather rather than sticking');
+}
+
+console.log('\n=== SP5: nothing to say, nothing said ===');
+{
+  const when = '2026-09-22T20:00:00-04:00';
+  const empty = await withScores(when, { 'baseball/mlb': [game('MIA', 1, 'PIT', 0)] });
+  ok(await empty.w.eval('sportsGames().length') === 0, 'no relevant games');
+  runSportsClock(empty);
+  ok($(empty.w, 'weather').querySelector('.sgame') === null,
+    'the band is not taken over for an empty strip');
+
+  const off = await withScores(when,
+    { 'hockey/nhl': [game('NJ', 2, 'NYR', 1, { state: 'in' })] },
+    { settings: { sports: 'off' } });
+  // Off does not merely hide the band: it never asks ESPN for anything, which
+  // is why there is nothing cached to show either.
+  ok(await off.w.eval('sportsGames().length') === 0,
+    'Off does not even fetch, so nothing is cached');
+  runSportsClock(off);
+  ok($(off.w, 'weather').querySelector('.sgame') === null, 'and Off means off');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

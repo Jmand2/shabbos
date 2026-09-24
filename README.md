@@ -598,6 +598,36 @@ Data is not part of the shell. Minyan times stay network-first with the last
 confirmed copy behind them; the forecast and `version.json` are not cached here
 at all.
 
+## Scores
+
+The least important thing on the board, and built to behave like it. It owns no
+space: it borrows the weather band for half a minute at a set interval — Off, 10,
+20 or 30 minutes, default 20 — so there is a moment to look for rather than a
+tile to ignore. When there is nothing worth showing it does not take the band at
+all.
+
+It follows the NY/NJ teams, plus **any** postseason game whoever is playing —
+October baseball is worth a glance. In progress first, then finals, then what is
+coming, with a local team ahead of a playoff between two others.
+
+Team abbreviations are scoped per league, which is the whole trap: **Rangers is
+NYR in hockey and TEX in baseball, Giants is NYG in football and SF in baseball,
+and Jets is NYJ and WPG.** A flat list of names would quietly follow three wrong
+teams.
+
+From ESPN's public scoreboard API — no key, and it sends `access-control-allow-
+origin: *`, so the display calls it directly as it does the weather. It is
+**undocumented**, so it is treated as something that may vanish: a bad response
+is ignored rather than cached, and a feed that disappears costs a half minute of
+borrowed band and nothing else. One league per pass in rotation, because each
+scoreboard is about 280KB and all four every ten minutes is a megabyte an hour
+for something nobody is waiting on.
+
+The band carries a floor so it is the same height either way. Without one it
+would shrink when the scores arrive and grow back when they leave, and every
+card below would jump twice an hour — on a display nobody is touching, movement
+is the one thing that gets noticed.
+
 ## The vehicles
 
 Four paints rather than one outline: a **hull** you cannot see through, **glass**

@@ -6,7 +6,7 @@
 import { JSDOM } from 'jsdom';
 
 const APP_FILES = [
-  'util.js', 'calendar.js', 'settings.js', 'minyanim.js', 'weather.js', 'display.js', 'app.js',
+  'util.js', 'calendar.js', 'settings.js', 'minyanim.js', 'weather.js', 'sports.js', 'display.js', 'app.js',
 ];
 import { readFileSync } from 'node:fs';
 import {

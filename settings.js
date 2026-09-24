@@ -11,7 +11,7 @@ const DEFAULTS = {
   shuls: ['beth-aaron', 'ohr-saadya'],
   layout: 'board', perShul: 'auto', theme: 'auto', accent: 'brass', clockSize: '1',
   face: 'sturdy', seconds: false, showHorizon: false, showZmanim: false,
-  showWeather: true, units: 'F',
+  showWeather: true, units: 'F', sports: '20',
 };
 
 const CHOICES = {
@@ -22,6 +22,7 @@ const CHOICES = {
   clockSize: ['0.8', '1', '1.25'],
   face: ['sturdy', 'classic', 'elegant', 'clean'],
   units: ['F', 'C'],
+  sports: ['off', '10', '20', '30'],
 };
 
 // A stored value outside the allowed set blanks its select, and for perShul it
@@ -110,6 +111,8 @@ async function renderStatus() {
     ['App build', buildStamp?.commit
       ? `${buildStamp.commit} · ${ago(buildStamp.built_at)}` : 'unstamped'],
     ['App cache', await cacheVersion()],
+    ['Scores', settings.sports === 'off' ? 'off'
+      : `${sportsGames().length} on screen · every ${settings.sports} min`],
     ['Network', navigator.onLine ? 'online' : 'offline'],
     ['Screen wake lock', wakeState],
     ['Minyan data', days.length
@@ -180,7 +183,8 @@ function buildSettings() {
   });
 
   for (const [id, key] of [['layout', 'layout'], ['perShul', 'perShul'], ['theme', 'theme'],
-    ['accent', 'accent'], ['clockSize', 'clockSize'], ['face', 'face'], ['units', 'units']]) {
+    ['accent', 'accent'], ['clockSize', 'clockSize'], ['face', 'face'], ['units', 'units'],
+    ['sports', 'sports']]) {
     $(id).value = settings[key];
     // The strip is memoised on its own markup, and a unit change produces the
     // same span and the same hours — only different numbers. Clear the cache or

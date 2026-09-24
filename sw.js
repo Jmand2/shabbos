@@ -31,7 +31,7 @@ const VERSION = 'fc9a83d';   // rewritten on deploy by .github/workflows/stamp.y
 // would wipe their caches too. Ours are the ones carrying this prefix.
 const PREFIX = 'shabbos-clock-';
 const CACHE = `${PREFIX}${VERSION}`;
-const APP = ['util.js', 'calendar.js', 'settings.js', 'minyanim.js', 'weather.js', 'display.js', 'app.js'];
+const APP = ['util.js', 'calendar.js', 'settings.js', 'minyanim.js', 'weather.js', 'sports.js', 'display.js', 'app.js'];
 const FILES = ['./', 'index.html', 'styles.css', ...APP,
   'flights.css', 'flights.js',
   'vendor/kosher-zmanim.min.js', 'data/shuls.json', 'manifest.webmanifest',
