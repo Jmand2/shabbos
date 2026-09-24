@@ -137,7 +137,29 @@ for (const [input, want] of [
   must(cleaned.maariv.length === 1, `a sentence survived as a minyan (${cleaned.maariv.length})`);
   must(cleaned.maariv[0]?.time === '8:30 PM', `time not normalised (${cleaned.maariv[0]?.time})`);
   must(cleaned.edge?.havdalah === '7:35 PM', 'normalisation dropped a key it does not own');
+  must(cleaned.shacharis[1]?.raw === 'Shachris',
+    `the original label is kept when normalisation changed it (${cleaned.shacharis[1]?.raw})`);
+  must(cleaned.shacharis[0]?.raw === undefined,
+    'and not kept when it did not');
   console.log('  duplicates collapsed, prose dropped, times and spellings settled');
+}
+
+{
+  // Sections come out in the order the day happens, whatever order the source
+  // listed them in.
+  const jumbled = normaliseSections({
+    shacharis: [
+      { label: 'Shacharis', time: '9:00 AM' },
+      { label: 'Shacharis', time: '6:30 AM' },
+      { label: 'Shacharis', time: '12:05 PM' },
+      { label: 'Shacharis', time: '7:45 AM' },
+    ],
+    mincha: [], maariv: [],
+  });
+  const order = jumbled.shacharis.map((r) => r.time);
+  must(order.join(' ') === '6:30 AM 7:45 AM 9:00 AM 12:05 PM',
+    `sections are not in time order (${order.join(' ')})`);
+  console.log(`  sorted chronologically: ${order.join(' · ')}`);
 }
 
 // And the file that is actually on the wall must already be clean.

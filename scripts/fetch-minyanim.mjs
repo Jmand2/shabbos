@@ -74,9 +74,17 @@ export function cleanLabel(text) {
   return out;
 }
 
-// Deduplicates on label+time within a section. The scrape genuinely repeats
-// rows — Shaare Tefillah listed the same 8:45 AM Shacharis twice, and the board
-// printed it twice.
+// Minutes past midnight, for ordering only.
+const minutesOf = (t) => {
+  const m = /^(\d{1,2}):(\d{2}) ([AP])M$/.exec(t);
+  if (!m) return 0;
+  return ((Number(m[1]) % 12) + (m[3] === 'P' ? 12 : 0)) * 60 + Number(m[2]);
+};
+
+// Deduplicates on label+time+note within a section, then puts the section in
+// the order the day actually happens. The scrape genuinely repeats rows —
+// Shaare Tefillah listed the same 8:45 AM Shacharis twice, and the board
+// printed it twice — and it does not always list them in time order.
 export function normaliseSections(entry) {
   if (!entry) return entry;
   const out = { ...entry };
@@ -88,12 +96,20 @@ export function normaliseSections(entry) {
       const label = cleanLabel(row.label);
       const time = cleanTime(row.time);
       if (!label || !time) return [];
-      const k = `${label.toLowerCase()}|${time}`;
+      const note = typeof row.note === 'string' ? row.note.replace(/\s+/g, ' ').trim() : '';
+      const k = `${label.toLowerCase()}|${time}|${note.toLowerCase()}`;
       if (seen.has(k)) return [];
       seen.add(k);
-      const note = typeof row.note === 'string' ? row.note.replace(/\s+/g, ' ').trim() : '';
-      return [{ ...row, label, time, note: note || undefined }];
-    });
+      const clean = { ...row, label, time, note: note || undefined };
+      // Kept only when this stage actually changed the label, so a surprising
+      // row on the wall can be traced back to what the shul really published
+      // without having to re-scrape to find out.
+      if (label !== row.label) clean.raw = row.label;
+      return [clean];
+    // Chronological. The display sorts what it shows anyway, but the file is
+    // read by people too, and a diff between two scrapes is unreadable when the
+    // rows can move around for no reason.
+    }).sort((a, b) => minutesOf(a.time) - minutesOf(b.time));
   }
   return out;
 }

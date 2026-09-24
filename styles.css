@@ -870,6 +870,9 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   content: ",";
   opacity: 0.8;
 }
+/* Except inside the capsule, which already separates it from what follows. A
+   comma there reads as part of the time rather than between two of them. */
+.card .body .time.next:not(:last-child) .ap::after { content: none; }
 /* Raised and small: the numerals are what gets read across the room, and the
    meridiem only disambiguates them. Superscripting it keeps it available
    without letting it take a share of the line. */
@@ -927,9 +930,15 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   color: var(--accent);
   font-weight: 700;
 }
-.card .body .times.next-row {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  box-shadow: 0 0 0 0.32em color-mix(in srgb, var(--accent) 12%, transparent);
+/* The capsule goes on the TIME, not on the row.
+   A label and its times are one grid row, and a run can hold several times
+   under one label — "Shacharis 7:00, 8:00, 8:45". Banding the row said all
+   three were next. The label still takes the accent, because the next minyan
+   really is that service; only the numerals that are actually next get the
+   capsule. */
+.card .body .time.next {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: 0 0 0 0.22em color-mix(in srgb, var(--accent) 14%, transparent);
   border-radius: 3px;
 }
 .card .body .nextflag {

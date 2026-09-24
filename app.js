@@ -1037,9 +1037,20 @@ function renderFreshness(now = new Date(), days = [now]) {
   const hours = (Date.now() - stamp) / 3.6e6;
   // Credit where the times on screen actually came from: a shul that publishes
   // its own schedule is read from its own site, not from the aggregator.
-  const own = shownShuls().filter((s) => minyanim.days?.[isoOf(new Date())]?.[s.slug]?.source === 'shul');
-  const source = own.length === 0 ? 'teaneckminyanim.com'
-    : own.length === shownShuls().length ? 'each shul’s own website'
+  // Credit where the times on screen came from — across every day on the board,
+  // not just today. A shul's own site reaches today and tomorrow; the days past
+  // that come from the aggregator, so on a long Yom Tov the same shul is both.
+  // Asking about today alone claimed the whole board came from the shul.
+  const shown = shownShuls();
+  const sources = new Set();
+  for (const day of days) {
+    for (const shul of shown) {
+      const entry = minyanim.days?.[isoOf(day)]?.[shul.slug];
+      if (entry) sources.add(entry.source === 'shul' ? 'shul' : 'aggregator');
+    }
+  }
+  const source = !sources.has('shul') ? 'teaneckminyanim.com'
+    : !sources.has('aggregator') ? 'each shul’s own website'
       : 'the shuls’ websites and teaneckminyanim.com';
   const times = hours > STALE_HOURS
     ? `Times last confirmed ${stamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`

@@ -15,7 +15,7 @@
 // whole list into a fresh cache, so a half-updated cache cannot survive it.
 // Bump it for data/shuls.json too — that one is cache-first, so an edit to it
 // (a new shul, a havdalah offset) reaches the wall no other way.
-const VERSION = 'v12';
+const VERSION = 'v13';
 // caches.keys() is ORIGIN-wide, not per-worker. This is served from
 // jmand2.github.io/shabbos/, so every other project page on that account shares
 // the origin — and an activate that deleted everything it did not recognise
@@ -67,11 +67,16 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
   const url = new URL(e.request.url);
-  // The forecast is the one thing here that is wrong the moment it is old, and
-  // it is the only cross-origin request the display makes. Cache-first would
-  // have painted an hour-old sky and only corrected it on the next render.
+
+  // The forecast is not cached here at all — not even fresh-first. app.js keeps
+  // the last one in localStorage, where it is parsed data it can reason about
+  // and date from the observation inside it. A worker-cached copy replayed as a
+  // 200 is indistinguishable from a live fetch at the response level, which is
+  // a trap worth simply not having. Two caches for one thing, and only one of
+  // them can tell you how old it is.
+  if (url.hostname.endsWith('open-meteo.com')) return;
+
   const freshFirst = url.pathname.includes('minyanim.json')
-    || url.hostname.endsWith('open-meteo.com')
     || e.request.mode === 'navigate'
     || COUPLED.test(url.pathname);
 
