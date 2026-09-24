@@ -27,6 +27,14 @@ const WEATHER_HOURS = 12;
 // heading that promises a day.
 const WEATHER_MIN_HOURS = 6;
 const WEATHER_REFRESH_MS = 1200000;   // 20 min; the model itself updates hourly
+// Six missed refreshes. Past this the strip is still worth showing — a forecast
+// is about the hours ahead, and those do not expire the way an observation does
+// — but it must stop presenting itself as current.
+const WEATHER_STALE_MS = 7200000;    // 2 hours
+// Past this the "now" reading is not a reading. The hourly row for the current
+// hour is at least a forecast ABOUT now, rather than an observation from
+// whenever the network last worked.
+const WEATHER_DEAD_MS = 21600000;    // 6 hours
 const ROTATE_MS = 45000;
 const PER_PAGE = 3;
 
@@ -755,6 +763,10 @@ function todayRange(now) {
   return hi == null || lo == null ? null : { hi, lo };
 }
 
+// null when we have never recorded one — a cache written before this field
+// existed, which is treated as unknown rather than fresh.
+const weatherAge = () => (weather?.fetched_at ? Date.now() - weather.fetched_at : null);
+
 let lastWeather = '';
 
 function renderWeather(now, info) {
@@ -763,9 +775,15 @@ function renderWeather(now, info) {
   el.hidden = !settings.showWeather || !rows.length;
   if (el.hidden) { lastWeather = ''; return; }
 
-  const cur = weather?.current ?? {};
-  const sky = skyOf(cur.weather_code, cur.is_day !== 0);
-  const temp = degrees(cur.temperature_2m) ?? rows[0].temp;
+  const age = weatherAge();
+  // An observation has a moment attached to it and goes wrong as that moment
+  // recedes; the hourly series does not, because every row already names its
+  // own hour. So when the fetch is old the "now" block is read off the current
+  // hour's row instead of off a stale observation.
+  const dead = age === null || age > WEATHER_DEAD_MS;
+  const cur = dead ? {} : (weather?.current ?? {});
+  const sky = dead ? rows[0].sky : skyOf(cur.weather_code, cur.is_day !== 0);
+  const temp = degrees(cur.temperature_2m) ?? degrees(rows[0].temp);
   const range = todayRange(now);
   // Only worth the line when it disagrees with the thermometer by enough to
   // change what you put on. Otherwise it is noise beside the real number.
@@ -814,6 +832,10 @@ async function refreshWeather() {
     // Anything without an hourly series is not a forecast, and overwriting a
     // good cache with it would blank the strip until the next fetch.
     if (!Array.isArray(data?.hourly?.time)) return;
+    // Stamped on arrival. Without this a cached forecast is indistinguishable
+    // from a fresh one for as long as the network stays down, and the strip
+    // goes on quietly presenting an old sky as the current one.
+    data.fetched_at = Date.now();
     weather = data;
     localStorage.setItem(WEATHER_CACHE, JSON.stringify(data));
     const now = new Date();
@@ -842,8 +864,13 @@ function renderFreshness() {
     ? `Times last confirmed ${stamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
     : `Times from ${source}`;
   // Open-Meteo is free to use under CC-BY, which asks for exactly this line.
-  $('freshness').textContent = settings.showWeather && weather
-    ? `${times} · weather from open-meteo.com` : times;
+  if (!settings.showWeather || !weather) { $('freshness').textContent = times; return; }
+  const age = weatherAge();
+  // Same standard the minyan times are held to on the line beside it: say when
+  // it was last confirmed rather than letting age pass for currency.
+  const stale = age === null || age > WEATHER_STALE_MS
+    ? ` (${age === null ? 'age unknown' : `${Math.floor(age / 3.6e6)}h old`})` : '';
+  $('freshness').textContent = `${times} · weather from open-meteo.com${stale}`;
 }
 
 // The hand's angle only ever increases. Feeding it seconds * 6 would send it
@@ -938,6 +965,7 @@ async function start() {
   scheduleOvernightReload();
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  watchWake();
   keepAwake();
 }
 
@@ -952,13 +980,25 @@ function scheduleOvernightReload() {
   }, next - now);
 }
 
+// The lock is released whenever the document stops being visible, so it has to
+// be taken again on the way back. This used to register the listener with
+// { once: true } from inside keepAwake: the first visibilitychange after a
+// successful request is the visible -> hidden edge, where the handler does
+// nothing — and { once: true } removed it anyway. The return to visible then
+// had nothing listening, and the screen was free to sleep for good.
+//
+// Registered once, at start, and never removed. Re-requesting while the lock is
+// already held is harmless.
 async function keepAwake() {
   try {
     await navigator.wakeLock.request('screen');
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') keepAwake();
-    }, { once: true });
   } catch { /* iPad also needs Settings > Display > Auto-Lock set to Never */ }
+}
+
+function watchWake() {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') keepAwake();
+  });
 }
 
 start().catch((err) => {

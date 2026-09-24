@@ -88,6 +88,11 @@ async function add(passphrase, names) {
     return;
   }
 
+  // Captured BEFORE the loop. Reading manifest.faces.length inside it counts
+  // the faces this run has already pushed, and adding i on top advances the
+  // ring twice per face — add two at once and the second lands on the fourth
+  // colour rather than the third.
+  const start = manifest.faces.length;
   for (const [i, name] of names.entries()) {
     const bytes = await readFile(new URL(name, SRC)).catch(() => null);
     if (!bytes) {
@@ -99,7 +104,7 @@ async function add(passphrase, names) {
     await writeFile(new URL(file, OUT), await seal(key, bytes));
     // Carry on round the ring from where the last run stopped, so the new face
     // does not land on the colour of the one before it.
-    manifest.faces.push({ id: id(), file, ring: RING[(manifest.faces.length + i) % RING.length] });
+    manifest.faces.push({ id: id(), file, ring: RING[(start + i) % RING.length] });
     const kb = Math.round(bytes.length / 1024);
     console.log(`  ${name.padEnd(24)} -> ${file}  (${kb} KB)`);
   }

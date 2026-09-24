@@ -61,13 +61,20 @@ async function boot(startIso, { settings = null, killMatchMedia = false, forecas
     if (path.includes('minyanim.json')) path = 'scripts/fixtures/minyanim.json';
     return { ok: true, json: async () => JSON.parse(file(path)) };
   };
-  w.navigator.wakeLock = { request: async () => ({}) };
+  const wake = { grants: 0 };
+  w.navigator.wakeLock = { request: async () => { wake.grants += 1; return {}; } };
+  let vis = 'visible';
+  Object.defineProperty(w.document, 'visibilityState', { get: () => vis, configurable: true });
+  const setVisible = (v) => {
+    vis = v;
+    w.document.dispatchEvent(new w.Event('visibilitychange'));
+  };
   const errors = [];
   w.addEventListener('error', (e) => errors.push(e.message));
   w.eval(file('vendor/kosher-zmanim.min.js'));
   w.eval(file('app.js'));
   await new Promise((r) => setTimeout(r, 150));
-  return { w, state, errors, advance: (ms) => { state.offset += ms; } };
+  return { w, state, errors, wake, setVisible, advance: (ms) => { state.offset += ms; } };
 }
 
 const $ = (w, id) => w.document.getElementById(id);
@@ -439,6 +446,10 @@ function forecastFrom(startIso, hours = 96) {
   return {
     hourly, daily,
     current: { temperature_2m: 61, apparent_temperature: 55, weather_code: 3, is_day: 1 },
+    // Stamped fresh, because that is what almost every test here wants. The
+    // ones about staleness override it, and one deletes it to stand in for a
+    // cache written before the field existed.
+    fetched_at: base.getTime(),
   };
 }
 
@@ -552,6 +563,72 @@ console.log('\n=== W6: both dates now live in one tile ===');
     'and both dates are actually filled in');
   ok(w.document.querySelector('.clockwrap')?.contains($(w, 'clock')) === true,
     'the clock sits in its own size container');
+}
+
+/* R — findings from review ------------------------------------------------ */
+
+console.log('\n=== R1: the wake lock is taken again on the way back to visible ===');
+{
+  const { wake, setVisible } = await boot('2026-09-22T14:05:00-04:00');
+  const first = wake.grants;
+  ok(first >= 1, `the lock is taken at start (${first})`);
+  // The real sequence. The visible -> hidden edge used to consume a
+  // { once: true } listener that did nothing, so nothing was left to hear the
+  // return and the screen was free to sleep for good.
+  setVisible('hidden');
+  await new Promise((r) => setTimeout(r, 20));
+  ok(wake.grants === first, 'going hidden does not request a lock');
+  setVisible('visible');
+  await new Promise((r) => setTimeout(r, 20));
+  ok(wake.grants > first, `coming back does (${first} -> ${wake.grants})`);
+  // And again, because a wall display does this every day for months.
+  setVisible('hidden'); setVisible('visible');
+  await new Promise((r) => setTimeout(r, 20));
+  ok(wake.grants > first + 1, `and again on the next cycle (${wake.grants})`);
+}
+
+console.log('\n=== R2: an old forecast says so instead of passing as current ===');
+{
+  const when = '2026-09-22T14:05:00-04:00';
+  const fresh = forecastFrom(when);
+
+  const now = await boot(when, { forecast: { ...fresh, fetched_at: new Date(when).getTime() } });
+  ok(!/old|age unknown/.test($(now.w, 'freshness').textContent),
+    `a forecast just fetched is not labelled ("${$(now.w, 'freshness').textContent}")`);
+
+  const old = await boot(when, {
+    forecast: { ...fresh, fetched_at: new Date(when).getTime() - 3 * 3600 * 1000 },
+  });
+  const line = $(old.w, 'freshness').textContent;
+  ok(/3h old/.test(line), `three hours on shows its age ("${line}")`);
+
+  // A cache written before the field existed. Unknown is not fresh.
+  const unstamped = { ...fresh };
+  delete unstamped.fetched_at;
+  const legacy = await boot(when, { forecast: unstamped });
+  ok(/age unknown/.test($(legacy.w, 'freshness').textContent),
+    `a cache with no stamp reads as unknown ("${$(legacy.w, 'freshness').textContent}")`);
+}
+
+console.log('\n=== R3: past six hours the "now" block stops being an observation ===');
+{
+  const when = '2026-09-22T14:05:00-04:00';
+  const fresh = forecastFrom(when);
+  // An observation that disagrees with the hourly row, so it is obvious which
+  // one the block is reading.
+  fresh.current = { temperature_2m: 99, apparent_temperature: 99, weather_code: 0, is_day: 1 };
+
+  const live = await boot(when, { forecast: { ...fresh, fetched_at: new Date(when).getTime() } });
+  ok($(live.w, 'weather').querySelector('.wbig').textContent === '99°',
+    'a fresh observation is used as-is');
+
+  const dead = await boot(when, {
+    forecast: { ...fresh, fetched_at: new Date(when).getTime() - 8 * 3600 * 1000 },
+  });
+  const shown = $(dead.w, 'weather').querySelector('.wbig').textContent;
+  ok(shown !== '99°', `an eight-hour-old observation is dropped (shows ${shown})`);
+  ok(shown === `${dead.w.document.querySelector('.wcol.now .wtemp').textContent}`,
+    'and the current hour of the forecast is read instead');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

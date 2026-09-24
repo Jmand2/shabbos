@@ -16,7 +16,12 @@
 // Bump it for data/shuls.json too — that one is cache-first, so an edit to it
 // (a new shul, a havdalah offset) reaches the wall no other way.
 const VERSION = 'v6';
-const CACHE = `shabbos-clock-${VERSION}`;
+// caches.keys() is ORIGIN-wide, not per-worker. This is served from
+// jmand2.github.io/shabbos/, so every other project page on that account shares
+// the origin — and an activate that deleted everything it did not recognise
+// would wipe their caches too. Ours are the ones carrying this prefix.
+const PREFIX = 'shabbos-clock-';
+const CACHE = `${PREFIX}${VERSION}`;
 const FILES = ['./', 'index.html', 'styles.css', 'app.js',
   'flights.css', 'flights.js',
   'vendor/kosher-zmanim.min.js', 'data/shuls.json', 'manifest.webmanifest',
@@ -37,7 +42,9 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys()
-    .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+    .then((keys) => Promise.all(keys
+      .filter((k) => k.startsWith(PREFIX) && k !== CACHE)
+      .map((k) => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
