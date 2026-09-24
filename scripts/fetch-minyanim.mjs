@@ -207,11 +207,19 @@ async function main() {
   let dateParamWorks = false;
   let fetched = 0;
 
-  // A shul that publishes its own schedule is the authority on it. Its site
-  // reaches only today and tomorrow, which is exactly what the board shows, and
-  // it carries the services the aggregator omits. Only if it cannot be read do
-  // we fall back to teaneckminyanim for that shul.
-  const ownSite = new Set();
+  // A shul that publishes its own schedule is the authority on it for the days
+  // that schedule covers, and it carries the services the aggregator omits.
+  //
+  // But its site reaches only today and tomorrow, and this used to mark the
+  // whole SHUL as handled — so the aggregator loop skipped it for every date,
+  // and an own-site shul got two days of coverage where every other shul got
+  // four. Both shuls on the wall are own-site shuls, so on a three-day Yom Tov
+  // the last day was not merely unread, it was never fetched.
+  //
+  // Now it records the DAYS it filled, not the shuls, and the aggregator fills
+  // the rest. Own site still wins wherever it spoke.
+  const filled = new Set();
+  const key = (slug, date) => `${slug}|${date}`;
   const tomorrow = isoDate(1);
   for (const shul of SHULS.filter((x) => x.site)) {
     const parsed = await grabShulSite(shul.site).catch(() => null);
@@ -220,25 +228,31 @@ async function main() {
       console.warn(`${shul.slug}: own site unreadable, falling back to ${new URL(ORG_URL.replace('{slug}', shul.slug)).host}`);
       continue;
     }
-    ownSite.add(shul.slug);
     fetched += 1;
     for (const [date, entry] of [[today, parsed.today], [tomorrow, parsed.tomorrow]]) {
+      // A day the parser did not produce is left for the aggregator rather than
+      // written as undefined and counted as covered.
+      if (!entry) continue;
       days[date] ??= {};
-      days[date][shul.slug] = entry;
+      days[date][shul.slug] = { ...entry, fetched_at: new Date().toISOString() };
+      filled.add(key(shul.slug, date));
     }
   }
 
   for (const date of wanted) {
     const useDateParam = date !== today;
     for (const shul of SHULS) {
-      if (ownSite.has(shul.slug)) continue;
+      if (filled.has(key(shul.slug, date))) continue;
       const parsed = await grab(shul.slug, date, useDateParam).catch(() => null);
       await new Promise((r) => setTimeout(r, 250));
       if (!parsed) continue;
       if (useDateParam) dateParamWorks = true;
       fetched += 1;
       days[date] ??= {};
-      days[date][shul.slug] = parsed;
+      // Stamped per shul-day. generated_at goes fresh if ANY fetch in the run
+      // succeeded, so a shul still showing an entry retained from a previous
+      // run looked exactly as current as one just confirmed.
+      days[date][shul.slug] = { ...parsed, fetched_at: new Date().toISOString() };
     }
   }
 

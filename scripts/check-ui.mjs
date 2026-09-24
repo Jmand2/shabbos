@@ -32,7 +32,7 @@ const ok = (cond, msg, extra = '') => {
 };
 
 // A clock that advances: each `new Date()` returns base + however far we've stepped.
-async function boot(startIso, { settings = null, killMatchMedia = false, forecast = null } = {}) {
+async function boot(startIso, { settings = null, killMatchMedia = false, forecast = null, minyanim = null } = {}) {
   const dom = new JSDOM(file('index.html'),
     { runScripts: 'outside-only', url: 'https://x.test/', pretendToBeVisual: true });
   const w = dom.window;
@@ -58,7 +58,10 @@ async function boot(startIso, { settings = null, killMatchMedia = false, forecas
     // few days either side of today, so assertions against it rot on their own:
     // the dates stay in range and the TIMES UNDER THEM change, which is how four
     // of these went red without a line of app code moving.
-    if (path.includes('minyanim.json')) path = 'scripts/fixtures/minyanim.json';
+    if (path.includes('minyanim.json')) {
+      if (minyanim) return { ok: true, json: async () => minyanim };
+      path = 'scripts/fixtures/minyanim.json';
+    }
     return { ok: true, json: async () => JSON.parse(file(path)) };
   };
   const wake = { grants: 0 };
@@ -629,6 +632,80 @@ console.log('\n=== R3: past six hours the "now" block stops being an observation
   ok(shown !== '99°', `an eight-hour-old observation is dropped (shows ${shown})`);
   ok(shown === `${dead.w.document.querySelector('.wcol.now .wtemp').textContent}`,
     'and the current hour of the forecast is read instead');
+}
+
+/* Y — multi-day Yom Tov ---------------------------------------------------
+   Pesach 2027: Yom Tov Thursday 22nd and Friday 23rd, running into Shabbos on
+   the 24th. The real three-day case, and the one the board used to truncate. */
+function schedule(dates, slug = 'beth-aaron', stamp = '2027-04-21T06:00:00Z') {
+  const days = {};
+  for (const iso of dates) {
+    days[iso] = { [slug]: {
+      source: 'shul', fetched_at: stamp,
+      shacharis: [{ label: 'Shacharis', time: '7:00 AM' }, { label: 'Shacharis', time: '8:30 AM' }],
+      mincha: [{ label: 'Mincha', time: '1:30 PM' }, { label: 'Mincha', time: '7:00 PM' }],
+      maariv: [{ label: 'Maariv', time: '8:45 PM' }],
+    } };
+  }
+  return { generated_at: new Date().toISOString(), days };
+}
+const PESACH = ['2027-04-21', '2027-04-22', '2027-04-23', '2027-04-24', '2027-04-25'];
+const groupsOn = (w) => [...w.document.querySelectorAll('.card .body .group')]
+  .map((el) => el.textContent);
+
+console.log('\n=== Y1: erev Yom Tov reaches every day of a three-day chag ===');
+{
+  const { w } = await boot('2027-04-21T15:00:00-04:00',
+    { minyanim: schedule(PESACH), settings: { shuls: ['beth-aaron'] } });
+  const groups = groupsOn(w);
+  ok(groups.length === 4, `four day headings (${groups.join(' / ')})`);
+  ok(groups[0] === 'Today' && groups[1] === 'Tomorrow',
+    'the first two are Today and Tomorrow');
+  ok(/Friday/.test(groups[2]) && /Saturday/.test(groups[3]),
+    'and the rest are named by weekday, not "in two days"');
+}
+
+console.log('\n=== Y2: an ordinary week is unchanged ===');
+{
+  const { w } = await boot('2027-04-13T15:00:00-04:00',
+    { minyanim: schedule(['2027-04-13', '2027-04-14', '2027-04-15', '2027-04-16']),
+      settings: { shuls: ['beth-aaron'] } });
+  const groups = groupsOn(w);
+  ok(groups.length <= 2, `a Tuesday still stops at tomorrow (${groups.join(' / ')})`);
+  ok(!groups.some((g) => /day$/.test(g) && g !== 'Today'),
+    'no weekday headings appear when no rest period is near');
+}
+
+console.log('\n=== Y3: the cap still wins, and every day still gets a share ===');
+{
+  for (const cap of ['4', '8', '12']) {
+    const { w } = await boot('2027-04-21T15:00:00-04:00',
+      { minyanim: schedule(PESACH), settings: { shuls: ['beth-aaron'], perShul: cap } });
+    const times = w.document.querySelectorAll('.card .body .time').length;
+    const groups = groupsOn(w).length;
+    ok(times <= Number(cap), `perShul=${cap} yields ${times} times (<= ${cap})`);
+    ok(groups >= 2, `and still spans ${groups} days rather than spending it all on today`);
+  }
+}
+
+console.log('\n=== F: freshness describes the oldest shul on screen ===');
+{
+  const old = '2027-04-20T06:00:00Z';     // a day and a half before "now"
+  const data = schedule(PESACH);
+  // A second shul whose entry was retained from a previous run, exactly the case
+  // generated_at used to paper over.
+  for (const iso of PESACH) {
+    data.days[iso]['ohr-saadya'] = { ...data.days[iso]['beth-aaron'], fetched_at: old };
+  }
+  const both = await boot('2027-04-21T15:00:00-04:00',
+    { minyanim: data, settings: { shuls: ['beth-aaron', 'ohr-saadya'] } });
+  const line = $(both.w, 'freshness').textContent;
+  ok(/last confirmed/.test(line), `a retained shul is reported, not hidden ("${line}")`);
+
+  const fresh = await boot('2027-04-21T15:00:00-04:00',
+    { minyanim: schedule(PESACH), settings: { shuls: ['beth-aaron'] } });
+  ok(!/last confirmed/.test($(fresh.w, 'freshness').textContent),
+    `and a board where everything is current says so ("${$(fresh.w, 'freshness').textContent}")`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

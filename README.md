@@ -258,6 +258,43 @@ iPad without scrolling.
 
 Pick more than three shuls and the display pages through them every 45 seconds.
 
+## How far ahead the board reaches
+
+Today and tomorrow on an ordinary day. When a rest period is current or starts
+tonight, it reaches the end of it — so a three-day Yom Tov shows all three days,
+headed Today, Tomorrow and then by weekday.
+
+Two things had to change together for that to work, and only one of them was in
+the display.
+
+The scraper reads a shul's own website first, because a shul is the authority on
+its own schedule. But a shul site reaches only today and tomorrow, and the
+aggregator loop used to skip any shul whose own site had been read — for every
+date, not just the two it had answered. Own-site shuls therefore got two days of
+coverage where every other shul got four, and both shuls on the wall are
+own-site shuls. On a three-day Yom Tov the last day was not merely unread; it
+was never fetched. The scraper now records the days it filled rather than the
+shuls, and the aggregator fills the remainder.
+
+The cap ("Times shown per shul") is spent across the days in view rather than in
+plain time order. Chronological alone let today swallow all eight slots and left
+the third day invisible, which was the whole point of reaching it. Every day on
+the board gets an even share first, unspent share flows to the days that can use
+it, and the cap itself is still a hard ceiling — a cap of four over five days
+drops the furthest day rather than quietly showing five.
+
+## When the times were last confirmed
+
+The footer describes the oldest shul on screen, not the newest thing in the file.
+
+`generated_at` goes fresh if **any** shul was fetched successfully, while the
+scraper deliberately retains the previous entry for any that failed. A shul
+quietly showing yesterday's schedule therefore sat under a line claiming the
+data had been confirmed minutes ago. Every entry now carries its own
+`fetched_at` and the line reports the worst of the ones actually displayed.
+Entries written before that field existed fall back to the file-level stamp, so
+nothing breaks while the old ones age out.
+
 ## The weather
 
 A strip under the clock: what it is doing now on the left, and the hours ahead

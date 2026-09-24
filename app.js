@@ -159,19 +159,71 @@ const timeToDate = (base, text) => {
   return new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, Number(m[2]));
 };
 
-function scheduleFor(slug, now) {
-  const today = minyanim.days?.[isoOf(now)]?.[slug];
-  const tomorrow = minyanim.days?.[isoOf(addDays(now, 1))]?.[slug];
-  if (!today && !tomorrow) return { state: 'unavailable' };
+// The days the board reaches: today and tomorrow normally, and the whole of a
+// rest period when we are in one or about to be. A three-day Yom Tov used to
+// show its first two days and never its third — you could stand on day one and
+// have no way to see Shabbos.
+function daysShown(now, info) {
+  const out = [now, addDays(now, 1)];
+  const jc = info.civil.jc;
+  const inIt = jc.isAssurBemelacha() && now < info.tzeis;
+  // restEnd walks forward whenever it is asked, so on an ordinary Tuesday it
+  // would happily return the coming Shabbos and stretch the board across the
+  // week. Only ask when a rest period is actually current or imminent.
+  if (!inIt && !jc.isTomorrowShabbosOrYomTov()) return out;
+  const end = restEnd(now);
+  if (!end) return out;
+  for (let i = 2; i < 5; i += 1) {
+    const day = addDays(now, i);
+    if (day > end.day) break;
+    out.push(day);
+  }
+  return out;
+}
 
-  // Combine today and tomorrow's minyanim, then filter to future ones
-  const allRows = [
-    ...(today ? flatten(today, now) : []),
-    ...(tomorrow ? flatten(tomorrow, addDays(now, 1)) : [])
-  ].filter((r) => r.at > now);
+function scheduleFor(slug, now, days) {
+  const rows = [];
+  let known = false;
+  for (const day of days) {
+    const entry = minyanim.days?.[isoOf(day)]?.[slug];
+    if (!entry) continue;
+    known = true;
+    rows.push(...flatten(entry, day));
+  }
+  if (!known) return { state: 'unavailable' };
 
-  if (!allRows.length) return { state: 'awaiting' };
-  return { state: 'ok', rows: allRows };
+  const ahead = rows.filter((r) => r.at > now).sort((a, b) => a.at - b.at);
+  if (!ahead.length) return { state: 'awaiting' };
+  return { state: 'ok', rows: ahead };
+}
+
+// Chronological order alone lets today crowd out the rest of a long Yom Tov:
+// a cap of eight spent on tonight and tomorrow morning leaves day three
+// invisible, which is the whole thing this was meant to fix. So every day on
+// the board is guaranteed a share first, and whatever is left of the cap is
+// then spent in time order.
+function capRows(byDay, cap) {
+  if (byDay.size <= 1) return [...byDay.values()].flat().slice(0, cap);
+  // An even division, never a fixed floor. A floor of three under "Next 4"
+  // returned six times across two days and quietly broke the setting — the cap
+  // is what the person asked for and it wins.
+  const share = Math.max(1, Math.floor(cap / byDay.size));
+  const kept = [];
+  const spare = [];
+  for (const rows of byDay.values()) {
+    kept.push(...rows.slice(0, share));
+    spare.push(...rows.slice(share));
+  }
+  // Late at night today has nothing left, so its share goes unspent — hand it
+  // to the days that can use it rather than showing a half-empty card.
+  const room = Math.max(0, cap - kept.length);
+  spare.sort((a, b) => a.at - b.at);
+  // The final slice is the hard ceiling: more days than the cap can seat (a cap
+  // of four over five days) drops the furthest, which is the honest thing to
+  // give up.
+  return [...kept, ...spare.slice(0, room)]
+    .sort((a, b) => a.at - b.at)
+    .slice(0, cap);
 }
 
 function flatten(sections, base) {
@@ -234,8 +286,8 @@ function render() {
   // next render corrected it thirty seconds later.
   renderHorizon(now, info);
   renderWeather(now, info);
-  renderShuls(now);
-  renderFreshness();
+  renderShuls(now, info);
+  renderFreshness(now);
 }
 
 function themeIsDay(now, info) {
@@ -371,7 +423,7 @@ function paintBoard(html) {
   $('shuls').innerHTML = html;
 }
 
-function renderShuls(now) {
+function renderShuls(now, info) {
   const list = shownShuls();
   if (!list.length) {
     paintBoard('<p class="none">No shuls chosen. Open Settings to pick some.</p>');
@@ -379,7 +431,7 @@ function renderShuls(now) {
   }
 
   const cap = Number(settings.perShul);
-  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const days = daysShown(now, info);
   // Counted per card, not pooled. Averaging across the board let one heavy shul
   // hide behind two light ones and clip its own times.
   const perCardLines = [];
@@ -387,7 +439,7 @@ function renderShuls(now) {
 
   const cards = list.map((shul) => {
     lines = 0;
-    const s = scheduleFor(shul.slug, now);
+    const s = scheduleFor(shul.slug, now, days);
     if (s.state === 'unavailable') {
       lines += 1;
       perCardLines.push(lines);
@@ -399,25 +451,36 @@ function renderShuls(now) {
       return card(shul.name, '<p class="unavailable">Done for today. Tomorrow\'s times not confirmed yet.</p>');
     }
 
-    // Chronological, then capped so the type can stay large.
-    const ahead = [...s.rows].sort((a, b) => a.at - b.at).slice(0, cap);
+    // Grouped by the day each time actually falls on, then capped — the cap
+    // has to be spent with the days in view, or it is spent entirely on the
+    // first of them.
+    const grouped = new Map();
+    for (const r of [...s.rows].sort((a, b) => a.at - b.at)) {
+      const k = isoOf(r.at);
+      if (!grouped.has(k)) grouped.set(k, []);
+      grouped.get(k).push(r);
+    }
+    const ahead = capRows(grouped, cap);
     const next = ahead[0];
 
     const byDay = new Map();
     for (const r of ahead) {
-      const key = r.at >= midnight ? 'tomorrow' : 'today';
-      if (!byDay.has(key)) byDay.set(key, []);
-      byDay.get(key).push(r);
+      const k = isoOf(r.at);
+      if (!byDay.has(k)) byDay.set(k, []);
+      byDay.get(k).push(r);
     }
 
     let body = '';
-    for (const [day, rows] of byDay) {
-      // Tomorrow is always announced. Without this, a board late at night shows
-      // tomorrow's 5:10 AM with nothing saying it is not tonight.
-      if (day === 'tomorrow' || byDay.size > 1) {
-        body += `<p class="group ${day}">${day === 'tomorrow' ? 'Tomorrow' : 'Today'}</p>`;
+    for (const [iso, rows] of byDay) {
+      const when = dayName(now, rows[0].at);
+      // Anything that is not today is always announced. Without this, a board
+      // late at night shows tomorrow's 5:10 AM with nothing saying it is not
+      // tonight — and on a long Yom Tov, three identical mornings in a row.
+      if (when.cls !== 'today' || byDay.size > 1) {
+        body += `<p class="group ${when.cls}">${esc(when.label)}</p>`;
         lines += 1;
       }
+      const day = when.cls;
 
       // Same tefillah on one line, but only while its times stay consecutive.
       // Grouping every row that shares a label merges times that are hours
@@ -543,6 +606,19 @@ function clockFace(text) {
   if (!m) return esc(text);
   return `<span class="hm">${m[1]}:${m[2]}</span>`
     + `<span class="ap">${m[3].toLowerCase()}m</span>`;
+}
+
+// Today and Tomorrow by name; anything further out by weekday, because "in two
+// days" is not how anyone refers to the second day of Yom Tov. The class stays
+// today/tomorrow so the existing tone rules keep working, with everything past
+// tomorrow taking tomorrow's quieter tone.
+function dayName(now, at) {
+  const a = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const b = new Date(at.getFullYear(), at.getMonth(), at.getDate());
+  const diff = Math.round((b - a) / 86400000);
+  if (diff <= 0) return { label: 'Today', cls: 'today' };
+  if (diff === 1) return { label: 'Tomorrow', cls: 'tomorrow' };
+  return { label: at.toLocaleDateString('en-US', { weekday: 'long' }), cls: 'tomorrow' };
 }
 
 const card = (name, body) => `<article class="card"><h2>${esc(name)}</h2><div class="body">${body}</div></article>`;
@@ -850,8 +926,28 @@ async function refreshWeather() {
   } catch { /* keep the last sky: a forecast an hour old beats an empty band */ }
 }
 
-function renderFreshness() {
-  const stamp = minyanim.generated_at ? new Date(minyanim.generated_at) : null;
+// The oldest thing on screen, not the newest thing in the file.
+//
+// generated_at goes fresh if ANY shul was fetched successfully, while the
+// scraper retains the previous entry for any that failed. So a shul quietly
+// showing yesterday's schedule sat under a line claiming the data was confirmed
+// minutes ago. Each entry now carries its own stamp, and the line describes the
+// worst of the ones actually displayed.
+function shownStamp(now) {
+  const file = minyanim.generated_at ? new Date(minyanim.generated_at) : null;
+  const today = isoOf(now);
+  const stamps = shownShuls()
+    .map((s) => minyanim.days?.[today]?.[s.slug]?.fetched_at)
+    // No per-shul stamp means data written before they existed; the file-level
+    // one is the only thing left to fall back on.
+    .map((t) => (t ? new Date(t) : file))
+    .filter(Boolean);
+  if (!stamps.length) return file;
+  return new Date(Math.min(...stamps.map((t) => t.getTime())));
+}
+
+function renderFreshness(now = new Date()) {
+  const stamp = shownStamp(now);
   if (!stamp) { $('freshness').textContent = 'No minyan data yet'; return; }
   const hours = (Date.now() - stamp) / 3.6e6;
   // Credit where the times on screen actually came from: a shul that publishes
