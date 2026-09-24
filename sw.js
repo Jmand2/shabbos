@@ -15,7 +15,7 @@
 // whole list into a fresh cache, so a half-updated cache cannot survive it.
 // Bump it for data/shuls.json too — that one is cache-first, so an edit to it
 // (a new shul, a havdalah offset) reaches the wall no other way.
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CACHE = `shabbos-clock-${VERSION}`;
 const FILES = ['./', 'index.html', 'styles.css', 'app.js',
   'flights.css', 'flights.js',
