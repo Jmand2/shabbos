@@ -248,12 +248,45 @@ async function refreshMinyanim() {
 
 /* Rendering ------------------------------------------------------------- */
 
+// The shuls on the board, in the order the person put them in.
+//
+// This used to filter the master list, which is alphabetical — so settings.shuls
+// recorded WHICH shuls were chosen and silently discarded the order, and someone
+// selecting six had no way to decide which three landed on the first page.
+// Mapping over settings.shuls makes that array mean what it looks like it means.
+function chosenShuls() {
+  const bySlug = new Map(shuls.map((s) => [s.slug, s]));
+  return settings.shuls.map((slug) => bySlug.get(slug)).filter(Boolean);
+}
+
+// Which page of them is up, when there are more than fit at once.
+function pageInfo() {
+  const total = chosenShuls().length;
+  if (total <= PER_PAGE) return null;
+  const pages = Math.ceil(total / PER_PAGE);
+  return { at: page % pages, pages };
+}
+
 function shownShuls() {
-  const chosen = shuls.filter((s) => settings.shuls.includes(s.slug));
-  if (chosen.length <= PER_PAGE) return chosen;
-  const pages = Math.ceil(chosen.length / PER_PAGE);
-  const start = (page % pages) * PER_PAGE;
+  const chosen = chosenShuls();
+  const info = pageInfo();
+  if (!info) return chosen;
+  const start = info.at * PER_PAGE;
   return chosen.slice(start, start + PER_PAGE);
+}
+
+// Two dots and no explanation. The board rotates every 45 seconds whether or
+// not anyone is watching, and until this there was nothing to say that the
+// other three shuls existed at all.
+function renderPager() {
+  const el = $('pager');
+  if (!el) return;
+  const info = pageInfo();
+  el.hidden = !info;
+  if (!info) { el.innerHTML = ''; return; }
+  const html = Array.from({ length: info.pages },
+    (_, i) => `<i class="${i === info.at ? 'on' : ''}"></i>`).join('');
+  if (html !== el.innerHTML) el.innerHTML = html;
 }
 
 const GROUPS = { shacharis: 'Shacharis', mincha: 'Mincha', maariv: 'Maariv' };
@@ -291,6 +324,7 @@ function render() {
   // One list, so the footer describes the same span the cards do.
   const days = daysShown(now, info);
   renderShuls(now, days);
+  renderPager();
   renderFreshness(now, days);
 }
 
@@ -1165,16 +1199,52 @@ async function renderStatus() {
 
 let statusTimer = null;
 
+// The chosen shuls first and in their own order, with the rest below. Grouping
+// them this way is the only affordance ordering needs: 23 alphabetical
+// checkboxes give nowhere to express "these three, in this order".
+function renderPicker() {
+  const chosen = chosenShuls();
+  const rest = shuls.filter((s) => !settings.shuls.includes(s.slug));
+  const row = (s, i, n) => `<div class="pick${n ? ' on' : ''}">`
+    + `<label><input type="checkbox" value="${esc(s.slug)}"${n ? ' checked' : ''}>`
+    + `<span>${esc(s.name)}</span></label>`
+    + (n ? `<button type="button" class="move" data-dir="-1" data-slug="${esc(s.slug)}"`
+      + `${i === 0 ? ' disabled' : ''} aria-label="Move ${esc(s.name)} up">&uarr;</button>`
+      + `<button type="button" class="move" data-dir="1" data-slug="${esc(s.slug)}"`
+      + `${i === n - 1 ? ' disabled' : ''} aria-label="Move ${esc(s.name)} down">&darr;</button>` : '')
+    + `</div>`;
+  $('shulPicker').innerHTML =
+    (chosen.length ? `<p class="pickhead">On the board${chosen.length > PER_PAGE
+      ? ` — ${PER_PAGE} at a time, in this order` : ''}</p>` : '')
+    + chosen.map((s, i) => row(s, i, chosen.length)).join('')
+    + `<p class="pickhead">Not shown</p>`
+    + rest.map((s) => row(s, 0, 0)).join('');
+}
+
 function buildSettings() {
-  $('shulPicker').innerHTML = shuls.map((s) =>
-    `<label><input type="checkbox" value="${esc(s.slug)}"${settings.shuls.includes(s.slug) ? ' checked' : ''}>` +
-    `<span>${esc(s.name)}</span></label>`).join('');
+  renderPicker();
   $('shulPicker').addEventListener('change', (e) => {
     const { value, checked } = e.target;
+    // Appended, not inserted: a shul just ticked goes to the end, where it is
+    // visible and can be walked up if it belongs higher.
     settings.shuls = checked
       ? [...settings.shuls, value]
       : settings.shuls.filter((s) => s !== value);
-    save(); render();
+    save(); renderPicker(); render();
+  });
+  $('shulPicker').addEventListener('click', (e) => {
+    const btn = e.target.closest('.move');
+    if (!btn) return;
+    const from = settings.shuls.indexOf(btn.dataset.slug);
+    const to = from + Number(btn.dataset.dir);
+    if (from < 0 || to < 0 || to >= settings.shuls.length) return;
+    const next = [...settings.shuls];
+    [next[from], next[to]] = [next[to], next[from]];
+    settings.shuls = next;
+    // Back to the first page, so the effect of the move is on screen rather
+    // than three pages away.
+    page = 0;
+    save(); renderPicker(); render();
   });
 
   for (const [id, key] of [['layout', 'layout'], ['perShul', 'perShul'], ['theme', 'theme'],

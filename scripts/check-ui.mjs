@@ -113,21 +113,30 @@ console.log('\n=== E1b: a real content change still repaints ===');
 console.log('\n=== F1: last-shul uncheck/recheck recovers (driven through the DOM) ===');
 {
   const { w } = await boot('2026-09-22T14:05:00-04:00', { settings: { shuls: ['beth-aaron'] } });
-  const box = w.document.querySelector('#shulPicker input[value="beth-aaron"]');
-  ok(!!box, 'found the beth-aaron checkbox');
-  const before = $(w, 'shuls').innerHTML;
-  ok(before.includes('card'), 'board starts with a card');
+  // Re-queried each time, deliberately. The picker is rebuilt on every change
+  // because ticking a shul moves it between "On the board" and "Not shown", so
+  // the node just clicked is replaced — holding a reference across a change is
+  // testing a detached element, not the app.
+  const box = () => w.document.querySelector('#shulPicker input[value="beth-aaron"]');
+  ok(!!box(), 'found the beth-aaron checkbox');
+  ok($(w, 'shuls').innerHTML.includes('card'), 'board starts with a card');
 
-  box.checked = false;
-  box.dispatchEvent(new w.Event('change', { bubbles: true }));
+  const toggle = (on) => {
+    const el = box();
+    el.checked = on;
+    el.dispatchEvent(new w.Event('change', { bubbles: true }));
+  };
+
+  toggle(false);
   ok($(w, 'shuls').textContent.includes('No shuls chosen'), 'unchecking shows the empty state');
+  ok(box()?.checked === false, 'and the rebuilt picker shows it unticked');
 
-  box.checked = true;
-  box.dispatchEvent(new w.Event('change', { bubbles: true }));
+  toggle(true);
   const after = $(w, 'shuls').innerHTML;
   ok(after.includes('card') && !after.includes('No shuls chosen'),
     're-checking the same shul brings the board back',
     `(got: ${$(w, 'shuls').textContent.slice(0, 40)})`);
+  ok(box()?.checked === true, 'and it is ticked again');
 }
 
 /* F2 — the sun is repositioned in place, not recreated ------------------- */
@@ -851,6 +860,52 @@ console.log('\n=== S4: the worker keeps one entry per path, and it is the newest
   const res = await run(`${base}?t=3`);
   ok(res ? (await res)?.body === 'NEW' : false,
     'an unseen query still finds the cached copy when the network is gone');
+}
+
+console.log('\n=== O: the board follows the order the person chose ===');
+{
+  const four = ['ohr-saadya', 'beth-aaron', 'rinat', 'bnai-yeshurun'];
+  const { w } = await boot('2026-09-22T14:05:00-04:00', { settings: { shuls: four } });
+  const names = () => [...w.document.querySelectorAll('.card h2')].map((h) => h.textContent);
+
+  // Three at a time, and the first three are the first three chosen — not the
+  // first three alphabetically, which is what filtering the master list gave.
+  ok(names().length === 3, `three cards on the first page (${names().length})`);
+  ok(names()[0].includes('Ohr Saadya'),
+    `the first chosen shul leads (${names().join(' / ')})`);
+  ok(!names()[0].includes('Beth Aaron'),
+    'and it is not simply alphabetical');
+
+  // Two dots, the first one lit.
+  const pager = $(w, 'pager');
+  ok(!pager.hidden && pager.querySelectorAll('i').length === 2,
+    `four shuls over three slots shows two dots (${pager.querySelectorAll('i').length})`);
+  ok(pager.querySelectorAll('i')[0].className === 'on', 'the first is the one lit');
+
+  // Walking a shul up changes the board, and returns to the first page.
+  const up = w.document.querySelector('.move[data-slug="bnai-yeshurun"][data-dir="-1"]');
+  ok(!!up, 'the fourth shul has a move-up control');
+  up.dispatchEvent(new w.Event('click', { bubbles: true }));
+  const moved = JSON.parse(w.localStorage.getItem('shabbos-clock-settings')).shuls;
+  ok(moved.indexOf('bnai-yeshurun') === 2,
+    `it moved up one place (${moved.join(', ')})`);
+  ok(names().includes('Bnai Yeshurun') || names().length === 3,
+    'and the board repainted');
+}
+
+console.log('\n=== O2: three or fewer needs no pager and no arrows past the ends ===');
+{
+  const { w } = await boot('2026-09-22T14:05:00-04:00',
+    { settings: { shuls: ['beth-aaron', 'ohr-saadya'] } });
+  ok($(w, 'pager').hidden, 'two shuls: no page indicator');
+  const first = w.document.querySelector('.move[data-slug="beth-aaron"][data-dir="-1"]');
+  const last = w.document.querySelector('.move[data-slug="ohr-saadya"][data-dir="1"]');
+  ok(first?.disabled === true, 'the top shul cannot move up');
+  ok(last?.disabled === true, 'the bottom shul cannot move down');
+  // And pressing a disabled one changes nothing.
+  first.dispatchEvent(new w.Event('click', { bubbles: true }));
+  const after = JSON.parse(w.localStorage.getItem('shabbos-clock-settings')).shuls;
+  ok(after.join() === 'beth-aaron,ohr-saadya', `order unchanged (${after.join(', ')})`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
