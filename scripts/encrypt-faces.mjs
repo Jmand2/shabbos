@@ -1,6 +1,14 @@
 // Encrypts the face crops so they can live in a public repo as noise.
 //
 //   node scripts/encrypt-faces.mjs "four random words you will not lose"
+//   node scripts/encrypt-faces.mjs --add "same passphrase" trump.jpg
+//
+// The second form appends. It matters: a plain run mints a NEW random salt, so
+// the same passphrase derives a DIFFERENT key, every existing .bin is rewritten
+// and the key sitting in the iPad's IndexedDB stops working — somebody has to
+// walk over and re-enter the passphrase. --add reuses the stored salt and
+// iteration count, so the key on the wall keeps decrypting and the twenty files
+// already committed are not touched.
 //
 // Reads faces-src/*.{jpg,jpeg,png,webp}  (gitignored — never committed)
 // Writes faces/<random-id>.bin          (AES-GCM, safe to commit)
@@ -55,10 +63,69 @@ export async function open(key, blob) {
 const id = () => [...crypto.getRandomValues(new Uint8Array(6))]
   .map((b) => b.toString(16).padStart(2, '0')).join('');
 
+// Appends to an existing faces/ without disturbing what is already there.
+async function add(passphrase, names) {
+  const manifestUrl = new URL('manifest.json', OUT);
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8').catch(() => 'null'));
+  if (!manifest?.faces?.length || !manifest.salt) {
+    console.error('No faces/manifest.json to add to. Run without --add first.');
+    process.exitCode = 1;
+    return;
+  }
+
+  const salt = Uint8Array.from(Buffer.from(manifest.salt, 'hex'));
+  const iterations = manifest.iterations ?? ITERATIONS;
+  const key = await deriveKey(passphrase, salt, iterations);
+
+  // Probe before writing anything. A wrong passphrase here would otherwise
+  // append files that decrypt to nothing on a display that is working fine,
+  // and the only symptom would be a face that never appears.
+  try {
+    await open(key, await readFile(new URL(manifest.faces[0].file, OUT)));
+  } catch {
+    console.error('That passphrase does not match the files already in faces/.');
+    process.exitCode = 1;
+    return;
+  }
+
+  for (const [i, name] of names.entries()) {
+    const bytes = await readFile(new URL(name, SRC)).catch(() => null);
+    if (!bytes) {
+      console.error(`Not found: faces-src/${name}`);
+      process.exitCode = 1;
+      return;
+    }
+    const file = `${id()}.bin`;
+    await writeFile(new URL(file, OUT), await seal(key, bytes));
+    // Carry on round the ring from where the last run stopped, so the new face
+    // does not land on the colour of the one before it.
+    manifest.faces.push({ id: id(), file, ring: RING[(manifest.faces.length + i) % RING.length] });
+    const kb = Math.round(bytes.length / 1024);
+    console.log(`  ${name.padEnd(24)} -> ${file}  (${kb} KB)`);
+  }
+
+  await writeFile(manifestUrl, `${JSON.stringify(manifest, null, 2)}\n`);
+  console.log(`\n${names.length} face(s) added. ${manifest.faces.length} in faces/ now.`);
+  console.log('Commit faces/. Nothing else changed, so the iPad needs no new passphrase.');
+}
+
 async function main() {
+  if (process.argv[2] === '--add') {
+    const passphrase = process.argv[3];
+    const names = process.argv.slice(4);
+    if (!passphrase || !names.length) {
+      console.error('Usage: node scripts/encrypt-faces.mjs --add "your passphrase" file.jpg [...]');
+      process.exitCode = 1;
+      return;
+    }
+    await add(passphrase, names);
+    return;
+  }
+
   const passphrase = process.argv[2];
   if (!passphrase) {
     console.error('Usage: node scripts/encrypt-faces.mjs "your passphrase"');
+    console.error('   or: node scripts/encrypt-faces.mjs --add "your passphrase" file.jpg');
     process.exitCode = 1;
     return;
   }
