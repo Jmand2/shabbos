@@ -14,17 +14,13 @@ const SPORTS_CACHE = 'shabbos-clock-sports';
 // are four of them; fetching all four every time is a megabyte an hour of wifi
 // for something nobody is waiting on.
 //
-// But a round-robin over four leagues at ten minutes refreshes any one of them
-// only every forty, and the strip can now be set to appear every two. Showing a
-// live score eight times from data three quarters of an hour old is worse than
-// not showing it: it looks current and is not. So when something is actually
-// being played the loop tightens and spends its fetches where the numbers are
-// changing.
+// Ten minutes is plenty. What this is for is looking at last night's result on
+// the way out of the door, and last night's result does not change. The
+// interval in Settings is about how long you wait for the band to come ROUND,
+// not about how fresh the numbers are — two minutes is there so somebody with
+// their coat on can wait for it, not so anybody can follow a game from the
+// kitchen.
 const SPORTS_REFRESH_MS = 600000;
-const SPORTS_LIVE_REFRESH_MS = 120000;
-// Every fourth fetch goes round the rotation regardless, so a game starting in
-// another league is noticed rather than waiting for the live one to finish.
-const SPORTS_SWEEP_EVERY = 4;
 // Long enough to read four or five games from across a room, short enough that
 // nobody waiting on a minyan time is kept waiting.
 const SPORTS_SHOW_MS = 30000;
@@ -47,7 +43,6 @@ const LEAGUES = [
 
 let sports = readJSON(SPORTS_CACHE) ?? { leagues: {} };
 let sportsLeague = 0;
-let sportsPass = 0;
 // When the strip last took the band, and when it may next.
 let sportsAt = 0;
 let sportsNext = 0;
@@ -85,42 +80,14 @@ function sportsPick(event, league) {
   }];
 }
 
-// Function declarations rather than const arrows, deliberately: these are the
-// two facts worth asserting about the refresh loop, and a const does not escape
-// the eval that declared it, so the harness could not see one.
-function sportsLive(tag) {
-  return (sports.leagues?.[tag]?.games ?? []).some((g) => g.state === 'in');
-}
-
-function sportsAnyLive() {
-  return LEAGUES.some((l) => sportsLive(l.tag));
-}
-
-// How long before the next fetch. Short while something is being played,
-// because that is when the numbers move.
-function sportsWait() {
-  return sportsAnyLive() ? SPORTS_LIVE_REFRESH_MS : SPORTS_REFRESH_MS;
-}
-
-// Which league this pass should spend its fetch on.
+// Plain rotation. An earlier version chased whichever league had a game in
+// progress and tightened to two minutes to keep up with it — which was solving
+// for standing at the screen following a game, and that is the opposite of what
+// this is for.
 function sportsNextLeague() {
-  sportsPass += 1;
-  const live = LEAGUES.filter((l) => sportsLive(l.tag));
-  if (live.length && sportsPass % SPORTS_SWEEP_EVERY !== 0) {
-    return live[sportsPass % live.length];
-  }
   const league = LEAGUES[sportsLeague % LEAGUES.length];
   sportsLeague += 1;
   return league;
-}
-
-// Self-scheduling rather than a fixed interval, so the cadence can follow
-// whether anything is being played right now.
-function scheduleSports() {
-  setTimeout(async () => {
-    await refreshSports();
-    scheduleSports();
-  }, sportsWait());
 }
 
 async function refreshSports() {
@@ -144,11 +111,17 @@ async function refreshSports() {
   } catch { /* this is the least important thing here; it fails silently */ }
 }
 
-// In progress first, then finals, then what is coming — and a local team ahead
-// of a playoff game between two others.
+// FINISHED GAMES FIRST, most recent first.
+//
+// This is the whole point and the first version had it upside down. What
+// somebody wants from this is last night's result, at eight in the morning,
+// on the way out — not a game in progress, which at that hour there almost
+// never is, and which if there were would mean standing and watching. A game
+// still to come is context and goes last. Within each, a local team ahead of a
+// playoff between two others.
 function sportsGames(now = new Date()) {
   const t = now.getTime();
-  const rank = (g) => (g.state === 'in' ? 0 : g.state === 'post' ? 2 : 4) + (g.local ? 0 : 1);
+  const rank = (g) => (g.state === 'post' ? 0 : g.state === 'in' ? 2 : 4) + (g.local ? 0 : 1);
   return Object.values(sports.leagues ?? {})
     .flatMap((l) => l.games ?? [])
     .filter((g) => {
@@ -156,7 +129,11 @@ function sportsGames(now = new Date()) {
       if (Number.isNaN(when)) return false;
       return when > t - SPORTS_BACK_MS && when < t + SPORTS_AHEAD_MS;
     })
-    .sort((a, b) => rank(a) - rank(b) || Date.parse(a.at) - Date.parse(b.at))
+    .sort((a, b) => rank(a) - rank(b)
+      // A result: the latest one is the one you have not seen. Anything else:
+      // soonest first.
+      || (a.state === 'post' ? Date.parse(b.at) - Date.parse(a.at)
+        : Date.parse(a.at) - Date.parse(b.at)))
     .slice(0, SPORTS_MAX);
 }
 
@@ -177,6 +154,19 @@ function sportsTick() {
   setTimeout(() => { sportsAt = 0; render(); }, SPORTS_SHOW_MS);
 }
 
+// Describes what is LEADING, not whatever happens to be on somewhere. The first
+// column is what a glance lands on, so if that is last night's result the band
+// should say so — it said "Live now" whenever any game anywhere was in play,
+// while showing a final from twelve hours earlier in the first column.
+function sportsLabel(games, now) {
+  const lead = games[0];
+  if (!lead) return 'NY &amp; NJ';
+  if (lead.state === 'in') return 'Live now';
+  if (lead.state !== 'post') return 'Later today';
+  const when = new Date(Date.parse(lead.at));
+  return when.toDateString() === now.toDateString() ? 'Final' : 'Last night';
+}
+
 let lastSports = '';
 
 function renderSports(now = new Date()) {
@@ -185,7 +175,7 @@ function renderSports(now = new Date()) {
   el.hidden = !games.length;
   if (el.hidden) { lastSports = ''; el.innerHTML = ''; return; }
 
-  const live = games.some((g) => g.state === 'in');
+
   const cols = games.map((g) => {
     // A scheduled game has no score yet, so it shows the time instead of 0-0.
     const pending = g.state === 'pre';
@@ -203,7 +193,7 @@ function renderSports(now = new Date()) {
   }).join('');
 
   const html = `<div class="snow"><span class="slabel">Scores</span>`
-    + `<span class="ssub">${live ? 'Live now' : 'NY &amp; NJ'}</span></div>`
+    + `<span class="ssub">${sportsLabel(games, now)}</span></div>`
     + `<div class="sgames">${cols}</div>`;
   if (html !== lastSports) {
     lastSports = html;

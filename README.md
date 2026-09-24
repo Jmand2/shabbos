@@ -606,9 +606,19 @@ space: it borrows the weather band for half a minute at a set interval — Off, 
 than a tile to ignore. When there is nothing worth showing it does not take the band at
 all.
 
+**What it is for: last night's result, on the way out of the door.** Not
+following a game — nobody should be standing at this screen waiting for an
+update. So finished games lead, most recent first, and the band says `Last
+night` when that is what they are. A game in progress comes after them, and one
+still to come is context and goes last.
+
 It follows the NY/NJ teams, plus **any** postseason game whoever is playing —
-October baseball is worth a glance. In progress first, then finals, then what is
-coming, with a local team ahead of a playoff between two others.
+October baseball is worth a glance. Within each group, a local team ahead of a
+playoff between two others.
+
+The interval in Settings is **how long you wait for the band to come round**, not
+how fresh the numbers are. Two minutes is there so somebody with their coat on
+can wait for it.
 
 Team abbreviations are scoped per league, which is the whole trap: **Rangers is
 NYR in hockey and TEX in baseball, Giants is NYG in football and SF in baseball,
@@ -623,14 +633,10 @@ borrowed band and nothing else. One league per pass in rotation, because each
 scoreboard is about 280KB and all four every ten minutes is a megabyte an hour
 for something nobody is waiting on.
 
-**The fetch follows the game.** A round-robin over four leagues at ten minutes
-refreshes any one of them only every forty, and the strip can be set to appear
-every two — showing a live score eight times from three-quarter-hour-old data is
-worse than not showing it, because it looks current and is not. So while
-something is actually being played the loop tightens to two minutes and spends
-its fetches on the leagues where the numbers are moving. Every fourth pass goes
-round the rotation regardless, or a game starting elsewhere would never be
-noticed.
+A plain rotation at ten minutes is plenty: last night's result does not change.
+An earlier version chased whichever league had a game in progress and tightened
+to two minutes to keep up with it — which was solving for standing at the screen
+following a game, and that is the opposite of the point.
 
 The band carries a floor so it is the same height either way. Without one it
 would shrink when the scores arrive and grow back when they leave, and every

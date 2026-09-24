@@ -1118,19 +1118,58 @@ console.log('\n=== SP2: playoffs anywhere, regular season only at home ===');
   ok(!kept.includes('MIA@PIT'), `and an unrelated regular-season game is not (${kept.join(', ')})`);
 }
 
-console.log('\n=== SP3: in progress first, then finals, then what is coming ===');
+console.log('\n=== SP3: last night\'s result leads, because that is the job ===');
 {
-  const when = '2026-09-22T20:00:00-04:00';
+  // Eight in the morning, on the way out. What is wanted is the result of the
+  // game that finished last night — not something in progress, which at this
+  // hour barely happens and would mean standing and watching anyway.
+  const when = '2026-09-23T08:00:00-04:00';
   const { w } = await withScores(when, {
     'baseball/mlb': [
-      game('NYY', 0, 'TB', 0, { state: 'pre', detail: '9:05 PM', at: '2026-09-23T01:05Z' }),
-      game('NYM', 4, 'ATL', 3, { state: 'post', detail: 'Final' }),
+      game('NYY', 0, 'TB', 0, { state: 'pre', detail: '7:05 PM', at: '2026-09-23T23:05Z' }),
+      game('NYM', 4, 'ATL', 3, { state: 'post', detail: 'Final', at: '2026-09-22T23:10Z' }),
     ],
-    'hockey/nhl': [game('NJ', 2, 'NYR', 1, { state: 'in', detail: '2nd 8:24' })],
+    'hockey/nhl': [game('NJ', 2, 'NYR', 1, { state: 'in', detail: '2nd 8:24', at: '2026-09-23T11:00Z' })],
   });
   const order = await w.eval('sportsGames().map((g) => g.state)');
-  ok(order[0] === 'in', `a game being played leads (${order.join(' ')})`);
-  ok(order[1] === 'post' && order[2] === 'pre', 'then the final, then the one still to come');
+  ok(order[0] === 'post', `the finished game leads (${order.join(' ')})`);
+  ok(order[order.length - 1] === 'pre', 'and tonight\'s game is last');
+
+  // The label describes what is LEADING, not whatever is on somewhere: there is
+  // a live game in this fixture and the band should still say Last night,
+  // because that is what the first column is.
+  w.eval('renderSports()');
+  ok(/Last night/.test($(w, 'weather').textContent),
+    `the band says what it is showing (${$(w, 'weather').textContent.slice(0, 34)})`);
+}
+
+console.log('\n=== SP3b: two results, the later one first ===');
+{
+  const when = '2026-09-23T08:00:00-04:00';
+  const { w } = await withScores(when, {
+    'baseball/mlb': [
+      game('NYY', 5, 'BOS', 2, { state: 'post', detail: 'Final', at: '2026-09-22T22:00Z' }),
+      game('NYM', 4, 'ATL', 3, { state: 'post', detail: 'Final', at: '2026-09-23T02:30Z' }),
+    ],
+  });
+  const order = await w.eval('sportsGames().map((g) => g.a)');
+  ok(order[0] === 'NYM', `the latest result is the one not yet seen (${order.join(' ')})`);
+}
+
+console.log('\n=== SP3c: the label tells the truth about which it is ===');
+{
+  const morning = '2026-09-23T08:00:00-04:00';
+  const nightBefore = await withScores(morning,
+    { 'baseball/mlb': [game('NYM', 4, 'ATL', 3, { state: 'post', at: '2026-09-22T23:10Z' })] });
+  nightBefore.w.eval('renderSports()');
+  ok(/Last night/.test($(nightBefore.w, 'weather').textContent), 'yesterday evening reads Last night');
+
+  const earlierToday = await withScores('2026-09-23T20:00:00-04:00',
+    { 'baseball/mlb': [game('NYM', 4, 'ATL', 3, { state: 'post', at: '2026-09-23T17:10Z' })] });
+  earlierToday.w.eval('renderSports()');
+  const text = $(earlierToday.w, 'weather').textContent;
+  ok(/Final/.test(text) && !/Last night/.test(text),
+    `an afternoon result today is not "last night" (${text.slice(0, 30)})`);
 }
 
 console.log('\n=== SP4: the band is borrowed, then given back ===');
@@ -1173,44 +1212,22 @@ console.log('\n=== SP5: nothing to say, nothing said ===');
   ok($(off.w, 'weather').querySelector('.sgame') === null, 'and Off means off');
 }
 
-console.log('\n=== SP6: the fetch follows the game that is actually being played ===');
+console.log('\n=== SP6: the fetch is a plain rotation ===');
 {
-  // A round-robin over four leagues at ten minutes refreshes any one of them
-  // only every forty, and the strip can be set to appear every two. Showing a
-  // live score eight times from three-quarter-hour-old data is worse than not
-  // showing it, so a live league gets the fetches.
-  const when = '2026-09-22T20:00:00-04:00';
+  // An earlier version chased whichever league had a game in progress and
+  // tightened to two minutes to keep up. That was solving for standing at the
+  // screen following a game, which is the opposite of what this is for — and
+  // last night's result does not change, so there is nothing to keep up with.
+  const when = '2026-09-23T08:00:00-04:00';
   const { w } = await withScores(when, {
     'hockey/nhl': [game('NJ', 2, 'NYR', 1, { state: 'in', detail: '2nd' })],
     'baseball/mlb': [game('NYY', 5, 'BOS', 2, { state: 'post' })],
   });
-
   const picks = await w.eval(
     '(() => { const out = []; for (let i = 0; i < 8; i += 1) out.push(sportsNextLeague().tag); return out; })()');
-  const nhl = picks.filter((t) => t === 'NHL').length;
-  ok(nhl >= 4, `the live league takes most of the passes (${picks.join(' ')})`);
-  // But not all of them, or a game starting elsewhere would never be noticed.
-  ok(new Set(picks).size > 1, 'and the rotation still sweeps the others');
-  ok(picks.filter((t) => t !== 'NHL').length >= 2,
-    'often enough to pick up a game that has not started yet');
-}
-
-console.log('\n=== SP7: and the cadence tightens while something is live ===');
-{
-  const when = '2026-09-22T20:00:00-04:00';
-  const quiet = await withScores(when, {
-    'baseball/mlb': [game('NYY', 5, 'BOS', 2, { state: 'post' })],
-  });
-  ok(await quiet.w.eval('sportsAnyLive()') === false, 'nothing being played');
-
-  const busy = await withScores(when, {
-    'hockey/nhl': [game('NJ', 2, 'NYR', 1, { state: 'in', detail: '2nd' })],
-  });
-  ok(await busy.w.eval('sportsAnyLive()') === true, 'something is');
-  const quietWait = await quiet.w.eval('sportsWait()');
-  const busyWait = await busy.w.eval('sportsWait()');
-  ok(busyWait < quietWait,
-    `and it waits less while a game is on (${busyWait / 1000}s against ${quietWait / 1000}s)`);
+  ok(new Set(picks).size === 4, `every league gets its turn (${picks.join(' ')})`);
+  ok(picks.slice(0, 4).join() === picks.slice(4).join(),
+    'in a steady rotation, whatever is being played');
 }
 
 console.log('\n=== SP8: every interval offered is one the app accepts ===');

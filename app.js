@@ -33,8 +33,7 @@ async function start() {
   setInterval(render, 30000);
   setInterval(refreshMinyanim, 1800000);
   setInterval(refreshWeather, WEATHER_REFRESH_MS);
-  // Self-scheduling: the gap depends on whether anything is being played.
-  scheduleSports();
+  setInterval(refreshSports, SPORTS_REFRESH_MS);
   setInterval(() => { page += 1; render(); }, ROTATE_MS);
   scheduleOvernightReload();
 
