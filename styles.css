@@ -274,7 +274,38 @@ body.locked .gear { visibility: hidden; }
   line-height: 1.3;
 }
 /* Clock only drops everything but the time and the next transition. */
-body.clock-only .datebox { display: none; }
+/* Clock only keeps the time and the one transition that matters, which is what
+   the README has always described. It did not: the tile was hidden outright and
+   .edge lives inside it, so the mode was the numerals and nothing else. The
+   tile's chrome goes; the line it carries does not, and it sits under the clock
+   rather than above it. */
+body.clock-only .datebox {
+  order: 2;
+  display: block;
+  /* stretch, not the base rule's start: at start the box shrinks to its own
+     text and sits at the left of the track, where text-align has nothing to
+     centre within. */
+  justify-self: stretch;
+  width: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  text-align: center;
+}
+body.clock-only .datebox > *:not(.edge) { display: none; }
+body.clock-only .datebox .edge {
+  margin-top: clamp(4px, 1vh, 14px);
+  padding-top: 0;
+  border-top: 0;
+  text-align: center;
+  /* Large enough to read from the same distance as the numerals above it. */
+  font-size: clamp(15px, 2.4vh, 30px);
+}
+/* Left as separate lines. Running them together looked tidier until the shuls
+   disagree on havdalah, when the lines are a heading and a list under it —
+   "Havdalah · Ohr Saadya 7:35p" reads as nonsense. */
+body.clock-only .datebox .edge .line { display: block; line-height: 1.5; }
 /* 1fr, not auto. .clockwrap is a size container, so its inline size must come
    from the track rather than from its contents — in an auto track it would
    have nothing to measure and collapse to nothing. */

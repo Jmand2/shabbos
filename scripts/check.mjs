@@ -60,6 +60,12 @@ for (const [when, tag] of [
     'lock:', w.document.body.classList.contains('locked') ? 'Y' : 'n');
 }
 
+// Counted, not just printed. This file ended with an unconditional exit(0), so
+// it reported problems in prose and then told the caller everything was fine —
+// which is worth nothing now that CI runs it.
+let failures = 0;
+const must = (cond, what) => { if (!cond) { failures += 1; console.log('  FAIL', what); } };
+
 console.log('\n=== Failure modes: the clock must survive all of these ===');
 const when = '2026-08-28T14:05:00-04:00';
 for (const [tag, opts] of [
@@ -72,8 +78,14 @@ for (const [tag, opts] of [
   ['corrupt settings', { settings: { perShul: 'nonsense', accent: 'bogus', clockSize: 'x' } }],
 ]) {
   const w = await boot(when, opts);
-  console.log(' ', tag.padEnd(24), '| clock', JSON.stringify(clockOf(w)).padEnd(10),
+  const clock = clockOf(w);
+  console.log(' ', tag.padEnd(24), '| clock', JSON.stringify(clock).padEnd(10),
     '|', text(w, 'shuls').replace(/\s+/g, ' ').slice(0, 58));
+  // The whole point of the section: whatever else is broken, the time is on the
+  // wall. "--:--" is the placeholder in index.html, so it means start() threw
+  // before the first tick.
+  must(/^\d{1,2}:\d{2}(am|pm)$/.test(clock), `${tag}: clock reads ${JSON.stringify(clock)}`);
+  must(text(w, 'hebrewDate').length > 0, `${tag}: no Hebrew date`);
 }
 
 console.log('\n=== Scraper parsing ===');
@@ -103,4 +115,8 @@ for (let i = 0; i < 365; i += 1) {
   }
 }
 console.log(bad ? `  ${bad} bad day(s)` : '  365/365 rendered cleanly');
-process.exit(0);
+failures += bad;
+
+if (failures) console.log(`\n${failures} failure(s)`);
+else console.log('\nAll checks passed');
+process.exit(failures ? 1 : 0);

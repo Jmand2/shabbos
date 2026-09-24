@@ -463,8 +463,10 @@ so it also covers two-day Yom Tov and a Yom Tov that runs into Shabbos.
 ## Checking a change
 
 Both suites run in GitHub Actions on every push and pull request
-(`.github/workflows/check.yml`). They existed for a while with nothing running
-them, which is how four assertions sat red for a week.
+(`.github/workflows/check.yml`), and both exit non-zero when something is
+actually wrong. `check.mjs` used to print its problems and then call
+`process.exit(0)` regardless, which is worth nothing to a CI job — it now counts
+failures and reports a verdict.
 
 To run them by hand:
 
