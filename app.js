@@ -35,19 +35,21 @@ const WEATHER_STALE_MS = 7200000;    // 2 hours
 // hour is at least a forecast ABOUT now, rather than an observation from
 // whenever the network last worked.
 const WEATHER_DEAD_MS = 21600000;    // 6 hours
+// Below this the model is reporting noise rather than a chance of rain.
+const WEATHER_POP_FLOOR = 10;
 const ROTATE_MS = 45000;
 const PER_PAGE = 3;
 
 const DEFAULTS = {
   shuls: ['beth-aaron', 'ohr-saadya'],
-  layout: 'board', perShul: '8', theme: 'auto', accent: 'brass', clockSize: '1',
+  layout: 'board', perShul: 'auto', theme: 'auto', accent: 'brass', clockSize: '1',
   face: 'sturdy', seconds: false, showHorizon: false, showZmanim: false,
   showWeather: true, units: 'F',
 };
 
 const CHOICES = {
   layout: ['board', 'clock'],
-  perShul: ['4', '8', '12'],
+  perShul: ['auto', '4', '8', '12'],
   theme: ['auto', 'night', 'day'],
   accent: ['brass', 'copper', 'sage', 'ice', 'purple'],
   clockSize: ['0.8', '1', '1.25'],
@@ -432,9 +434,9 @@ function renderShuls(now, days) {
     return;
   }
 
-  const cap = Number(settings.perShul);
   // Counted per card, not pooled. Averaging across the board let one heavy shul
   // hide behind two light ones and clip its own times.
+  const build = (cap) => {
   const perCardLines = [];
   let lines = 0;
 
@@ -504,8 +506,15 @@ function renderShuls(now, days) {
       const perLine = list.length <= 2 ? 4 : 3;
       for (const { label, times } of runs) {
         lines += Math.ceil(times.length / perLine);
-        body += `<span class="label ${day}">${esc(label)}</span>`
-          + `<span class="times ${day}">`
+        // The next minyan is decided per card, so neither shul becomes the more
+        // important one just by being first.
+        const here = times.includes(next) ? ' next-row' : '';
+        body += `<span class="label ${day}${here}">${esc(label)}</span>`
+          + `<span class="times ${day}${here}">`
+          // A marker, not a countdown. The board is memoised on its own markup
+          // and repaints only when something genuinely changed; "in 24 min"
+          // would differ on every render and rebuild all of it twice a minute.
+          + (here ? '<span class="nextflag">Next</span>' : '')
           + times.map((r) => `<span class="time${r === next ? ' next' : ''}">${clockFace(r.time)}</span>`).join('')
           + `</span>`;
       }
@@ -528,7 +537,37 @@ function renderShuls(now, days) {
   document.documentElement.style.setProperty('--clock-fill', fill);
 
   paintBoard(cards.join(''));
-  fitBoard();
+  return fitBoard();
+  };
+
+  // Auto turns the question round. Instead of being told a count and then
+  // shrinking the type until it fits — which is how a board ends up at 10px and
+  // still clipped — it asks how many rows survive at a size worth reading, and
+  // shows that many. A quiet Tuesday gets more than a crowded erev Yom Tov.
+  //
+  // A chosen 4/8/12 is still honoured, but only as a CEILING: if the board
+  // cannot fit that many at any size it shows fewer rather than clipping them,
+  // because a clipped time is worse than an absent one.
+  const auto = settings.perShul === 'auto';
+  const ceiling = auto ? AUTO_MAX : Number(settings.perShul);
+  const floor = auto ? AUTO_MIN_PX : 0;
+  const goodAt = (cap) => {
+    const r = build(cap);
+    // No geometry to measure (jsdom, or a board with no times on it) — take the
+    // requested count at face value rather than searching against nothing.
+    if (r.px === null) return true;
+    return r.fitted && r.px >= floor;
+  };
+
+  if (goodAt(ceiling)) return;
+  let lo = AUTO_MIN_ROWS;
+  let hi = ceiling;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (goodAt(mid)) lo = mid; else hi = mid - 1;
+  }
+  // The search leaves the board at whatever it probed last, so paint the answer.
+  build(lo);
 }
 
 // Fit to the box, in both directions.
@@ -553,12 +592,20 @@ const MIN_SCALE = 0.3;
 // padding, which is the billboard the note above is about.
 const MAX_SCALE = 1.7;
 
+// Auto sizing. AUTO_MIN_PX is the point where numerals stop carrying across a
+// room — the whole purpose of the board — so it is the thing held fixed and the
+// row count is what gives way. AUTO_MAX is a sanity ceiling: past a dozen or so
+// nobody is reading a wall, they are reading a timetable.
+const AUTO_MIN_PX = 22;
+const AUTO_MAX = 14;
+const AUTO_MIN_ROWS = 2;
+
 function fitBoard() {
   const cards = [...document.querySelectorAll('.card')];
-  if (!cards.length) return;
+  if (!cards.length) return { px: null, fitted: true };
   // No layout (jsdom, or a hidden board) reports 0 for everything, and a search
   // against zeros would settle on nonsense. Leave the heuristic value alone.
-  if (!cards.some((c) => c.clientHeight > 0)) return;
+  if (!cards.some((c) => c.clientHeight > 0)) return { px: null, fitted: true };
 
   // Measure the body, not just the card. The card clips (overflow: hidden), so
   // the rows can spill out of the body while the card itself still reports no
@@ -586,8 +633,10 @@ function fitBoard() {
     });
   };
 
-  if (fits(MAX_SCALE)) return;          // everything fits at the ceiling
-  if (!fits(MIN_SCALE)) return;         // cannot fit even at the floor
+  if (fits(MAX_SCALE)) return achieved(true);   // everything fits at the ceiling
+  // Cannot fit even at the floor. It used to return here and leave the board
+  // clipped at 0.3; now it says so, and the caller shows fewer rows instead.
+  if (!fits(MIN_SCALE)) return achieved(false);
 
   let lo = MIN_SCALE;
   let hi = MAX_SCALE;
@@ -596,6 +645,16 @@ function fitBoard() {
     if (fits(mid)) lo = mid; else hi = mid;
   }
   fits(lo);
+  return achieved(true);
+}
+
+// The size the numerals actually came out at, which is the only thing that
+// answers "can this be read from the sofa". null means there was nothing to
+// measure — jsdom, or a board of unavailable cards.
+function achieved(fitted) {
+  const el = document.querySelector('.card .body .time');
+  if (!el) return { px: null, fitted };
+  return { px: parseFloat(getComputedStyle(el).fontSize) || null, fitted };
 }
 
 // The numerals carry the information and the meridiem only disambiguates them,
@@ -888,9 +947,12 @@ function renderWeather(now, info) {
 
   const cols = rows.map((r, i) => {
     const t = degrees(r.temp);
-    // Rain worth mentioning only. A 10% chance printed under every column
-    // trains the eye to skip the row on the day it matters.
-    const wet = r.pop >= 25 ? `<span class="wpop">${Math.round(r.pop)}%</span>` : '';
+    // Any real chance, printed on the hour it belongs to. This used to start at
+    // 25%, which hid exactly the reading someone wants before a walk to shul —
+    // a 10% on one hour is worth knowing. The floor is there only to keep the
+    // model's 0-5% noise off twelve tiles at once.
+    const wet = r.pop >= WEATHER_POP_FLOOR
+      ? `<span class="wpop">${Math.round(r.pop)}%</span>` : '';
     return `<div class="wcol${i === 0 ? ' now' : ''}">`
       + `<span class="whour">${i === 0 ? 'Now' : esc(hourOf(r.at))}</span>`
       + skyGlyph(r.sky.kind)

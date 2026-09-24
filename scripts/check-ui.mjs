@@ -349,10 +349,15 @@ console.log('\n=== G4: "Times shown per shul" actually caps ===');
       `perShul=${cap} yields ${times} times (<= ${cap})`);
   }
   // A stored value from the old option set must fall back, not blank the card.
+  // The default is Auto now, and Auto with no geometry to measure — which is
+  // every run in jsdom — takes its own ceiling rather than guessing.
   const { w } = await boot('2026-09-22T05:00:00-04:00',
     { settings: { shuls: ['bnai-yeshurun'], perShul: '3' } });
   const times = w.document.querySelectorAll('.card .time').length;
-  ok(times > 0 && times <= 8, `a stale perShul="3" falls back to 8, not NaN (${times} times)`);
+  ok(times > 0 && times <= 14,
+    `a stale perShul="3" falls back to Auto, not NaN (${times} times)`);
+  ok(w.document.getElementById('perShul').value === 'auto',
+    'and the settings sheet shows Auto rather than a blank select');
 }
 
 /* G6 / E5 — the edge element and the line count -------------------------- */
@@ -436,7 +441,7 @@ function forecastFrom(startIso, hours = 96) {
     hourly.time.push(stamp(at));
     hourly.temperature_2m.push(60 + (i % 12));
     hourly.apparent_temperature.push(58 + (i % 12));
-    hourly.precipitation_probability.push(i % 2 ? 40 : 5);
+    hourly.precipitation_probability.push([0, 40, 5, 10, 60, 8][i % 6]);
     hourly.weather_code.push([0, 2, 3, 61, 71, 95][i % 6]);
     hourly.is_day.push(at.getHours() >= 7 && at.getHours() < 19 ? 1 : 0);
     const day = stamp(at).slice(0, 10);
@@ -473,9 +478,13 @@ console.log('\n=== W1: the strip covers the rest period, and says which one ==='
     'one sky glyph per column, plus the one for now');
   ok(el.querySelector('.wcol.now .whour')?.textContent === 'Now',
     'the first column is labelled Now');
-  // 5% is noise on a wall. Only the hours worth a coat get a number.
-  const pops = [...el.querySelectorAll('.wpop')].length;
-  ok(pops === 6, `only the hours above the threshold print a chance (${pops} of 12)`);
+  // The pattern cycles 0, 40, 5, 10, 60, 8 — so half of twelve columns carry a
+  // real chance and half are the model's noise.
+  const pops = [...el.querySelectorAll('.wpop')].map((n) => n.textContent);
+  ok(pops.length === 6, `six of twelve print a chance (${pops.join(' ')})`);
+  ok(pops.includes('10%'), 'a 10% hour is shown, not swallowed by the threshold');
+  ok(!pops.includes('8%') && !pops.includes('5%') && !pops.includes('0%'),
+    'and single-figure noise is not');
 }
 
 console.log('\n=== W2: a three-day Yom Tov is no different from a Shabbos ===');

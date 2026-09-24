@@ -227,10 +227,6 @@
           {
             "label": "Shacharis",
             "time": "8:45 AM"
-          },
-          {
-            "label": "Shacharis",
-            "time": "8:45 AM"
           }
         ],
         "mincha": [
@@ -542,10 +538,6 @@
           {
             "label": "Maariv",
             "time": "8:40 PM"
-          },
-          {
-            "label": "Preceded by Tehillim, Tefillah and Togetherness at",
-            "time": "8:30PM"
           }
         ]
       },
@@ -1111,10 +1103,6 @@
           {
             "label": "Maariv",
             "time": "8:40 PM"
-          },
-          {
-            "label": "Preceded by Tehillim, Tefillah and Togetherness at",
-            "time": "8:30PM"
           }
         ]
       },
@@ -1676,10 +1664,6 @@
           {
             "label": "Maariv",
             "time": "8:40 PM"
-          },
-          {
-            "label": "Preceded by Tehillim, Tefillah and Togetherness at",
-            "time": "8:30PM"
           }
         ],
         "fetched_at": "2026-09-24T14:36:29.054Z"
@@ -1990,15 +1974,15 @@
             "time": "5:40 AM"
           },
           {
-            "label": "Shacharit",
+            "label": "Shacharis",
             "time": "6:15 AM"
           },
           {
-            "label": "Shacharit",
+            "label": "Shacharis",
             "time": "7:05 AM"
           },
           {
-            "label": "Shacharit",
+            "label": "Shacharis",
             "time": "8:00 AM"
           }
         ],
@@ -2529,10 +2513,6 @@
           },
           {
             "label": "Shacharis",
-            "time": "9:00 AM"
-          },
-          {
-            "label": "Shacharis",
             "time": "9:15 AM"
           }
         ],
@@ -2883,10 +2863,6 @@
           {
             "label": "Shacharis",
             "time": "8:30 AM"
-          },
-          {
-            "label": "Shacharis",
-            "time": "9:00 AM"
           },
           {
             "label": "Shacharis",

@@ -5,7 +5,9 @@
 
 import { JSDOM } from 'jsdom';
 import { readFileSync } from 'node:fs';
-import { toText, renderedDate, parseSections } from './fetch-minyanim.mjs';
+import {
+  toText, renderedDate, parseSections, cleanLabel, cleanTime, normaliseSections,
+} from './fetch-minyanim.mjs';
 
 const file = (name) => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
 
@@ -98,6 +100,67 @@ console.log('  date read from page :', renderedDate(lines, '2026'));
 console.log('  abbreviated form    :', renderedDate(toText('<h4>Fri, Aug 28, 2026</h4>'), '1999'));
 console.log('  parsed              :', JSON.stringify(parseSections(lines)));
 console.log('  (the Shkiya line must not appear as a minyan)');
+
+console.log('\n=== Normalisation: what the parser is allowed to hand on ===');
+for (const [input, want] of [
+  ['8:30PM', '8:30 PM'], ['08:30 P.M.', '8:30 PM'], ['7:00  am', '7:00 AM'],
+  ['13:00 PM', null], ['8:75 AM', null], ['not a time', null],
+]) must(cleanTime(input) === want, `cleanTime(${JSON.stringify(input)}) -> ${JSON.stringify(cleanTime(input))}, wanted ${JSON.stringify(want)}`);
+
+for (const [input, want] of [
+  ['Shachris', 'Shacharis'], ['Shacharit', 'Shacharis'], ['Minchah', 'Mincha'],
+  ['Mincha:', 'Mincha'], ['  Mincha/Maariv  ', 'Mincha/Maariv'],
+  // A synonym, not a misspelling: rewriting it would be editing a shul's words.
+  ['Arvit', 'Arvit'],
+  ['Preceded by Tehillim, Tefillah and Togetherness at', null],
+  ['Please note the time change this week', null],
+  ['8:30 PM', null],
+]) must(cleanLabel(input) === want, `cleanLabel(${JSON.stringify(input)}) -> ${JSON.stringify(cleanLabel(input))}, wanted ${JSON.stringify(want)}`);
+
+{
+  const cleaned = normaliseSections({
+    source: 'shul',
+    edge: { havdalah: '7:35 PM' },
+    shacharis: [
+      { label: 'Shacharis', time: '8:45 AM' },
+      { label: 'Shacharis', time: '8:45 AM' },
+      { label: 'shacharis', time: '8:45 AM' },
+      { label: 'Shachris', time: '9:00 AM' },
+    ],
+    mincha: [],
+    maariv: [
+      { label: 'Preceded by Tehillim, Tefillah and Togetherness at', time: '8:30PM' },
+      { label: 'Maariv', time: '8:30PM' },
+    ],
+  });
+  must(cleaned.shacharis.length === 2, `duplicate rows survived (${cleaned.shacharis.length})`);
+  must(cleaned.maariv.length === 1, `a sentence survived as a minyan (${cleaned.maariv.length})`);
+  must(cleaned.maariv[0]?.time === '8:30 PM', `time not normalised (${cleaned.maariv[0]?.time})`);
+  must(cleaned.edge?.havdalah === '7:35 PM', 'normalisation dropped a key it does not own');
+  console.log('  duplicates collapsed, prose dropped, times and spellings settled');
+}
+
+// And the file that is actually on the wall must already be clean.
+{
+  const live = JSON.parse(file('data/minyanim.json'));
+  let dirty = 0;
+  for (const shuls of Object.values(live.days ?? {})) {
+    for (const entry of Object.values(shuls)) {
+      for (const g of ['shacharis', 'mincha', 'maariv']) {
+        const rows = entry[g] ?? [];
+        const seen = new Set();
+        for (const r of rows) {
+          const k = `${String(r.label).toLowerCase()}|${r.time}`;
+          if (seen.has(k)) dirty += 1;
+          seen.add(k);
+          if (cleanLabel(r.label) !== r.label || cleanTime(r.time) !== r.time) dirty += 1;
+        }
+      }
+    }
+  }
+  must(dirty === 0, `data/minyanim.json carries ${dirty} row(s) normalisation would change`);
+  console.log(dirty ? '' : '  data/minyanim.json is clean');
+}
 
 console.log('\n=== A year of daily renders ===');
 let bad = 0;

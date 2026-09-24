@@ -18,15 +18,33 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm i --no-save jsdom
+      - run: npm ci
+      # WebKit, because that is what the iPad runs. The layout suite is the only
+      # thing here that can see a real box.
+      - run: npx playwright install --with-deps webkit
 
       # Behaviour over time: the board repainting, the horizon rolling over at
       # nightfall, the weather window, the Yom Tov span. Reads its minyan times
       # from scripts/fixtures/, so a scraper run cannot turn it red.
-      - name: check-ui
-        run: TZ=America/New_York node scripts/check-ui.mjs
+      - name: check:ui
+        run: npm run check:ui
 
       # One frozen moment, many of them: every Shabbos and Yom Tov transition,
-      # the failure modes, and a full year of renders.
+      # the failure modes, the normalisation rules, and a full year of renders.
       - name: check
-        run: TZ=America/New_York node scripts/check.mjs
+        run: npm run check
+
+      # Real WebKit at real iPad sizes. Asserts that nothing overflows its box
+      # and that the numerals stay large enough to read across a room — the one
+      # thing jsdom cannot see, because it computes no geometry at all.
+      - name: check:layout
+        run: npm run check:layout
+
+      - name: screenshots
+        if: failure()
+        run: npm run screenshots || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: screenshots
+          path: screenshots/

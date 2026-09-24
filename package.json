@@ -1,0 +1,18 @@
+{
+  "name": "shabbos-clock",
+  "private": true,
+  "type": "module",
+  "description": "Wall display for the mounted iPad in Teaneck. The app itself has no build step and no runtime dependencies; everything here is for checking it.",
+  "scripts": {
+    "test": "npm run check && npm run check:ui && npm run check:layout",
+    "check": "TZ=America/New_York node scripts/check.mjs",
+    "check:ui": "TZ=America/New_York node scripts/check-ui.mjs",
+    "check:layout": "node scripts/check-layout.mjs",
+    "screenshots": "node scripts/check-layout.mjs --update-screenshots",
+    "refresh": "node scripts/fetch-minyanim.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^26.0.0",
+    "playwright": "^1.50.0"
+  }
+}

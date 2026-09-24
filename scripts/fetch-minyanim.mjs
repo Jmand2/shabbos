@@ -22,6 +22,82 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
 
 const SHULS = JSON.parse(await readFile(new URL('../data/shuls.json', import.meta.url), 'utf8'));
 
+/* Normalisation -----------------------------------------------------------
+   The parsers are deliberately permissive: faced with an odd line they would
+   rather capture it than drop a real minyan. This is where that is paid back,
+   in one place that can be read and tested on its own rather than as more
+   special cases smuggled into the regexes above.
+
+   It only ever removes or tidies. It never invents a minyan. */
+
+const TIME_RE = /^(\d{1,2}):(\d{2})\s*([AP])\.?\s*M\.?$/i;
+
+// A service has a name; these are sentences that happen to contain a time.
+// "Preceded by Tehillim, Tefillah and Togetherness at 8:30PM" is a note about
+// a minyan, not a minyan, and it was reaching the wall as one.
+const PROSE = /\b(preceded|followed|please|note|beginning|begins|starting|starts|approximately|immediately|thereafter|as above|see |contact)\b/i;
+// Six words is already generous for "Mincha/Maariv Early Sefard".
+const MAX_WORDS = 6;
+
+// Spelling only. Deliberately not synonyms: Arvit is not a misspelling of
+// Maariv, and rewriting it would be editing a shul's own words.
+const SPELLING = [
+  [/\bshach?a?ris\b/gi, 'Shacharis'],
+  [/\bshach?a?rit\b/gi, 'Shacharis'],
+  [/\bminchah\b/gi, 'Mincha'],
+  [/\bma'?ariv\b/gi, 'Maariv'],
+];
+
+// "8:30PM" and "8:30 p.m." both become "8:30 PM". timeToDate in the display
+// accepts the first of those by luck rather than design, and the second not at
+// all, so the shape is settled here instead.
+export function cleanTime(text) {
+  const m = TIME_RE.exec(String(text ?? '').trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h < 1 || h > 12 || min > 59) return null;
+  return `${h}:${m[2]} ${m[3].toUpperCase()}M`;
+}
+
+export function cleanLabel(text) {
+  let out = String(text ?? '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s|\-–—·,]+|[\s|\-–—·,:;.]+$/g, '')
+    .trim();
+  if (!out) return null;
+  if (PROSE.test(out)) return null;
+  if (out.split(' ').length > MAX_WORDS) return null;
+  // A label that is only a time, or only a number, names nothing.
+  if (cleanTime(out) || /^[\d\s:.]+$/.test(out)) return null;
+  for (const [re, to] of SPELLING) out = out.replace(re, to);
+  return out;
+}
+
+// Deduplicates on label+time within a section. The scrape genuinely repeats
+// rows — Shaare Tefillah listed the same 8:45 AM Shacharis twice, and the board
+// printed it twice.
+export function normaliseSections(entry) {
+  if (!entry) return entry;
+  const out = { ...entry };
+  for (const group of SECTIONS.map((g) => g.toLowerCase())) {
+    const rows = entry[group];
+    if (!Array.isArray(rows)) continue;
+    const seen = new Set();
+    out[group] = rows.flatMap((row) => {
+      const label = cleanLabel(row.label);
+      const time = cleanTime(row.time);
+      if (!label || !time) return [];
+      const k = `${label.toLowerCase()}|${time}`;
+      if (seen.has(k)) return [];
+      seen.add(k);
+      const note = typeof row.note === 'string' ? row.note.replace(/\s+/g, ' ').trim() : '';
+      return [{ ...row, label, time, note: note || undefined }];
+    });
+  }
+  return out;
+}
+
 export function toText(html) {
   return html
     .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
@@ -234,7 +310,9 @@ async function main() {
       // written as undefined and counted as covered.
       if (!entry) continue;
       days[date] ??= {};
-      days[date][shul.slug] = { ...entry, fetched_at: new Date().toISOString() };
+      days[date][shul.slug] = {
+        ...normaliseSections(entry), fetched_at: new Date().toISOString(),
+      };
       filled.add(key(shul.slug, date));
     }
   }
@@ -252,7 +330,9 @@ async function main() {
       // Stamped per shul-day. generated_at goes fresh if ANY fetch in the run
       // succeeded, so a shul still showing an entry retained from a previous
       // run looked exactly as current as one just confirmed.
-      days[date][shul.slug] = { ...parsed, fetched_at: new Date().toISOString() };
+      days[date][shul.slug] = {
+        ...normaliseSections(parsed), fetched_at: new Date().toISOString(),
+      };
     }
   }
 
