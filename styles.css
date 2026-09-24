@@ -302,8 +302,9 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
      The vw one is the fallback: the numerals are nowrap and the body clips, so
      an unbounded vh-based size would run off the side of a narrow window.
      The cqi one is the real rule. The widest time is about 2.84em of numerals
-     on the widest face, so 32cqi of font is about 91% of the container and
-     leaves a few per cent of headroom for the faces that run wider. Because
+     on the widest face, plus a 0.08em gap and a 0.3em suffix column, so the
+     element is about 3.22em across and 29cqi of font is about 93% of the
+     container — a few per cent of headroom for the faces that run wider. Because
      this measures the container rather than the viewport, the tile beside it
      can change width without anyone re-deriving a cap.
      The vh term is deliberately generous: it only takes over on a short wide
@@ -313,38 +314,42 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
     var(--clock-cap));
   font-size: min(
     calc(clamp(88px, 34vh, 360px) * var(--clock-scale) * var(--clock-fill)),
-    32cqi);
-  /* One column, exactly as wide as the numerals, so the grid centres THEM and
-     not a numerals-plus-suffix cluster — which left the digits visibly left of
-     the centre line. The suffix sits in the second row (below), where it costs
-     the numerals no width at all. */
+    29cqi);
+  /* One row: numerals, then the suffix beside them. */
   padding: clamp(4px, 1.2vh, 16px) 0;
   min-height: 0;
-  display: grid;
-  grid-template-columns: auto;
-  align-content: center;
-  justify-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.08em;
 }
 
-/* "pm" and the dial sit UNDER the numerals, tucked to their right end.
-   Beside them, every pixel of the suffix came out of the numerals' width budget
-   at 2.18x: the numerals are centred, so the suffix pushed the right edge out
-   twice as fast as the tiles came in, and the clock had to be capped at 15vw to
-   keep the dial clear of the Hebrew tile. Below, the numerals own the whole gap
-   between the tiles, and the dial grows with them instead of competing. */
+/* "pm" and the dial sit BESIDE the numerals, stacked in a narrow column.
+   They used to be tucked under, and the reason was real at the time: the
+   numerals were centred on the SCREEN between two date tiles, so every pixel of
+   suffix pushed the right edge out twice as fast as the tiles came in and the
+   clock had to be capped at 15vw to keep the dial clear of the Hebrew tile.
+   Neither half of that still holds — there is no right-hand tile, and the clock
+   is centred in its own container rather than on the screen — so the suffix now
+   costs its width once, which is affordable.
+   Under the numerals it cost nothing horizontally but a great deal vertically:
+   at the current size the dial is ~90px, and it plus the meridiem formed a
+   second row hanging off the clock that read as a separate widget and pushed
+   the whole band down.
+   Stacked rather than side by side, because the column is then only as wide as
+   the dial instead of dial-plus-meridiem — about 0.3em against 0.5em, which is
+   the difference between a 29cqi clock and a 27cqi one. */
 .clock .hm { white-space: nowrap; }
 .clock .suffix {
-  justify-self: end;
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.1em;
-  /* Up into the dead space at the bottom of the line box, but not into the
-     digits. line-height is 0.9, so the ink stops about 0.086em above the box's
-     bottom edge; -0.05em takes back most of that and still leaves a hair of
-     clearance on every face. At 0.46em and no pull-up the dial hung a third of
-     the font size below the digits and read as a separate widget. */
-  margin-top: -0.05em;
-  margin-right: 0.02em;
+  justify-content: center;
+  gap: 0.06em;
+  /* line-height is 0.9, so the numerals' ink overflows their line box top and
+     bottom. Nudged down to sit on the optical centre of the digits rather than
+     the centre of a box that is shorter than they are. */
+  margin-top: 0.06em;
 }
 .clock .mer {
   font-family: var(--sans);
@@ -353,7 +358,7 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   color: var(--dim);
   line-height: 1;
 }
-.clock .dial { width: 0.36em; height: 0.36em; overflow: visible; }
+.clock .dial { width: 0.3em; height: 0.3em; overflow: visible; }
 .clock .dial[hidden] { display: none; }
 /* --rule is an alpha hairline meant for edges; on the dial it was invisible.
    These are keyed off the text colour so the dial reads in both themes. */
@@ -833,9 +838,9 @@ body.clock-only .footer { justify-content: flex-end; }
 body.clock-only .clock {
   /* Same pair as the board clock: a conservative vw fallback, then the real
      container measurement. With the tile gone the container is the full width
-     of the screen, so 32cqi is the whole of it. */
+     of the screen, so 29cqi is the whole of it. */
   font-size: min(calc(clamp(120px, 42vh, 460px) * var(--clock-scale)), 30vw);
-  font-size: min(calc(clamp(120px, 42vh, 460px) * var(--clock-scale)), 32cqi);
+  font-size: min(calc(clamp(120px, 42vh, 460px) * var(--clock-scale)), 29cqi);
   margin: auto 0;
 }
 body.clock-only .clockwrap { margin: auto 0; }
