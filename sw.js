@@ -1,7 +1,9 @@
 // The wall display must never go blank, and it is never relaunched by hand.
 //
-// index.html, app.js and styles.css are one generation and must be served as
-// one. Refreshing them independently in the background can hand the page a new
+// index.html, the app scripts and styles.css are one generation and must be
+// served as one. There are seven scripts now rather than one, which makes this
+// more important than it was, not less: a new display.js against an old
+// calendar.js is exactly the half-updated state described below. Refreshing them independently in the background can hand the page a new
 // stylesheet against an old script, which is worse than serving either
 // generation whole: the CSS scopes its rules to markup the old script does not
 // emit, so the times lose their columns and their colour. Those three are
@@ -15,14 +17,15 @@
 // whole list into a fresh cache, so a half-updated cache cannot survive it.
 // Bump it for data/shuls.json too — that one is cache-first, so an edit to it
 // (a new shul, a havdalah offset) reaches the wall no other way.
-const VERSION = 'v14';
+const VERSION = 'v15';
 // caches.keys() is ORIGIN-wide, not per-worker. This is served from
 // jmand2.github.io/shabbos/, so every other project page on that account shares
 // the origin — and an activate that deleted everything it did not recognise
 // would wipe their caches too. Ours are the ones carrying this prefix.
 const PREFIX = 'shabbos-clock-';
 const CACHE = `${PREFIX}${VERSION}`;
-const FILES = ['./', 'index.html', 'styles.css', 'app.js',
+const APP = ['util.js', 'calendar.js', 'settings.js', 'minyanim.js', 'weather.js', 'display.js', 'app.js'];
+const FILES = ['./', 'index.html', 'styles.css', ...APP,
   'flights.css', 'flights.js',
   'vendor/kosher-zmanim.min.js', 'data/shuls.json', 'manifest.webmanifest',
   'icons/icon-180.png'];
@@ -31,7 +34,8 @@ const FILES = ['./', 'index.html', 'styles.css', 'app.js',
 // flights.js and flights.css are a pair in the same way app.js and styles.css
 // are: the module builds the markup its stylesheet expects, so serving one
 // generation's script against another's styles breaks it the same way.
-const COUPLED = /\/(app\.js|styles\.css|index\.html|flights\.js|flights\.css)$/;
+const COUPLED = new RegExp(`/(${[...APP, 'styles.css', 'index.html', 'flights.js', 'flights.css']
+  .map((f) => f.replace('.', '\\.')).join('|')})$`);
 // Long enough for a slow wifi handshake, short enough that a dead network never
 // leaves the wall blank: past this we show the cached generation instead.
 const NET_TIMEOUT = 4000;

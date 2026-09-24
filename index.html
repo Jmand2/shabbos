@@ -169,6 +169,15 @@
 </div>
 
 <script src="vendor/kosher-zmanim.min.js"></script>
+<!-- Ordinary scripts, in dependency order, sharing one script scope. Not
+     modules: jsdom cannot load <script type="module">, and both behavioural
+     suites work by loading this page and running the real app inside it. -->
+<script src="util.js"></script>
+<script src="calendar.js"></script>
+<script src="settings.js"></script>
+<script src="minyanim.js"></script>
+<script src="weather.js"></script>
+<script src="display.js"></script>
 <script src="app.js"></script>
 <script src="flights.js"></script>
 </body>

@@ -4,6 +4,10 @@
 //   TZ=America/New_York node scripts/check.mjs
 
 import { JSDOM } from 'jsdom';
+
+const APP_FILES = [
+  'util.js', 'calendar.js', 'settings.js', 'minyanim.js', 'weather.js', 'display.js', 'app.js',
+];
 import { readFileSync } from 'node:fs';
 import {
   toText, renderedDate, parseSections, cleanLabel, cleanTime, normaliseSections,
@@ -31,7 +35,12 @@ async function boot(fakeNow, { failFetch = [], settings = null, wakeLock = true 
     request: async () => { if (!wakeLock) throw new Error('unsupported'); return {}; },
   };
   w.eval(file('vendor/kosher-zmanim.min.js'));
-  w.eval(file('app.js'));
+  // Evaluated as ONE program, which is what the browser effectively does.
+  // Separate <script> tags share the global lexical scope, so a const in
+  // calendar.js is visible to weather.js; separate eval() calls do not — each
+  // gets its own scope and the second file cannot see the first's constants.
+  // Concatenating is the faithful thing here, not seven evals.
+  w.eval(APP_FILES.map(file).join('\n'));
   await new Promise((r) => setTimeout(r, 150));
   return w;
 }

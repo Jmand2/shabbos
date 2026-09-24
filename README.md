@@ -504,6 +504,38 @@ hidden and taps do nothing, so nobody changes anything by leaning on it. It come
 back on its own after havdalah. The lock uses the same calculation as the display,
 so it also covers two-day Yom Tov and a Yom Tov that runs into Shabbos.
 
+## How the code is laid out
+
+No build step and no framework. Seven ordinary scripts, loaded in this order and
+sharing one script scope:
+
+| | |
+| --- | --- |
+| `util.js` | the two or three things everything needs |
+| `calendar.js` | dates, zmanim, and the shape of the day |
+| `settings.js` | what the person chose, and the sheet they chose it in |
+| `minyanim.js` | real minyan times, and only ever real ones |
+| `weather.js` | the forecast, and how old it is |
+| `display.js` | everything that paints |
+| `app.js` | startup, intervals, the appliance lifecycle |
+
+**Not ES modules**, deliberately. jsdom cannot load `<script type="module">` at
+all, and both behavioural suites work by loading the real `index.html` and
+running the real app inside it. Splitting the file was worth doing; giving up
+that harness to gain `import` statements was not. If those suites ever move to
+Playwright — which they could, now that a WebKit harness exists — modules become
+free and are worth taking.
+
+One consequence worth knowing if you touch the test harnesses: separate
+`<script>` tags share the global lexical scope, so a `const` in `calendar.js` is
+visible to `weather.js`. Separate `eval()` calls do **not** — each gets its own
+scope. The suites therefore concatenate the files and evaluate them as one
+program, which is the faithful equivalent.
+
+All seven are in the service worker's coupled set, so they are cached and
+replaced as one generation. A new `display.js` against an old `calendar.js` is
+exactly the half-updated state that is designed against.
+
 ## Checking a change
 
 All three suites run in GitHub Actions on every push and pull request

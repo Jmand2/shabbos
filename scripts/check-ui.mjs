@@ -20,6 +20,10 @@
 // legitimately change. shuls.json is NOT frozen — it is configuration, and a
 // change to it should be caught here rather than hidden.
 import { JSDOM } from 'jsdom';
+
+const APP_FILES = [
+  'util.js', 'calendar.js', 'settings.js', 'minyanim.js', 'weather.js', 'display.js', 'app.js',
+];
 import { readFileSync } from 'node:fs';
 
 const ROOT = new URL('..', import.meta.url);
@@ -75,7 +79,12 @@ async function boot(startIso, { settings = null, killMatchMedia = false, forecas
   const errors = [];
   w.addEventListener('error', (e) => errors.push(e.message));
   w.eval(file('vendor/kosher-zmanim.min.js'));
-  w.eval(file('app.js'));
+  // Evaluated as ONE program, which is what the browser effectively does.
+  // Separate <script> tags share the global lexical scope, so a const in
+  // calendar.js is visible to weather.js; separate eval() calls do not — each
+  // gets its own scope and the second file cannot see the first's constants.
+  // Concatenating is the faithful thing here, not seven evals.
+  w.eval(APP_FILES.map(file).join('\n'));
   await new Promise((r) => setTimeout(r, 150));
   return { w, state, errors, wake, setVisible, advance: (ms) => { state.offset += ms; } };
 }

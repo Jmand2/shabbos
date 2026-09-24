@@ -1,0 +1,532 @@
+/* Shabbos Clock — everything that paints.
+
+   Loaded as ordinary scripts, in the order index.html lists them, sharing one
+   script scope. Not ES modules: jsdom cannot load <script type="module"> at
+   all, and both behavioural suites work by loading the real index.html and
+   running the real app inside it. Splitting the file was worth doing; giving up
+   that harness to get import statements was not. */
+
+const PER_PAGE = 3;
+let page = 0;
+
+/* Rendering ------------------------------------------------------------- */
+
+// The shuls on the board, in the order the person put them in.
+//
+// This used to filter the master list, which is alphabetical — so settings.shuls
+// recorded WHICH shuls were chosen and silently discarded the order, and someone
+// selecting six had no way to decide which three landed on the first page.
+// Mapping over settings.shuls makes that array mean what it looks like it means.
+function chosenShuls() {
+  const bySlug = new Map(shuls.map((s) => [s.slug, s]));
+  return settings.shuls.map((slug) => bySlug.get(slug)).filter(Boolean);
+}
+
+// Which page of them is up, when there are more than fit at once.
+function pageInfo() {
+  const total = chosenShuls().length;
+  if (total <= PER_PAGE) return null;
+  const pages = Math.ceil(total / PER_PAGE);
+  return { at: page % pages, pages };
+}
+
+function shownShuls() {
+  const chosen = chosenShuls();
+  const info = pageInfo();
+  if (!info) return chosen;
+  const start = info.at * PER_PAGE;
+  return chosen.slice(start, start + PER_PAGE);
+}
+
+// Two dots and no explanation. The board rotates every 45 seconds whether or
+// not anyone is watching, and until this there was nothing to say that the
+// other three shuls existed at all.
+function renderPager() {
+  const el = $('pager');
+  if (!el) return;
+  const info = pageInfo();
+  el.hidden = !info;
+  if (!info) { el.innerHTML = ''; return; }
+  const html = Array.from({ length: info.pages },
+    (_, i) => `<i class="${i === info.at ? 'on' : ''}"></i>`).join('');
+  if (html !== el.innerHTML) el.innerHTML = html;
+}
+
+const GROUPS = { shacharis: 'Shacharis', mincha: 'Mincha', maariv: 'Maariv' };
+let lastBoard = '';
+let lastMarks = '';
+
+function render() {
+  const now = new Date();
+  const info = dayInfo(now);
+
+  document.body.classList.toggle('day', themeIsDay(now, info));
+  document.body.dataset.accent = settings.accent;
+  document.body.dataset.face = settings.face;
+  const locked = isLocked(now, info);
+  document.body.classList.toggle('locked', locked);
+  document.body.classList.toggle('clock-only', settings.layout === 'clock');
+  if (locked) $('sheet').hidden = true;   // never leave settings open into Shabbos
+  document.documentElement.style.setProperty('--clock-scale', settings.clockSize);
+
+  $('hebrewDate').textContent = fmtHeb.format(info.hebrew.jc);
+  $('occasion').textContent = occasionOf(info.hebrew.jc, info.hebrewFor);
+  $('civilDate').textContent = now.toLocaleDateString('en-US',
+    { weekday: 'long', month: 'long', day: 'numeric' });
+
+  renderEdge(now, info);
+  renderZmanim(info);
+  // Everything that claims a band goes first, and the cards fit what is left.
+  // renderShuls ends by MEASURING the cell it was given, so anything inserted
+  // after it has already been measured around — with the strip painted last,
+  // the first frame sized the type against a board that was about to lose
+  // 15vh to the weather, and a portrait card clipped its own times until the
+  // next render corrected it thirty seconds later.
+  renderHorizon(now, info);
+  renderWeather(now, info);
+  // One list, so the footer describes the same span the cards do.
+  const days = daysShown(now, info);
+  renderShuls(now, days);
+  renderPager();
+  renderFreshness(now, days);
+}
+
+function themeIsDay(now, info) {
+  if (settings.theme !== 'auto') return settings.theme === 'day';
+  return now >= toDate(info.cal.getSunrise()) && now < info.sunset;
+}
+
+// Formatted by hand: some iOS builds separate the meridiem with U+202F rather
+// than a space, which breaks any parse of toLocaleTimeString output.
+function hhmm(d) {
+  return { hour: d.getHours() % 12 || 12,
+    minute: String(d.getMinutes()).padStart(2, '0'),
+    meridiem: d.getHours() < 12 ? 'am' : 'pm' };
+}
+
+const clockTime = (d) => { const t = hhmm(d); return `${t.hour}:${t.minute}${t.meridiem[0]}`; };
+// The shape clockFace parses, so the horizon sets its meridiems exactly as the
+// cards do rather than inventing a second convention.
+const clockTimeLong = (d) => { const t = hhmm(d); return `${t.hour}:${t.minute} ${t.meridiem.toUpperCase()}`; };
+
+// Nightfall is a fact; havdalah is a practice, and the two shuls that have one
+// hold by their own motzei Shabbos maariv plus a fixed few minutes. That is the
+// number their members actually wait on, so it beats a computed tzeis — but it
+// only exists for a shul we have both an offset and a maariv time for.
+function havdalahFor(slug, endDay) {
+  const day = minyanim.days?.[isoOf(endDay)]?.[slug];
+  // If the shul publishes when its fast or Shabbos ends, that is the answer and
+  // no arithmetic can improve on it.
+  const published = timeToDate(endDay, day?.edge?.havdalah ?? '');
+  if (published) return published;
+
+  const mins = shuls.find((s) => s.slug === slug)?.havdalahAfterMaariv;
+  if (!mins) return null;
+  const times = (day?.maariv ?? [])
+    // Neila and Kol Nidrei sit in the evening bucket but neither is the maariv
+    // the practice counts from; measuring off Neila put havdalah an hour early.
+    .filter((row) => !/neila|ne'?ilah?|kol ?nidre/i.test(row.label ?? ''))
+    .map((row) => timeToDate(endDay, row.time)).filter(Boolean)
+    .sort((a, b) => a - b);
+  // The maariv that ends the day, not an earlier one sharing the slot.
+  const sunset = toDate(zmanim(endDay).getSunset());
+  const maariv = times.find((t) => t >= sunset) ?? times[0];
+  return maariv ? new Date(maariv.getTime() + mins * 60000) : null;
+}
+
+// One time when the shuls on screen agree, one line each when they do not —
+// which is the whole point, since they end Shabbos minutes apart. With nothing
+// shul-specific to show we fall back to tzeis, the town-wide answer.
+function havdalahLines(now) {
+  const end = restEnd(now);
+  if (!end) return [];
+  const shown = shownShuls();
+  const per = shown.map((s) => ({ name: s.name, at: havdalahFor(s.slug, end.day) }))
+    .filter((r) => r.at);
+  if (!per.length) return [`Havdalah <b>${clockTime(end.tzeis)}</b>`];
+  const distinct = new Set(per.map((r) => clockTime(r.at)));
+  // An unlabelled time has to speak for every shul on screen, so it is only
+  // safe when they all agree AND none of them is missing from the list.
+  if (distinct.size === 1 && per.length === shown.length) {
+    return [`Havdalah <b>${[...distinct][0]}</b>`];
+  }
+  return ['Havdalah', ...per.map((r) => `${r.name} <b>${clockTime(r.at)}</b>`)];
+}
+
+function renderEdge(now, info) {
+  const jc = info.civil.jc;
+  const candles = toDate(info.cal.getCandleLighting());
+  const restingNow = jc.isAssurBemelacha() && now < info.tzeis;
+  const restingNext = jc.isTomorrowShabbosOrYomTov();
+  const parts = [];
+  if (restingNow && restingNext) {
+    // Another day of rest starts tonight. Into Shabbos, lighting is at the usual
+    // time; into a second day of Yom Tov, nothing is lit until nightfall.
+    const intoShabbos = now.getDay() === 5;
+    const lightAt = intoShabbos ? candles : info.tzeis;
+    if (now < lightAt) {
+      parts.push(`Candles ${intoShabbos ? '' : 'after '}<b>${clockTime(lightAt)}</b>`);
+    }
+    parts.push(...havdalahLines(now));
+  } else if (isLocked(now, info)) {
+    parts.push(...havdalahLines(now));
+  } else if (restingNext && now < candles) {
+    // Both ends, not just the one about to happen. Knowing Shabbos is in at
+    // 6:41 is half the question; the other half is when it is out.
+    parts.push(`Candles <b>${clockTime(candles)}</b>`, ...havdalahLines(now));
+  }
+  // On an ordinary weekday there is no transition to announce. Hide the element
+  // rather than leaving an empty one contributing a gap to the column.
+  // One line per fact. The tile is only as wide as the Hebrew date, so an inline
+  // separator always wrapped anyway and left the dot dangling off the first line.
+  $('edge').innerHTML = parts.map((p) => `<span class="line">${p}</span>`).join('');
+  $('edge').hidden = !parts.length;
+}
+
+// Netz, shkiya and tzeis, in the tile beside the clock. They used to appear
+// only on the horizon, so turning that off — which is now the default — left
+// them nowhere. These are the three that pace the day; the setting adds the
+// rest for anyone who wants them.
+let lastZmanim = '';
+
+function renderZmanim(info) {
+  const cal = info.cal;
+  // Each zman by its own name, and then what it is for. "Netz" on its own
+  // assumes you already know; the pairing is how a luach reads.
+  const rows = [['נץ החמה', 'Earliest Shacharis', toDate(cal.getSunrise()), 'netz']];
+  if (settings.showZmanim) {
+    rows.push(['סוף זמן שמע', 'Latest Shema', toDate(cal.getSofZmanShmaGRA()), 'mid'],
+      ['מנחה גדולה', 'Earliest Mincha', toDate(cal.getMinchaGedola()), 'mid'],
+      ['פלג המנחה', 'Early Maariv', toDate(cal.getPlagHamincha()), 'mid']);
+  }
+  rows.push(['שקיעה', 'Sunset', info.sunset, 'shkiya'],
+    ['צאת הכוכבים', 'Nightfall', info.tzeis, 'tzeis']);
+
+  // dir on the Hebrew span, so the pipe and the English stay to its right
+  // instead of the bidi algorithm reordering the line.
+  const html = rows.filter(([, , d]) => d).map(([heb, eng, d, kind]) =>
+    `<div class="zrow ${kind}">`
+    + `<div class="zname"><span class="zheb" dir="rtl">${esc(heb)}</span>`
+    + `<span class="zsep">|</span><span class="zeng">${esc(eng)}</span></div>`
+    + `<div class="ztime">${clockFace(clockTimeLong(d))}</div></div>`).join('');
+  if (html !== lastZmanim) {
+    lastZmanim = html;
+    $('zmanimList').innerHTML = html;
+  }
+}
+
+// One writer for the board, so every state updates the cache. Writing the DOM
+// directly anywhere else leaves lastBoard stale and the next identical render
+// gets skipped.
+function paintBoard(html) {
+  if (html === lastBoard) return;
+  lastBoard = html;
+  $('shuls').innerHTML = html;
+}
+
+function renderShuls(now, days) {
+  const list = shownShuls();
+  if (!list.length) {
+    paintBoard('<p class="none">No shuls chosen. Open Settings to pick some.</p>');
+    return;
+  }
+
+  // Counted per card, not pooled. Averaging across the board let one heavy shul
+  // hide behind two light ones and clip its own times.
+  const build = (cap) => {
+  const perCardLines = [];
+  let lines = 0;
+
+  const cards = list.map((shul) => {
+    lines = 0;
+    const s = scheduleFor(shul.slug, now, days);
+    if (s.state === 'unavailable') {
+      lines += 1;
+      perCardLines.push(lines);
+      return card(shul.name, `<p class="unavailable">Times unavailable — check ${esc(shul.name)}'s own schedule.</p>`);
+    }
+    if (s.state === 'awaiting') {
+      lines += 1;
+      perCardLines.push(lines);
+      return card(shul.name, '<p class="unavailable">Done for today. Tomorrow\'s times not confirmed yet.</p>');
+    }
+
+    // Grouped by the day each time actually falls on, then capped — the cap
+    // has to be spent with the days in view, or it is spent entirely on the
+    // first of them.
+    const grouped = new Map();
+    for (const r of [...s.rows].sort((a, b) => a.at - b.at)) {
+      const k = isoOf(r.at);
+      if (!grouped.has(k)) grouped.set(k, []);
+      grouped.get(k).push(r);
+    }
+    const ahead = capRows(grouped, cap);
+    const next = ahead[0];
+
+    const byDay = new Map();
+    for (const r of ahead) {
+      const k = isoOf(r.at);
+      if (!byDay.has(k)) byDay.set(k, []);
+      byDay.get(k).push(r);
+    }
+
+    let body = '';
+    for (const [iso, rows] of byDay) {
+      const when = dayName(now, rows[0].at);
+      // Anything that is not today is always announced. Without this, a board
+      // late at night shows tomorrow's 5:10 AM with nothing saying it is not
+      // tonight — and on a long Yom Tov, three identical mornings in a row.
+      if (when.cls !== 'today' || byDay.size > 1) {
+        body += `<p class="group ${when.cls}">${esc(when.label)}</p>`;
+        lines += 1;
+      }
+      const day = when.cls;
+
+      // Same tefillah on one line, but only while its times stay consecutive.
+      // Grouping every row that shares a label merges times that are hours
+      // apart and then places the row by the earliest of them: Beth Aaron
+      // lists Night Selichos at both 5:00 AM and 9:45 PM, which put the last
+      // minyan of the day above times sixteen hours earlier. Runs keep the
+      // board in the order things actually happen. The label is always the
+      // tefillah — never blanked, or Mincha and Maariv collapse into one
+      // unlabelled row.
+      const runs = [];
+      for (const r of rows) {
+        const label = r.label.toLowerCase() === r.group ? GROUPS[r.group] : r.label;
+        const open = runs[runs.length - 1];
+        if (open && open.label === label) open.times.push(r);
+        else runs.push({ label, times: [r] });
+      }
+
+      // A run of times wraps, so count the lines it will actually occupy.
+      // Narrower cards (more shuls across) fit fewer per line.
+      const perLine = list.length <= 2 ? 4 : 3;
+      for (const { label, times } of runs) {
+        lines += Math.ceil(times.length / perLine);
+        // The next minyan is decided per card, so neither shul becomes the more
+        // important one just by being first.
+        const here = times.includes(next) ? ' next-row' : '';
+        body += `<span class="label ${day}${here}">${esc(label)}</span>`
+          + `<span class="times ${day}${here}">`
+          // A marker, not a countdown. The board is memoised on its own markup
+          // and repaints only when something genuinely changed; "in 24 min"
+          // would differ on every render and rebuild all of it twice a minute.
+          + (here ? '<span class="nextflag">Next</span>' : '')
+          + times.map((r) => `<span class="time${r === next ? ' next' : ''}">${clockFace(r.time)}</span>`).join('')
+          + `</span>`;
+      }
+    }
+    perCardLines.push(lines);
+    return card(shul.name, body || '<p class="none">Nothing further listed.</p>');
+  });
+
+  // Scale on LINES, which is what actually consumes height, and on the fullest
+  // card rather than the average of them.
+  const perCard = Math.max(1, ...perCardLines);
+  const scale = perCard <= 4 ? 1.15 : perCard <= 6 ? 1 : perCard <= 8 ? 0.9
+    : perCard <= 10 ? 0.82 : perCard <= 13 ? 0.72 : 0.64;
+  document.documentElement.style.setProperty('--minyan-scale', scale);
+
+  // Cards hug their content, so the clock inherits the rest of the column. A
+  // sparse evening gives it room; a full Friday board takes it back.
+  const fill = perCard <= 3 ? 1.5 : perCard <= 5 ? 1.3 : perCard <= 7 ? 1.15
+    : perCard <= 9 ? 1 : 0.85;
+  document.documentElement.style.setProperty('--clock-fill', fill);
+
+  paintBoard(cards.join(''));
+  return fitBoard();
+  };
+
+  // Auto turns the question round. Instead of being told a count and then
+  // shrinking the type until it fits — which is how a board ends up at 10px and
+  // still clipped — it asks how many rows survive at a size worth reading, and
+  // shows that many. A quiet Tuesday gets more than a crowded erev Yom Tov.
+  //
+  // A chosen 4/8/12 is still honoured, but only as a CEILING: if the board
+  // cannot fit that many at any size it shows fewer rather than clipping them,
+  // because a clipped time is worse than an absent one.
+  const auto = settings.perShul === 'auto';
+  const ceiling = auto ? AUTO_MAX : Number(settings.perShul);
+  const floor = auto ? AUTO_MIN_PX : 0;
+  const goodAt = (cap) => {
+    const r = build(cap);
+    // No geometry to measure (jsdom, or a board with no times on it) — take the
+    // requested count at face value rather than searching against nothing.
+    if (r.px === null) return true;
+    return r.fitted && r.px >= floor;
+  };
+
+  if (goodAt(ceiling)) return;
+  let lo = AUTO_MIN_ROWS;
+  let hi = ceiling;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (goodAt(mid)) lo = mid; else hi = mid - 1;
+  }
+  // The search leaves the board at whatever it probed last, so paint the answer.
+  build(lo);
+}
+
+// Fit to the box, in both directions.
+//
+// The line count is only a first guess. This measures, and — the part that was
+// missing — it GROWS as well as shrinks. Cards fill their cells, so any room
+// left over is legibility left on the table: on a wall display read across a
+// room, empty panel is worse than large numerals. Shrink-only sizing is why
+// every card was a small table floating in a large blank rectangle.
+//
+// Binary search on the scale: find the largest value where the tallest card
+// still fits its cell, both ways.
+// Low enough that the board can always shrink to fit. Six zmanim in portrait
+// makes the tile half the screen tall, and at a 0.45 floor the loop ran out of
+// room and clipped rather than shrinking further.
+const MIN_SCALE = 0.3;
+// 2.6 let a card with two rows blow its times up to 86px against a 36px label
+// — top-heavy, and wide enough to run to the card's clip edge. A card with
+// little to say should read as a calm card, not a billboard. Down again from
+// 1.8 now that the weather strip has taken a band off the cards: in a shorter
+// cell the old ceiling put a two-row card's numerals hard against its own
+// padding, which is the billboard the note above is about.
+const MAX_SCALE = 1.7;
+
+// Auto sizing. AUTO_MIN_PX is the point where numerals stop carrying across a
+// room — the whole purpose of the board — so it is the thing held fixed and the
+// row count is what gives way. AUTO_MAX is a sanity ceiling: past a dozen or so
+// nobody is reading a wall, they are reading a timetable.
+const AUTO_MIN_PX = 22;
+const AUTO_MAX = 14;
+const AUTO_MIN_ROWS = 2;
+
+function fitBoard() {
+  const cards = [...document.querySelectorAll('.card')];
+  if (!cards.length) return { px: null, fitted: true };
+  // No layout (jsdom, or a hidden board) reports 0 for everything, and a search
+  // against zeros would settle on nonsense. Leave the heuristic value alone.
+  if (!cards.some((c) => c.clientHeight > 0)) return { px: null, fitted: true };
+
+  // Measure the body, not just the card. The card clips (overflow: hidden), so
+  // the rows can spill out of the body while the card itself still reports no
+  // overflow — the test would pass on content that is already being cut off.
+  const boxes = cards.flatMap((c) => [c, c.querySelector('.body')]).filter(Boolean);
+  // Scroll metrics are not enough. A time that is wider than its grid track
+  // overflows and is clipped by the card, and the browser still reports
+  // scrollWidth === clientWidth to the pixel — the same blindness that let
+  // alignment overflow through before. So compare the rows' own rectangles
+  // against the body they are supposed to sit in.
+  const rows = cards.map((c) => [c.querySelector('.body'),
+    [...c.querySelectorAll('.time, .label, .group')]]).filter(([b]) => b);
+  const root = document.documentElement;
+  const fits = (v) => {
+    root.style.setProperty('--minyan-scale', v);
+    if (!boxes.every((b) => b.scrollHeight <= b.clientHeight + 1
+      && b.scrollWidth <= b.clientWidth + 1)) return false;
+    return rows.every(([body, els]) => {
+      const box = body.getBoundingClientRect();
+      return els.every((el) => {
+        const r = el.getBoundingClientRect();
+        return r.right <= box.right + 1 && r.bottom <= box.bottom + 1
+          && r.left >= box.left - 1;
+      });
+    });
+  };
+
+  if (fits(MAX_SCALE)) return achieved(true);   // everything fits at the ceiling
+  // Cannot fit even at the floor. It used to return here and leave the board
+  // clipped at 0.3; now it says so, and the caller shows fewer rows instead.
+  if (!fits(MIN_SCALE)) return achieved(false);
+
+  let lo = MIN_SCALE;
+  let hi = MAX_SCALE;
+  for (let i = 0; i < 9; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) lo = mid; else hi = mid;
+  }
+  fits(lo);
+  return achieved(true);
+}
+
+// The size the numerals actually came out at, which is the only thing that
+// answers "can this be read from the sofa". null means there was nothing to
+// measure — jsdom, or a board of unavailable cards.
+function achieved(fitted) {
+  const el = document.querySelector('.card .body .time');
+  if (!el) return { px: null, fitted };
+  return { px: parseFloat(getComputedStyle(el).fontSize) || null, fitted };
+}
+
+// The numerals carry the information and the meridiem only disambiguates them,
+// so they are separated and set at different weights rather than run together
+// as one string. Anything that does not parse is left exactly as it arrived —
+// these are real schedule times and are never reformatted into a guess.
+function clockFace(text) {
+  const m = /^(\d{1,2}):(\d{2})\s*([AP])M$/i.exec(String(text).trim());
+  if (!m) return esc(text);
+  return `<span class="hm">${m[1]}:${m[2]}</span>`
+    + `<span class="ap">${m[3].toLowerCase()}m</span>`;
+}
+
+// Today and Tomorrow by name; anything further out by weekday, because "in two
+// days" is not how anyone refers to the second day of Yom Tov. The class stays
+// today/tomorrow so the existing tone rules keep working, with everything past
+// tomorrow taking tomorrow's quieter tone.
+function dayName(now, at) {
+  const a = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const b = new Date(at.getFullYear(), at.getMonth(), at.getDate());
+  const diff = Math.round((b - a) / 86400000);
+  if (diff <= 0) return { label: 'Today', cls: 'today' };
+  if (diff === 1) return { label: 'Tomorrow', cls: 'tomorrow' };
+  return { label: at.toLocaleDateString('en-US', { weekday: 'long' }), cls: 'tomorrow' };
+}
+
+const card = (name, body) => `<article class="card"><h2>${esc(name)}</h2><div class="body">${body}</div></article>`;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// The strip is the solar day and nothing else: dawn to nightfall, the zmanim
+// that actually divide it, and the sun at now. It used to plot every upcoming
+// minyan as an unlabelled tick, which put two shuls davening at the same time
+// on top of each other, clipped the one labelled tick off the edge when it fell
+// near dawn, and disagreed with the cards after tzeis. The cards carry minyan
+// times in numerals that can be read across a room; this carries the day.
+function renderHorizon(now, info) {
+  const figure = document.querySelector('.horizon');
+  figure.hidden = !settings.showHorizon;
+  if (figure.hidden) return;
+
+  // Past nightfall the day it describes is over, so it moves on to tomorrow's.
+  const nightfall = now >= info.tzeis;
+  const cal = nightfall ? zmanim(addDays(now, 1)) : info.cal;
+  const start = toDate(cal.getAlos72());
+  const end = toDate(cal.getTzais());
+  const span = end - start;
+  const at = (d) => Math.min(100, Math.max(0, ((d - start) / span) * 100));
+
+  $('horizonElapsed').style.width = nightfall ? '0%' : `${at(now)}%`;
+
+  // Its own node, moved in place so the transition runs rather than being
+  // destroyed and rebuilt on every render.
+  const sun = $('sun');
+  sun.hidden = nightfall;
+  if (!nightfall) sun.style.left = `${at(now)}%`;
+
+  // Split across two rows by what each mark is. The sun's own two moments go
+  // above the line, the halachic boundaries below it. That is not only tidy: it
+  // is what keeps them apart. Netz sits ~8% in and shkiya ~95%, so on one row
+  // each would crowd the end next to it — "Tomorrow · Alos" ran straight into
+  // Netz, and shkiya into tzeis. Split, each row spans almost the whole bar.
+  // The two ends anchor to their edges rather than centring on them, or half
+  // the label hangs off the screen.
+  const marks = [
+    { name: nightfall ? 'Tomorrow · Alos' : 'Alos', at: start, cls: 'first' },
+    { name: 'Netz', at: toDate(cal.getSunrise()), cls: 'up' },
+    { name: 'Chatzos', at: toDate(cal.getChatzos()) },
+    { name: 'Shkiya', at: toDate(cal.getSunset()), cls: 'up' },
+    { name: 'Tzeis', at: end, cls: 'last' },
+  ];
+  const html = marks.map((m) => `<span class="zman ${m.cls ?? ''}" style="left:${at(m.at)}%">`
+    + `<i></i><b>${esc(m.name)}</b><s>${clockFace(clockTimeLong(m.at))}</s></span>`).join('');
+  if (html !== lastMarks) {
+    lastMarks = html;
+    $('horizonMarks').innerHTML = html;
+  }
+}
+
