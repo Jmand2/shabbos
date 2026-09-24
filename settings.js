@@ -65,14 +65,35 @@ async function cacheVersion() {
   } catch { return 'unavailable'; }
 }
 
-function shulSources(now) {
-  const today = isoOf(now);
-  return shuls.filter((s) => settings.shuls.includes(s.slug)).map((s) => {
-    const entry = minyanim.days?.[today]?.[s.slug];
-    if (!entry) return [s.name, 'no times for today'];
-    const src = entry.source === 'shul' ? 'own website' : 'teaneckminyanim.com';
-    return [s.name, `${src} · ${ago(entry.fetched_at ?? minyanim.generated_at)}`];
+// Per day, not per shul.
+//
+// Today alone was enough when the board only reached tomorrow. It now reaches
+// the end of a rest period, and the provenance genuinely differs across those
+// days: a shul's own site covers today and tomorrow, and the aggregator covers
+// what is past that. When something looks wrong, which day came from where is
+// the question, so this answers it rather than averaging it away.
+function shulSources(now, days) {
+  return chosenShuls().map((s) => {
+    const parts = days.map((day) => {
+      const entry = minyanim.days?.[isoOf(day)]?.[s.slug];
+      const label = dayName(now, day).label.split(' · ')[0];
+      if (!entry) return `${label} —`;
+      return `${label} ${entry.source === 'shul' ? 'site' : 'agg'}`
+        + ` ${ago(entry.fetched_at ?? minyanim.generated_at)}`;
+    });
+    return [s.name, parts.join('  ·  ')];
   });
+}
+
+// What this build actually is, which is the thing that cannot be worked out by
+// looking at the screen. Written by the stamp workflow on every push.
+let buildStamp = null;
+
+async function loadBuildStamp() {
+  try {
+    const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (res.ok) buildStamp = await res.json();
+  } catch { /* an unstamped build says so rather than guessing */ }
 }
 
 async function renderStatus() {
@@ -86,6 +107,8 @@ async function renderStatus() {
   const flights = window.shabbosFlights?.status?.();
 
   const rows = [
+    ['App build', buildStamp?.commit
+      ? `${buildStamp.commit} · ${ago(buildStamp.built_at)}` : 'unstamped'],
     ['App cache', await cacheVersion()],
     ['Network', navigator.onLine ? 'online' : 'offline'],
     ['Screen wake lock', wakeState],
@@ -97,7 +120,7 @@ async function renderStatus() {
       + `${settings.showWeather ? '' : ' · hidden'}`
       : 'never fetched'],
     ...(flights ? [['Family photos', flights]] : []),
-    ...shulSources(now),
+    ...shulSources(now, daysShown(now, dayInfo(now))),
   ];
 
   el.innerHTML = rows.map(([k, v]) =>

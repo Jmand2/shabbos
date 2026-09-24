@@ -1,0 +1,40 @@
+# Writes the commit the site was built from into version.json, so the iPad can
+# say which one it is actually running.
+#
+# "Is the display on the latest version?" is otherwise unanswerable from across
+# a room: GitHub Pages, Safari and the service worker each hold a copy, and any
+# of them can be the stale one.
+name: Stamp version
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stamp
+  cancel-in-progress: false
+
+jobs:
+  stamp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write version.json
+        run: |
+          printf '{\n  "commit": "%s",\n  "built_at": "%s"\n}\n' \
+            "$(git rev-parse --short HEAD)" \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > version.json
+          cat version.json
+      - name: Commit if changed
+        run: |
+          git config user.name  "shabbos-clock-bot"
+          git config user.email "actions@github.com"
+          git add version.json
+          git diff --staged --quiet && exit 0
+          # Skips CI on purpose: this commit is a stamp, not a change to test.
+          git commit -m "Stamp version [skip ci]"
+          git pull --rebase --autostash
+          git push

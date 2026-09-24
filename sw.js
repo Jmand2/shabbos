@@ -17,7 +17,7 @@
 // whole list into a fresh cache, so a half-updated cache cannot survive it.
 // Bump it for data/shuls.json too — that one is cache-first, so an edit to it
 // (a new shul, a havdalah offset) reaches the wall no other way.
-const VERSION = 'v16';
+const VERSION = 'v17';
 // caches.keys() is ORIGIN-wide, not per-worker. This is served from
 // jmand2.github.io/shabbos/, so every other project page on that account shares
 // the origin — and an activate that deleted everything it did not recognise
@@ -79,6 +79,10 @@ self.addEventListener('fetch', (e) => {
   // a trap worth simply not having. Two caches for one thing, and only one of
   // them can tell you how old it is.
   if (url.hostname.endsWith('open-meteo.com')) return;
+
+  // Nor version.json. A cached copy of the file whose entire job is to say
+  // which build this is would be the most misleading thing on the screen.
+  if (url.pathname.endsWith('version.json')) return;
 
   const freshFirst = url.pathname.includes('minyanim.json')
     || e.request.mode === 'navigate'

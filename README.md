@@ -296,10 +296,11 @@ absent time is better than a cut one.
 
 The next minyan gets the whole row rather than one recoloured number: accent
 label, a tinted band and a NEXT marker, decided independently per card so
-neither shul becomes the more important one. It is a marker and not a countdown
-on purpose — the board is memoised on its own markup and repaints only when
-something genuinely changed, and "in 24 min" would rebuild all of it twice a
-minute.
+neither shul becomes the more important one. Inside the last ninety minutes it also counts down —
+`Next · 42m`, then `Next · soon`. The countdown is written into that one node by
+the clock's own tick, never rendered into the board: the board is memoised on
+its markup, and a changing string in there would rebuild every card twice a
+minute. The markup carries the moment; the text is painted over it.
 
 ## Three surfaces
 

@@ -308,10 +308,12 @@ function renderShuls(now, days) {
         const here = times.includes(next) ? ' next-row' : '';
         body += `<span class="label ${day}${here}">${esc(label)}</span>`
           + `<span class="times ${day}${here}">`
-          // A marker, not a countdown. The board is memoised on its own markup
-          // and repaints only when something genuinely changed; "in 24 min"
-          // would differ on every render and rebuild all of it twice a minute.
-          + (here ? '<span class="nextflag">Next</span>' : '')
+          // The marker carries the MOMENT, not the countdown. The board is
+          // memoised on its own markup, so a changing string in here would
+          // rebuild every card twice a minute — the thing E1 exists to prevent.
+          // The text is written in place by paintCountdowns, from the clock's
+          // own tick, and the generated markup never varies.
+          + (here ? `<span class="nextflag" data-at="${next.at.getTime()}">Next</span>` : '')
           + times.map((r) => `<span class="time${r === next ? ' next' : ''}">${clockFace(r.time)}</span>`).join('')
           + `</span>`;
       }
@@ -356,7 +358,7 @@ function renderShuls(now, days) {
     return r.fitted && r.px >= floor;
   };
 
-  if (goodAt(ceiling)) return;
+  if (goodAt(ceiling)) { paintCountdowns(now); return; }
   let lo = AUTO_MIN_ROWS;
   let hi = ceiling;
   while (lo < hi) {
@@ -365,6 +367,7 @@ function renderShuls(now, days) {
   }
   // The search leaves the board at whatever it probed last, so paint the answer.
   build(lo);
+  paintCountdowns(now);
 }
 
 // Fit to the box, in both directions.
@@ -584,4 +587,63 @@ function renderFreshness(now = new Date(), days = [now]) {
   const stale = age === null || age > WEATHER_STALE_MS
     ? ` (${age === null ? 'age unknown' : `${Math.floor(age / 3.6e6)}h old`})` : '';
   $('freshness').textContent = `${times} · weather from open-meteo.com${stale}`;
+}
+
+/* The clock face ---------------------------------------------------------
+   Here rather than in weather.js, where the split first put it: the original
+   file had the dial sitting at the tail of the weather section and the cut
+   took it along. It paints; it belongs with the painting. */
+
+// The hand's angle only ever increases. Feeding it seconds * 6 would send it
+// backwards through a whole revolution at 59 -> 0, which the detent transition
+// would then animate; accumulating the step keeps every move a forward one.
+// Steps are taken mod 60 seconds, so the angle stays correct mod 360 even after
+// the dial has been switched off for a while.
+let handAngle = null;
+let handAt = -1;
+
+function paintDial(now) {
+  // hidden is a property of HTMLElement, and the dial is an <svg>. Assigning
+  // el.hidden there sets a plain expando: no attribute is reflected, the
+  // stylesheet's [hidden] never matches, and the dial stays on the screen
+  // whatever the setting says. toggleAttribute sets the real attribute.
+  $('dial').toggleAttribute('hidden', !settings.seconds);
+  const second = now.getSeconds();
+  if (second === handAt) return;
+  const hand = $('dialHand');
+  const first = handAngle === null;
+  handAngle = first ? second * 6 : handAngle + (((second - handAt + 60) % 60) * 6);
+  handAt = second;
+  // On the very first paint the hand would wind up from twelve to wherever it
+  // belongs. Place it, then let the detent run from the next step on.
+  hand.style.transition = first ? 'none' : '';
+  hand.style.transform = `rotate(${handAngle}deg)`;
+}
+
+// Only inside the last ninety minutes. A minyan six hours out does not need a
+// countdown, and "Next · 341m" is arithmetic rather than information.
+const COUNTDOWN_FROM_MINS = 90;
+
+// Written in place by the clock that is ticking anyway. Nothing here touches the
+// board's markup, so nothing here can invalidate the memoisation that keeps the
+// cards from being rebuilt twice a minute.
+function paintCountdowns(now = new Date()) {
+  for (const el of document.querySelectorAll('.nextflag[data-at]')) {
+    const at = Number(el.dataset.at);
+    if (!Number.isFinite(at)) continue;
+    const mins = Math.round((at - now.getTime()) / 60000);
+    const text = mins > COUNTDOWN_FROM_MINS || mins < 0 ? 'Next'
+      : mins > 1 ? `Next · ${mins}m`
+        : 'Next · soon';
+    if (el.textContent !== text) el.textContent = text;
+  }
+}
+
+function tick() {
+  const now = new Date();
+  const t = hhmm(now);
+  $('clockTime').textContent = `${t.hour}:${t.minute}`;
+  $('clockMer').textContent = t.meridiem;
+  paintDial(now);
+  paintCountdowns(now);
 }

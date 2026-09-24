@@ -939,5 +939,43 @@ console.log('\n=== Y4: two festivals back to back are named, not numbered ===');
   ok(!groups.some((g) => /\bI{1,3}\b/.test(g)), 'neither is given a numeral');
 }
 
+console.log('\n=== N: the NEXT countdown is written in place, not rendered in ===');
+{
+  const when = '2026-09-22T14:05:00-04:00';
+  const { w, advance } = await boot(when);
+  const flag = () => w.document.querySelector('.nextflag');
+  ok(!!flag(), 'the next minyan carries a flag');
+  ok(flag().dataset.at, 'the flag carries the moment, not the countdown');
+
+  // The page's clock, not this process's — the window is frozen to `when`, and
+  // an offset from the real now would be two days out.
+  const inside = (ms) => { flag().dataset.at = String(w.Date.now() + ms); };
+
+  // Far out: a countdown would be arithmetic rather than information.
+  inside(6 * 3600 * 1000);
+  w.eval('paintCountdowns(new Date())');
+  ok(flag().textContent === 'Next',
+    `six hours out it stays a plain marker (${flag().textContent})`);
+
+  // Inside the window it counts, and the BOARD is not rebuilt to do it.
+  const card = w.document.querySelector('.card');
+  inside(42 * 60000);
+  w.eval('paintCountdowns(new Date())');
+  ok(/^Next · 4[12]m$/.test(flag().textContent),
+    `forty-two minutes out it says so (${flag().textContent})`);
+  ok(w.document.querySelector('.card') === card,
+    'and the card node was not replaced to do it');
+
+  inside(30000);
+  w.eval('paintCountdowns(new Date())');
+  ok(flag().textContent === 'Next · soon', `under a minute it says soon (${flag().textContent})`);
+
+  // The generated markup never varies, which is what keeps the memoisation
+  // honest across a run of renders.
+  for (let i = 0; i < 6; i += 1) { advance(30000); w.eval('render()'); }
+  ok(w.document.querySelector('.card') === card,
+    'six renders across three minutes replace no card node');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

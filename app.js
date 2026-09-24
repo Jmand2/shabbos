@@ -22,6 +22,8 @@ async function start() {
     .catch(() => settings.shuls.map((slug) => ({ slug, name: titleCase(slug) })));
 
   buildSettings();
+  // Not awaited: the board must never wait on a diagnostic.
+  loadBuildStamp();
   render();
   refreshMinyanim();
 
@@ -39,14 +41,29 @@ async function start() {
 }
 
 // The display is never relaunched by hand, so refresh it once in the quiet hours.
+//
+// Never during Shabbos or Yom Tov. But rescheduling that the obvious way — by
+// calling this again — lands on the FOLLOWING 3am, because by then the hour is
+// already 3. A deploy made on Friday therefore waited until Sunday morning, and
+// across a three-day Yom Tov it waited three nights. It now comes back a couple
+// of minutes after the rest period actually ends.
+const RELOAD_HOUR = 3;
+const AFTER_HAVDALAH_MS = 120000;
+
+function reloadWhenFree() {
+  if (!document.body.classList.contains('locked')) { location.reload(); return; }
+  const end = restEnd(new Date());
+  // No end in sight is not a state this should ever be in; an hour is a safe
+  // thing to do about it rather than giving up until tomorrow.
+  const at = end ? end.tzeis.getTime() + AFTER_HAVDALAH_MS : Date.now() + 3600000;
+  setTimeout(reloadWhenFree, Math.max(60000, at - Date.now()));
+}
+
 function scheduleOvernightReload() {
   const now = new Date();
   const next = new Date(now.getFullYear(), now.getMonth(),
-    now.getDate() + (now.getHours() < 3 ? 0 : 1), 3, 0, 0);
-  setTimeout(() => {
-    if (document.body.classList.contains('locked')) scheduleOvernightReload();
-    else location.reload();
-  }, next - now);
+    now.getDate() + (now.getHours() < RELOAD_HOUR ? 0 : 1), RELOAD_HOUR, 0, 0);
+  setTimeout(reloadWhenFree, next - now);
 }
 
 // The lock is released whenever the document stops being visible, so it has to

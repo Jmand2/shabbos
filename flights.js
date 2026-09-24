@@ -26,6 +26,8 @@
   // corresponds to.
   if (!EVERY.includes(String(settings.every))) settings.every = DEFAULTS.every;
   let faces = [];
+  // What the last load actually managed, for the status panel.
+  let loadReport = null;
   let layer = null;
   let timer = null;
 
@@ -71,15 +73,24 @@
     const m = await fetch('faces/manifest.json').then((r) => r.json());
     const k = key ?? await idbGo('readonly', (s) => s.get(KEY_ID)).catch(() => null);
     if (!k || !m.faces?.length) return [];
+    // Each face independently. One unreachable file or one failed decrypt used
+    // to reject the whole function, the caller caught it, and every face
+    // vanished — so a single wifi hiccup at startup meant no photos at all until
+    // the next reload. Twenty of twenty-one is a rounding error; nought of
+    // twenty-one is the feature being gone.
     const out = [];
+    let lost = 0;
     for (const f of m.faces) {
-      const buf = await fetch(`faces/${f.file}`).then((r) => r.arrayBuffer());
-      const plain = await openBlob(k, buf);
-      // The type the crop actually was. Faces encrypted before the manifest
-      // carried one are jpegs, which is what the old hard-coded value assumed.
-      const type = f.type ?? 'image/jpeg';
-      out.push({ ring: f.ring, url: URL.createObjectURL(new Blob([plain], { type })) });
+      try {
+        const buf = await fetch(`faces/${f.file}`).then((r) => r.arrayBuffer());
+        const plain = await openBlob(k, buf);
+        // The type the crop actually was. Faces encrypted before the manifest
+        // carried one are jpegs, which is what the old hard-coded value assumed.
+        const type = f.type ?? 'image/jpeg';
+        out.push({ ring: f.ring, url: URL.createObjectURL(new Blob([plain], { type })) });
+      } catch { lost += 1; }
     }
+    loadReport = { got: out.length, of: m.faces.length, lost };
     return out;
   }
 
@@ -307,7 +318,11 @@
   }
 
   function fly(name) {
-    const v = VEHICLES[name];
+    // A copy. `side` was written straight onto the shared definition, so two of
+    // the same vehicle in the air at once had the second one move the first's
+    // path out from under it. They cannot currently overlap at the shipped
+    // intervals; this costs nothing and stops that being load-bearing.
+    const v = { ...VEHICLES[name] };
     const lane = name === 'helicopter' ? 'hover' : v.lane;
     const seats = Math.min(v.seats, faces.length);
     const riders = faceBag(seats);
@@ -453,9 +468,16 @@
     // state and its own storage and reads nothing from app.js; this is the only
     // thing it publishes, and app.js omits the row when the module is absent.
     window.shabbosFlights = {
-      status: () => (settings.every === 'off' ? 'off'
-        : faces.length ? `${faces.length} unlocked · every ${settings.every} min`
-          : 'locked — passphrase not entered on this iPad'),
+      status: () => {
+        if (settings.every === 'off') return 'off';
+        if (!faces.length) {
+          return loadReport && loadReport.of
+            ? `none of ${loadReport.of} could be loaded`
+            : 'locked — passphrase not entered on this iPad';
+        }
+        const missing = loadReport?.lost ? `, ${loadReport.lost} unavailable` : '';
+        return `${faces.length} unlocked${missing} · every ${settings.every} min`;
+      },
     };
     try { faces = await loadFaces(); } catch { faces = []; }
     faceBag = bag(faces);

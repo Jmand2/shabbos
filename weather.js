@@ -307,38 +307,3 @@ async function refreshWeather() {
     renderFreshness(now, daysShown(now, info));
   } catch { /* keep the last sky: a forecast an hour old beats an empty band */ }
 }
-
-// The hand's angle only ever increases. Feeding it seconds * 6 would send it
-// backwards through a whole revolution at 59 -> 0, which the detent transition
-// would then animate; accumulating the step keeps every move a forward one.
-// Steps are taken mod 60 seconds, so the angle stays correct mod 360 even after
-// the dial has been switched off for a while.
-let handAngle = null;
-let handAt = -1;
-
-function paintDial(now) {
-  // hidden is a property of HTMLElement, and the dial is an <svg>. Assigning
-  // el.hidden there sets a plain expando: no attribute is reflected, the
-  // stylesheet's [hidden] never matches, and the dial stays on the screen
-  // whatever the setting says. toggleAttribute sets the real attribute.
-  $('dial').toggleAttribute('hidden', !settings.seconds);
-  const second = now.getSeconds();
-  if (second === handAt) return;
-  const hand = $('dialHand');
-  const first = handAngle === null;
-  handAngle = first ? second * 6 : handAngle + (((second - handAt + 60) % 60) * 6);
-  handAt = second;
-  // On the very first paint the hand would wind up from twelve to wherever it
-  // belongs. Place it, then let the detent run from the next step on.
-  hand.style.transition = first ? 'none' : '';
-  hand.style.transform = `rotate(${handAngle}deg)`;
-}
-
-function tick() {
-  const now = new Date();
-  const t = hhmm(now);
-  $('clockTime').textContent = `${t.hour}:${t.minute}`;
-  $('clockMer').textContent = t.meridiem;
-  paintDial(now);
-}
-
