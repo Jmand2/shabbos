@@ -7,10 +7,18 @@
 //   npm i --no-save jsdom
 //   TZ=America/New_York node scripts/check-ui.mjs
 //
-// Dates here must sit inside data/minyanim.json's range, which the scraper
-// rolls forward continuously — it keeps only a few days either side of today.
-// When these start failing with "0 times", that is what happened: shift them by
-// whole weeks so the weekday stays the same, and re-check any asserted time.
+// Minyan times come from scripts/fixtures/minyanim.json, a frozen copy, so the
+// dates below are stable and mean the same thing every run. They used to read
+// data/minyanim.json, which the scraper rewrites three times a day and trims to
+// a few days either side of today — so these tests rotted on their own, and the
+// advice here used to be "shift them by whole weeks when they go red". A test
+// that has to be rewritten on a schedule is not testing anything.
+//
+// To refresh the fixture deliberately (a new shul, a changed offset):
+//   cp data/minyanim.json scripts/fixtures/minyanim.json
+// and then re-check every asserted time, because that is the moment they can
+// legitimately change. shuls.json is NOT frozen — it is configuration, and a
+// change to it should be caught here rather than hidden.
 import { JSDOM } from 'jsdom';
 import { readFileSync } from 'node:fs';
 
@@ -44,7 +52,13 @@ async function boot(startIso, { settings = null, killMatchMedia = false, forecas
   if (forecast) w.localStorage.setItem('shabbos-clock-weather', JSON.stringify(forecast));
   w.fetch = async (u) => {
     if (String(u).includes('open-meteo')) throw new Error('offline');
-    const path = String(u).replace(/^.*?(data\/[^?]+).*$/, '$1');
+    let path = String(u).replace(/^.*?(data\/[^?]+).*$/, '$1');
+    // Minyan times come from the frozen fixture, never from data/minyanim.json.
+    // That file is rewritten three times a day by the scraper and keeps only a
+    // few days either side of today, so assertions against it rot on their own:
+    // the dates stay in range and the TIMES UNDER THEM change, which is how four
+    // of these went red without a line of app code moving.
+    if (path.includes('minyanim.json')) path = 'scripts/fixtures/minyanim.json';
     return { ok: true, json: async () => JSON.parse(file(path)) };
   };
   w.navigator.wakeLock = { request: async () => ({}) };

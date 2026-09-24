@@ -434,9 +434,18 @@ the weather strip's choice of window:
 TZ=America/New_York node scripts/check-ui.mjs
 ```
 
-It seeds a synthetic forecast rather than calling out to the network, so its
-assertions are about the window the code chooses and not about the sky over
-Teaneck on the day it runs.
+It seeds a synthetic forecast rather than calling out to the network, and reads
+minyan times from `scripts/fixtures/minyanim.json` rather than from
+`data/minyanim.json`. Both for the same reason: assertions should be about the
+code, not about the sky over Teaneck or the schedule the scraper happened to
+pull this morning. `data/minyanim.json` is rewritten three times a day and
+trimmed to a few days either side of today, so tests pointed at it rot on their
+own — the dates stay in range while the times under them change.
+
+To refresh the fixture deliberately, copy the live file over it and then
+re-check every asserted time, because that is the moment they can legitimately
+change. `data/shuls.json` is deliberately NOT frozen: it is configuration, and a
+change to it should be caught by these tests rather than hidden from them.
 
 `check.mjs` covers four things: what the screen shows across thirteen Shabbos and Yom Tov moments
 including whether the lock is on; that the clock still renders with the data
