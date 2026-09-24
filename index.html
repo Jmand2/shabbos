@@ -14,14 +14,24 @@
 </head>
 <body>
 <main id="screen">
-  <!-- The clock owns the whole band. The dates sit in the dead space either
-       side of the numerals rather than in a bar of their own above them. -->
+  <!-- One dated tile on the left; the clock owns everything to its right and
+       centres in that space. The two tiles used to flank the numerals, which
+       meant the wider of them set the clock's width budget on BOTH sides. One
+       tile costs the clock its own width once, and nothing else. -->
   <div class="topline">
-    <aside class="datebox civ">
+    <aside class="datebox">
       <div class="civil" id="civilDate"></div>
+      <div class="hebrew" id="hebrewDate"></div>
+      <div class="occasion" id="occasion"></div>
+      <p class="edge" id="edge"></p>
       <div class="zmanim" id="zmanimList"></div>
     </aside>
 
+    <!-- A size container, so the numerals are sized against the width actually
+         left to them rather than against a vw guess that has to be re-derived
+         every time a tile changes. cqi is that width; the vw rule below stays
+         as the fallback where container queries are missing. -->
+    <div class="clockwrap">
     <div class="clock" id="clock">
     <span class="hm" id="clockTime">--:--</span><!--
     --><span class="suffix">
@@ -51,12 +61,7 @@
       </svg>
     </span>
     </div>
-
-    <aside class="datebox heb">
-      <div class="hebrew" id="hebrewDate"></div>
-      <div class="occasion" id="occasion"></div>
-      <p class="edge" id="edge"></p>
-    </aside>
+    </div>
   </div>
 
   <!-- Horizon: the solar day, dawn on the left and nightfall on the right, with
@@ -72,6 +77,12 @@
       </div>
     </div>
   </figure>
+
+  <!-- The sky for as long as the display can usefully say: a rolling window of
+       real hourly forecast, labelled with the Shabbos or Yom Tov it falls in.
+       It takes its band off the cards, which were taller than their contents
+       needed. -->
+  <section class="weather" id="weather" hidden></section>
 
   <section class="shuls" id="shuls"></section>
 
@@ -140,6 +151,13 @@
     <label class="row"><span>Show seconds</span><input type="checkbox" id="seconds"></label>
     <label class="row"><span>Show the day horizon</span><input type="checkbox" id="showHorizon"></label>
     <label class="row"><span>Show zmanim strip</span><input type="checkbox" id="showZmanim"></label>
+    <label class="row"><span>Show the weather</span><input type="checkbox" id="showWeather"></label>
+    <label class="row"><span>Temperature</span>
+      <select id="units">
+        <option value="F">Fahrenheit</option>
+        <option value="C">Celsius</option>
+      </select>
+    </label>
   </div>
 </div>
 

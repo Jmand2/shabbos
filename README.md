@@ -1,7 +1,7 @@
 # Shabbos Clock
 
-Wall display for the mounted iPad in Teaneck. Big clock, zmanim, and minyan times
-for whichever Teaneck shuls you pick.
+Wall display for the mounted iPad in Teaneck. Big clock, zmanim, the hourly
+weather for Shabbos, and minyan times for whichever Teaneck shuls you pick.
 
 ## How it gets its numbers
 
@@ -16,6 +16,12 @@ to update each year.
 teaneckminyanim.com and writes `data/minyanim.json`. The iPad only reads that
 file. Nothing derives a minyan time from sunset or from last week's schedule. If
 a day was not confirmed, the shul shows "Times unavailable" instead of a number.
+
+**Fetched live** — the weather, from open-meteo.com, every twenty minutes. No key
+and no account; it is the only request the display makes off its own origin. The
+last forecast is kept on the iPad, so a wifi drop shows an hour-old sky rather
+than an empty band, and a forecast that never arrives hides the strip instead of
+leaving a hole.
 
 ## Holidays
 
@@ -177,15 +183,24 @@ saved on the iPad.
 | Accent | brass, copper, sage, ice, purple |
 | Clock face | sturdy, classic, elegant, clean |
 | Clock size | smaller, standard, larger |
-| Also | seconds, the day horizon, an extra zmanim strip |
+| Temperature | Fahrenheit or Celsius |
+| Also | seconds, the day horizon, an extra zmanim strip, the weather |
 
-There is no bar across the top. The clock owns the upper band, with two tiles
-in the space either side of the numerals: the civil date and netz, shkiya and
-tzeis on the left; the Hebrew date, the parsha and the next candle lighting or
-havdalah on the right. The Hebrew tile sits on the right because its content
-reads that way, and because it is the narrower of the two — which leaves the
-meridiem and the seconds dial room to breathe beside it. The tiles are a fixed width and the clock is capped to
-guarantee they fit, so nothing resizes as the time goes from 9:59 to 10:00.
+There is no bar across the top. One tile on the left carries the dates — civil
+date, Hebrew date, parsha, the next candle lighting or havdalah, then netz,
+shkiya and tzeis — and the clock takes everything to its right.
+
+It used to be two tiles, one either side of the numerals. That cost the clock
+more than it looked: the numerals are centred, so the WIDER of the two tiles set
+the clock's width budget on both sides at once, and the clock paid for the zmanim
+tile twice. One tile is paid for once, which is most of where the larger numerals
+came from.
+
+The tile is a fixed width, so nothing resizes as the time goes from 9:59 to
+10:00. The clock is sized against its own container rather than against the
+viewport (`cqi`, not `vw`), so the tile can change width without anybody
+re-deriving a cap for it — which is what the old three-line stack of media
+queries was doing.
 
 Shkiya and tzeis live there because the horizon is off by default and they had
 nowhere else to appear. Each is named in Hebrew and then by what it is for —
@@ -193,10 +208,7 @@ nowhere else to appear. Each is named in Hebrew and then by what it is for —
 because "Netz" on its own assumes you already know. Turning on the zmanim strip
 adds sof zman shema, mincha gedola and plag.
 
-Name and time share a line, the time flush right. The two tiles are sized for
-what each holds rather than matched to one another, and the clock is capped so
-that the wider of them always fits inside its own grid track — let the track
-grow to fit the tile instead and the clock is pushed off centre.
+Name and time share a line, the time flush right.
 
 What gets centred is the whole clock — numerals, meridiem and dial together —
 not the numerals alone. Centring the numerals meant carrying a matching empty
@@ -246,6 +258,44 @@ iPad without scrolling.
 
 Pick more than three shuls and the display pages through them every 45 seconds.
 
+## The weather
+
+A strip under the clock: what it is doing now on the left, and the hours ahead
+across the rest. It is keyed to the rest period rather than to the calendar day,
+because the question it answers is "do we need coats when we walk back", and the
+walking lasts as long as Shabbos does.
+
+- **In or approaching a rest period** the strip is captioned with it by name —
+  Shabbos, or the Yom Tov, so a three-day chag says Succos rather than Shabbos —
+  and with the havdalah it runs to. The columns are clipped to that end, so the
+  strip never shows hours past the time it is captioned with.
+- **On an ordinary day** it says "Next 12 hours" and does not invent an occasion.
+- **When a period is nearly over** — under six hours left — clipping honestly
+  would leave two columns under a heading promising a day. There it opens back up
+  to the plain twelve hours and drops the claim in the same breath. Havdalah is
+  not lost; it is on the tile, which is where it belongs.
+
+A three-day Yom Tov is 72 hours and will not fit one strip, so the window rolls
+forward with the hour instead: always the next twelve, whichever day of the chag
+it is. That is also why the code does not special-case long spans — a Tuesday and
+the second day of Succos take the same path.
+
+Each column carries the hour, a sky glyph, and the temperature. A chance of rain
+is printed only above 25% — a 10% under every column trains the eye to skip the
+row on the day it matters.
+
+The glyphs are drawn here rather than pulled from an icon set: overlapping discs
+and a rounded bar for the cloud, two circles differenced for the moon. All ten
+are built in the same 24×24 grid and centred in it, so a row of twelve sits on a
+common line rather than the sun riding high over the clouds. The cloud's
+transparency is on the group, not on each disc — fade them individually and every
+overlap becomes a darker patch, which reads as three humps rather than one cloud.
+After dark a clear sky is a moon, not a sun; `is_day` comes back per hour, so
+every column knows which it is.
+
+Open-Meteo is free under CC-BY, which asks for attribution — that is the
+"weather from open-meteo.com" in the footer, and why it is there.
+
 ## Family flights
 
 Every few minutes a vehicle crosses the screen carrying family faces — a train
@@ -267,6 +317,29 @@ That writes `faces/<random-id>.bin` (AES-GCM-256, key from PBKDF2-SHA256 at
 random ids and the ring colours and **no names**. Commit `faces/`. Then on the
 iPad: Settings → Family flights → passphrase → Unlock. Only the derived key is
 kept, non-extractable, in IndexedDB; the passphrase itself is never stored.
+
+### Adding a face later
+
+```
+node scripts/encrypt-faces.mjs --add "the same passphrase" trump.jpg
+```
+
+Use `--add`, not a second plain run. A plain run mints a **new random salt**, so
+the same passphrase derives a **different key**: every existing `.bin` is
+rewritten and the key sitting in the iPad's IndexedDB quietly stops working, and
+somebody has to walk over and enter the passphrase again. `--add` reuses the
+stored salt and iteration count, touches none of the files already committed, and
+carries on round the ring so the new face does not land on the colour of the one
+before it.
+
+It probes an existing file with the derived key before it writes anything. A
+wrong passphrase there would otherwise append a face that decrypts to nothing on
+a display that looks like it is working fine — and the only symptom would be a
+face that never appears.
+
+Crops are 240px square, head centred, padded so hair and chin survive the
+circular mask — a square whose inscribed circle still contains the whole head,
+since the mask throws the corners away.
 
 The script refuses anything under 16 characters, and it should: **this repo is
 public, so the ciphertext is public too.** Its whole security is the strength of
@@ -322,6 +395,23 @@ which keeps the clock alive on its own. If it ever does stop, the display tells
 you: the footer changes to "Times last confirmed [date]" and the shuls fall back
 to "Times unavailable". One click on Run workflow starts it again.
 
+## Why the cards got smaller
+
+They were as tall as the screen allowed rather than as tall as they had anything
+to say, so a shul with two minyanim left got the same slab as one with twelve.
+The cards now stop at a height their contents can justify, the weather takes a
+band off what is left, and the slack settles around the clock instead of being
+spent on empty panel.
+
+Past that cap the fit loop shrinks the type rather than clipping it, which is the
+right thing to give up on a busy Friday.
+
+One ordering note, because it is easy to undo: whatever claims a band has to be
+painted BEFORE the cards. `renderShuls` ends by measuring the cell it was given,
+so anything inserted after it has already been measured around — with the strip
+painted last, the first frame sized the type against a board that was about to
+lose a band to the weather.
+
 ## Shabbos behaviour
 
 From candle lighting (or Yom Tov onset) until tzeis, the screen locks: Settings is
@@ -336,7 +426,19 @@ npm i --no-save jsdom
 TZ=America/New_York node scripts/check.mjs
 ```
 
-Four things: what the screen shows across thirteen Shabbos and Yom Tov moments
+There is a second suite for the behaviour a single frozen frame cannot show —
+the board repainting twice a minute, the horizon rolling over at nightfall, and
+the weather strip's choice of window:
+
+```
+TZ=America/New_York node scripts/check-ui.mjs
+```
+
+It seeds a synthetic forecast rather than calling out to the network, so its
+assertions are about the window the code chooses and not about the sky over
+Teaneck on the day it runs.
+
+`check.mjs` covers four things: what the screen shows across thirteen Shabbos and Yom Tov moments
 including whether the lock is on; that the clock still renders with the data
 files unreachable, the wake lock unsupported, no shuls chosen, or stored settings
 corrupt; that the scraper reads a page correctly and refuses to treat a sunset

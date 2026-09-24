@@ -15,7 +15,7 @@
 // whole list into a fresh cache, so a half-updated cache cannot survive it.
 // Bump it for data/shuls.json too — that one is cache-first, so an edit to it
 // (a new shul, a havdalah offset) reaches the wall no other way.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CACHE = `shabbos-clock-${VERSION}`;
 const FILES = ['./', 'index.html', 'styles.css', 'app.js',
   'flights.css', 'flights.js',
@@ -45,7 +45,11 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
   const url = new URL(e.request.url);
+  // The forecast is the one thing here that is wrong the moment it is old, and
+  // it is the only cross-origin request the display makes. Cache-first would
+  // have painted an hour-old sky and only corrected it on the next render.
   const freshFirst = url.pathname.includes('minyanim.json')
+    || url.hostname.endsWith('open-meteo.com')
     || e.request.mode === 'navigate'
     || COUPLED.test(url.pathname);
 
