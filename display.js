@@ -465,19 +465,6 @@ function clockFace(text) {
     + `<span class="ap">${m[3].toLowerCase()}m</span>`;
 }
 
-// Today and Tomorrow by name; anything further out by weekday, because "in two
-// days" is not how anyone refers to the second day of Yom Tov. The class stays
-// today/tomorrow so the existing tone rules keep working, with everything past
-// tomorrow taking tomorrow's quieter tone.
-function dayName(now, at) {
-  const a = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const b = new Date(at.getFullYear(), at.getMonth(), at.getDate());
-  const diff = Math.round((b - a) / 86400000);
-  if (diff <= 0) return { label: 'Today', cls: 'today' };
-  if (diff === 1) return { label: 'Tomorrow', cls: 'tomorrow' };
-  return { label: at.toLocaleDateString('en-US', { weekday: 'long' }), cls: 'tomorrow' };
-}
-
 const card = (name, body) => `<article class="card"><h2>${esc(name)}</h2><div class="body">${body}</div></article>`;
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -530,3 +517,71 @@ function renderHorizon(now, info) {
   }
 }
 
+/* Freshness --------------------------------------------------------------
+   Lives here rather than in weather.js, where the split first put it: it
+   paints the footer and it is mostly about the MINYAN data, which weather.js
+   has no business owning. It credits open-meteo too, which is how it ended
+   up next to the forecast in the first place. */
+
+// The oldest thing on screen, not the newest thing in the file.
+//
+// generated_at goes fresh if ANY shul was fetched successfully, while the
+// scraper retains the previous entry for any that failed. So a shul quietly
+// showing yesterday's schedule sat under a line claiming the data was confirmed
+// minutes ago. Each entry now carries its own stamp, and the line describes the
+// worst of the ones actually displayed.
+function shownStamp(now, days) {
+  const file = minyanim.generated_at ? new Date(minyanim.generated_at) : null;
+  const stamps = [];
+  // Every day the board reaches, not just today. Once the window widened to
+  // cover a three-day Yom Tov this still asked about today alone, so a Shabbos
+  // entry retained from an older run sat two columns away from a line calling
+  // the board current.
+  for (const day of days) {
+    const iso = isoOf(day);
+    for (const s of shownShuls()) {
+      const entry = minyanim.days?.[iso]?.[s.slug];
+      if (!entry) continue;
+      // No per-shul stamp means data written before they existed; the
+      // file-level one is the only thing left to fall back on.
+      stamps.push(entry.fetched_at ? new Date(entry.fetched_at) : file);
+    }
+  }
+  const known = stamps.filter(Boolean);
+  if (!known.length) return file;
+  return new Date(Math.min(...known.map((t) => t.getTime())));
+}
+
+function renderFreshness(now = new Date(), days = [now]) {
+  const stamp = shownStamp(now, days);
+  if (!stamp) { $('freshness').textContent = 'No minyan data yet'; return; }
+  const hours = (Date.now() - stamp) / 3.6e6;
+  // Credit where the times on screen actually came from: a shul that publishes
+  // its own schedule is read from its own site, not from the aggregator.
+  // Credit where the times on screen came from — across every day on the board,
+  // not just today. A shul's own site reaches today and tomorrow; the days past
+  // that come from the aggregator, so on a long Yom Tov the same shul is both.
+  // Asking about today alone claimed the whole board came from the shul.
+  const shown = shownShuls();
+  const sources = new Set();
+  for (const day of days) {
+    for (const shul of shown) {
+      const entry = minyanim.days?.[isoOf(day)]?.[shul.slug];
+      if (entry) sources.add(entry.source === 'shul' ? 'shul' : 'aggregator');
+    }
+  }
+  const source = !sources.has('shul') ? 'teaneckminyanim.com'
+    : !sources.has('aggregator') ? 'each shul’s own website'
+      : 'the shuls’ websites and teaneckminyanim.com';
+  const times = hours > STALE_HOURS
+    ? `Times last confirmed ${stamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+    : `Times from ${source}`;
+  // Open-Meteo is free to use under CC-BY, which asks for exactly this line.
+  if (!settings.showWeather || !weather) { $('freshness').textContent = times; return; }
+  const age = weatherAge();
+  // Same standard the minyan times are held to on the line beside it: say when
+  // it was last confirmed rather than letting age pass for currency.
+  const stale = age === null || age > WEATHER_STALE_MS
+    ? ` (${age === null ? 'age unknown' : `${Math.floor(age / 3.6e6)}h old`})` : '';
+  $('freshness').textContent = `${times} · weather from open-meteo.com${stale}`;
+}

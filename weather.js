@@ -308,69 +308,6 @@ async function refreshWeather() {
   } catch { /* keep the last sky: a forecast an hour old beats an empty band */ }
 }
 
-// The oldest thing on screen, not the newest thing in the file.
-//
-// generated_at goes fresh if ANY shul was fetched successfully, while the
-// scraper retains the previous entry for any that failed. So a shul quietly
-// showing yesterday's schedule sat under a line claiming the data was confirmed
-// minutes ago. Each entry now carries its own stamp, and the line describes the
-// worst of the ones actually displayed.
-function shownStamp(now, days) {
-  const file = minyanim.generated_at ? new Date(minyanim.generated_at) : null;
-  const stamps = [];
-  // Every day the board reaches, not just today. Once the window widened to
-  // cover a three-day Yom Tov this still asked about today alone, so a Shabbos
-  // entry retained from an older run sat two columns away from a line calling
-  // the board current.
-  for (const day of days) {
-    const iso = isoOf(day);
-    for (const s of shownShuls()) {
-      const entry = minyanim.days?.[iso]?.[s.slug];
-      if (!entry) continue;
-      // No per-shul stamp means data written before they existed; the
-      // file-level one is the only thing left to fall back on.
-      stamps.push(entry.fetched_at ? new Date(entry.fetched_at) : file);
-    }
-  }
-  const known = stamps.filter(Boolean);
-  if (!known.length) return file;
-  return new Date(Math.min(...known.map((t) => t.getTime())));
-}
-
-function renderFreshness(now = new Date(), days = [now]) {
-  const stamp = shownStamp(now, days);
-  if (!stamp) { $('freshness').textContent = 'No minyan data yet'; return; }
-  const hours = (Date.now() - stamp) / 3.6e6;
-  // Credit where the times on screen actually came from: a shul that publishes
-  // its own schedule is read from its own site, not from the aggregator.
-  // Credit where the times on screen came from — across every day on the board,
-  // not just today. A shul's own site reaches today and tomorrow; the days past
-  // that come from the aggregator, so on a long Yom Tov the same shul is both.
-  // Asking about today alone claimed the whole board came from the shul.
-  const shown = shownShuls();
-  const sources = new Set();
-  for (const day of days) {
-    for (const shul of shown) {
-      const entry = minyanim.days?.[isoOf(day)]?.[shul.slug];
-      if (entry) sources.add(entry.source === 'shul' ? 'shul' : 'aggregator');
-    }
-  }
-  const source = !sources.has('shul') ? 'teaneckminyanim.com'
-    : !sources.has('aggregator') ? 'each shul’s own website'
-      : 'the shuls’ websites and teaneckminyanim.com';
-  const times = hours > STALE_HOURS
-    ? `Times last confirmed ${stamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-    : `Times from ${source}`;
-  // Open-Meteo is free to use under CC-BY, which asks for exactly this line.
-  if (!settings.showWeather || !weather) { $('freshness').textContent = times; return; }
-  const age = weatherAge();
-  // Same standard the minyan times are held to on the line beside it: say when
-  // it was last confirmed rather than letting age pass for currency.
-  const stale = age === null || age > WEATHER_STALE_MS
-    ? ` (${age === null ? 'age unknown' : `${Math.floor(age / 3.6e6)}h old`})` : '';
-  $('freshness').textContent = `${times} · weather from open-meteo.com${stale}`;
-}
-
 // The hand's angle only ever increases. Feeding it seconds * 6 would send it
 // backwards through a whole revolution at 59 -> 0, which the detent transition
 // would then animate; accumulating the step keeps every move a forward one.

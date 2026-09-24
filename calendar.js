@@ -80,3 +80,54 @@ function restEnd(now) {
 }
 const restEndsAt = (now) => restEnd(now)?.tzeis ?? now;
 
+// Which day of a multi-day Yom Tov a given day is, as a numeral — or '' when
+// the festival only lasts one day and numbering it would say nothing.
+//
+// Counted rather than looked up, because the run is what actually matters: two
+// days sharing a name are Succos I and Succos II, while Shemini Atzeres and
+// Simchas Torah are consecutive Yom Tov days with DIFFERENT names and are not
+// numbered at all — naming them is already the distinction.
+function yomTovDay(day) {
+  const jc = new JewishDay(day).jc;
+  const name = fmtEng.formatYomTov(jc);
+  if (!name || !jc.isAssurBemelacha()) return '';
+  const sameFestival = (d) => {
+    const other = new JewishDay(d).jc;
+    return other.isAssurBemelacha() && fmtEng.formatYomTov(other) === name;
+  };
+  let index = 1;
+  for (let i = 1; i < 4 && sameFestival(addDays(day, -i)); i += 1) index += 1;
+  let total = index;
+  for (let i = 1; i < 4 && sameFestival(addDays(day, i)); i += 1) total += 1;
+  return total > 1 ? (['', 'I', 'II', 'III'][index] ?? '') : '';
+}
+
+// What to call a day on a card.
+//
+// Today and Tomorrow by their relation to now; anything further out by name,
+// and Saturday is Shabbos because that is what it is called by everyone who
+// will read this. A Yom Tov day carries the festival with it, numbered when the
+// festival runs more than one day — the point of reaching three days ahead is
+// lost if all three say only "Succos".
+function dayName(now, at) {
+  const a = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const b = new Date(at.getFullYear(), at.getMonth(), at.getDate());
+  const diff = Math.round((b - a) / 86400000);
+  const base = diff <= 0 ? 'Today'
+    : diff === 1 ? 'Tomorrow'
+      : at.getDay() === 6 ? 'Shabbos'
+        : at.toLocaleDateString('en-US', { weekday: 'long' });
+
+  // Only on days melacha is actually forbidden. formatYomTov also names Erev
+  // Succos, Hoshana Rabbah, Isru Chag and every day of Chol Hamoed, and
+  // hanging all of those off a heading buys length rather than meaning — the
+  // tile already says what today is. What this is FOR is telling consecutive
+  // days of rest apart, which is exactly the set it now covers.
+  const jc = new JewishDay(at).jc;
+  const festival = jc.isAssurBemelacha() ? fmtEng.formatYomTov(jc) : '';
+  const numeral = festival ? yomTovDay(at) : '';
+  const named = festival ? `${festival}${numeral ? ` ${numeral}` : ''}` : '';
+  // "Shabbos · Shabbos" helps nobody.
+  const label = named && named !== base ? `${base} · ${named}` : base;
+  return { label, cls: diff <= 0 ? 'today' : 'tomorrow' };
+}

@@ -261,6 +261,27 @@ iPad without scrolling.
 
 Pick more than three shuls and the display pages through them every 45 seconds.
 
+## What the days are called
+
+Today and Tomorrow by their relation to now; anything further out by name, and
+Saturday is **Shabbos**, because that is what it is called by everyone who will
+read this.
+
+A day on which melacha is forbidden carries the festival with it, numbered when
+the festival runs more than one day: `Tomorrow · Pesach I`, `Friday · Pesach II`,
+`Shabbos · Chol Hamoed Pesach`. Reaching three days ahead is not worth much if
+all three headings say only "Pesach".
+
+Numbered by counting the run, not by looking it up — which is what makes
+Shemini Atzeres and Simchas Torah come out right. They are consecutive Yom Tov
+days with *different* names, so they are named and not numbered; naming them is
+already the distinction.
+
+Only on days melacha is actually forbidden. The calendar will also name Erev
+Succos, Hoshana Rabbah, Isru Chag and every day of Chol Hamoed, and hanging all
+of those off a heading buys length rather than meaning — the tile already says
+what today is.
+
 ## How many times fit
 
 **Auto**, which is the default, turns the usual question round. Instead of being

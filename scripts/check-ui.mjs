@@ -686,10 +686,19 @@ console.log('\n=== Y1: erev Yom Tov reaches every day of a three-day chag ===');
     { minyanim: schedule(PESACH), settings: { shuls: ['beth-aaron'] } });
   const groups = groupsOn(w);
   ok(groups.length === 4, `four day headings (${groups.join(' / ')})`);
-  ok(groups[0] === 'Today' && groups[1] === 'Tomorrow',
-    'the first two are Today and Tomorrow');
-  ok(/Friday/.test(groups[2]) && /Saturday/.test(groups[3]),
-    'and the rest are named by weekday, not "in two days"');
+  ok(groups[0] === 'Today' && groups[1].startsWith('Tomorrow'),
+    `the first two are still Today and Tomorrow (${groups[0]} / ${groups[1]})`);
+  ok(/Friday/.test(groups[2]),
+    `the rest are named by weekday, not "in two days" (${groups[2]})`);
+  // Saturday is Shabbos, because that is what it is called by everyone who will
+  // read this.
+  ok(/Shabbos/.test(groups[3]) && !/Saturday/.test(groups[3]),
+    `and Saturday is Shabbos (${groups[3]})`);
+  // The point of reaching three days is lost if all three say only "Pesach".
+  ok(/Pesach I\b/.test(groups[1]) && /Pesach II\b/.test(groups[2]),
+    `consecutive Yom Tov days are numbered (${groups[1]} / ${groups[2]})`);
+  ok(!/·/.test(groups[0]),
+    `an ordinary day carries no festival qualifier (${groups[0]})`);
 }
 
 console.log('\n=== Y2: an ordinary week is unchanged ===');
@@ -915,6 +924,19 @@ console.log('\n=== O2: three or fewer needs no pager and no arrows past the ends
   first.dispatchEvent(new w.Event('click', { bubbles: true }));
   const after = JSON.parse(w.localStorage.getItem('shabbos-clock-settings')).shuls;
   ok(after.join() === 'beth-aaron,ohr-saadya', `order unchanged (${after.join(', ')})`);
+}
+
+console.log('\n=== Y4: two festivals back to back are named, not numbered ===');
+{
+  // Shemini Atzeres and Simchas Torah are consecutive Yom Tov days with
+  // DIFFERENT names. Numbering them would say less than naming them does.
+  const days = ['2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05'];
+  const { w } = await boot('2026-10-02T15:00:00-04:00',
+    { minyanim: schedule(days), settings: { shuls: ['beth-aaron'] } });
+  const groups = groupsOn(w);
+  ok(groups.some((g) => /Shemini Atzeres/.test(g)), `Shemini Atzeres is named (${groups.join(' / ')})`);
+  ok(groups.some((g) => /Simchas Torah/.test(g)), 'and so is Simchas Torah');
+  ok(!groups.some((g) => /\bI{1,3}\b/.test(g)), 'neither is given a numeral');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
