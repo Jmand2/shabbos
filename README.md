@@ -598,6 +598,32 @@ Data is not part of the shell. Minyan times stay network-first with the last
 confirmed copy behind them; the forecast and `version.json` are not cached here
 at all.
 
+## The vehicles
+
+Four paints rather than one outline: a **hull** you cannot see through, **glass**
+a little brighter for windows and canopies, **thin** detail lines that step back,
+and **solid** for the small marks that need to read at speed. Every vehicle was
+a uniform 3px stroke with no fill, which on a near-black wall is a wireframe you
+can see through rather than an object going past — that, more than the drawing,
+is what made the set feel flat.
+
+Each face now sits in a **seat**: a dark disc with a ring, drawn from the same
+slot numbers the face is placed from, so it cannot drift out of line with it.
+
+The plane leads its banner now instead of being a squiggle towing a box, and the
+helicopter has a cabin rather than a circle with a stick.
+
+**The car laps the screen boundary**, so unlike everything else — which flies in
+from off screen and out again — it should be whole for its entire flight. Its
+margin was a flat 26px, written when the artwork was 62px tall. Every vehicle
+then got its own scale, the car's grew to 1.6, and its centre went on travelling
+26px from each edge with ninety pixels of car hanging off. Measured: it peaked at
+65% visible and was never once whole across a forty-eight-second lap, while every
+other vehicle reached 100%. The margin is derived from the vehicle's own scaled
+height now, plus a constant for the fact that several of them draw outside their
+declared viewBox and `overflow: visible` paints all of it. It sits at 98% worst,
+and `check-layout.mjs` holds it there.
+
 ## Checking a change
 
 All three suites run in GitHub Actions on every push and pull request

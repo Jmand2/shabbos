@@ -257,6 +257,51 @@ for (const view of VIEWS) {
   await page.close();
 }
 
+/* The flight layer -------------------------------------------------------
+   The car laps the screen boundary, so unlike everything else that flies past
+   it should be whole the entire time. Its margin was a constant written when
+   the artwork was a third of its current size, and it spent its whole
+   forty-eight-second lap clipped — never once fully visible — while every other
+   vehicle reached 100%. Sampled along the bottom run, before the first corner,
+   where there is no excuse for any of it to be off screen. */
+{
+  console.log('  family flights');
+  current = { at: '2026-09-25T14:00:00-04:00', settings: { theme: 'night' } };
+  const page = await browser.newPage({ viewport: { width: 1180, height: 820 } });
+  await page.route('**/api.open-meteo.com/**', (r) => r.abort());
+  await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
+  await page.waitForTimeout(1200);
+
+  const hook = await page.evaluate(() => typeof window.shabbosFlights?.send === 'function');
+  ok(hook, 'the flight layer exposes a way to launch one deliberately');
+
+  const car = await page.evaluate(async () => {
+    window.shabbosFlights.send('car');
+    await new Promise((r) => setTimeout(r, 80));
+    const el = document.querySelector('.flight:last-child');
+    if (!el) return null;
+    const seen = [];
+    for (let i = 0; i < 40; i += 1) {
+      await new Promise((r) => setTimeout(r, 150));
+      if (!el.isConnected) break;
+      const b = el.getBoundingClientRect();
+      if (!b.width) break;
+      const vis = Math.max(0, Math.min(b.right, innerWidth) - Math.max(b.left, 0))
+        * Math.max(0, Math.min(b.bottom, innerHeight) - Math.max(b.top, 0));
+      seen.push(vis / (b.width * b.height || 1));
+    }
+    if (el.isConnected) el.remove();
+    return seen.length ? { worst: Math.min(...seen), n: seen.length } : null;
+  });
+
+  ok(car !== null, 'a car can be launched and measured');
+  if (car) {
+    ok(car.worst >= 0.95,
+      `the car stays on screen along its lap (worst ${Math.round(car.worst * 100)}%)`);
+  }
+  await page.close();
+}
+
 await browser.close();
 server.close();
 

@@ -117,8 +117,6 @@
   // at any screen size or orientation.
   // slots are [cx, cy, r] in viewBox units.
 
-  const A = (d, extra = '') => `<path d="${d}"/>${extra}`;
-
   // Faces were 20-38px on a 1024-wide screen, which is nothing across a room.
   // They are now drawn well outside their seat and cover part of the vehicle —
   // the face is the point, the vehicle is only the frame. The one thing that
@@ -149,63 +147,87 @@
     train: {
       vb: [210, 66], seats: 4, colour: '#D9544D', speed: 67, lane: 'horizon', dir: 1,
       slots: [[24, 33, 11], [66, 33, 11], [108, 33, 11], [150, 33, 11]],
-      art: `<rect x="6" y="20" width="36" height="26" rx="4"/><rect x="48" y="20" width="36" height="26" rx="4"/>
-        <rect x="90" y="20" width="36" height="26" rx="4"/><rect x="132" y="20" width="36" height="26" rx="4"/>
-        <rect x="174" y="14" width="26" height="32" rx="4"/>${A('M188 14 V6 h6 v8')}
-        ${[14, 34, 56, 76, 98, 118, 140, 160, 180, 196].map((cx) => `<circle class="wheel" cx="${cx}" cy="52" r="5"/>`).join('')}
-        ${A('M2 58 H206')}`,
+      art: `<rect class="hull" x="6" y="18" width="36" height="28" rx="6"/>
+        <rect class="hull" x="48" y="18" width="36" height="28" rx="6"/>
+        <rect class="hull" x="90" y="18" width="36" height="28" rx="6"/>
+        <rect class="hull" x="132" y="18" width="36" height="28" rx="6"/>
+        <path class="hull" d="M174 46 V24 q0-8 8-8 h14 q6 0 6 6 v24 z"/>
+        <path class="solid" d="M180 16 h10 v-9 h-10 z"/>
+        <path class="thin" d="M6 12 H196"/>
+        <path d="M2 50 H204"/>
+        <circle class="solid" cx="18" cy="54" r="5"/><circle class="solid" cx="34" cy="54" r="5"/>
+        <circle class="solid" cx="60" cy="54" r="5"/><circle class="solid" cx="76" cy="54" r="5"/>
+        <circle class="solid" cx="102" cy="54" r="5"/><circle class="solid" cx="118" cy="54" r="5"/>
+        <circle class="solid" cx="144" cy="54" r="5"/><circle class="solid" cx="160" cy="54" r="5"/>
+        <circle class="solid" cx="186" cy="54" r="6"/>`,
     },
     boat: {
       vb: [134, 74], seats: 2, colour: '#4FA3A5', speed: 47, lane: 'horizon', dir: -1,
       slots: [[38, 52, 10], [92, 52, 10]],
-      art: `${A('M6 44 H124 L110 62 H20 Z')}${A('M65 44 V6')}${A('M65 10 L100 40 H65')}
-        ${A('M2 68 q12 -6 24 0 t24 0 t24 0 t24 0 t24 0')}`,
+      art: `<path class="hull" d="M14 42 H120 L104 64 H30 z"/>
+        <path class="glass" d="M66 38 V6 L104 34 z"/>
+        <path d="M66 4 V44"/>
+        <path class="thin" d="M4 68 q12-7 22 0 t22 0 t22 0 t22 0 t22 0 t20 0"/>`,
     },
     plane: {
       vb: [252, 62], seats: 3, colour: '#6E8BD6', speed: 98, lane: 'upper', dir: 1,
       slots: [[32, 32, 15], [80, 32, 15], [128, 32, 15]],
-      art: `<rect x="2" y="12" width="150" height="40" rx="4"/>${A('M152 32 H172')}
-        ${A('M176 38 C190 30 216 26 240 30 C248 31 248 36 240 38 C218 44 192 44 176 38 Z')}
-        ${A('M182 30 L176 12 L196 28')}${A('M200 40 L192 54 L216 42')}`,
+      art: `<rect class="hull" x="6" y="12" width="124" height="40" rx="8"/>
+        <path class="thin" d="M130 32 H150"/>
+        <path class="hull" d="M150 32 q28-16 62-14 q14 1 20 14 q-6 13-20 14 q-34 2-62-14 z"/>
+        <path class="hull" d="M176 26 L168 4 h12 l18 22 z"/>
+        <path class="hull" d="M176 38 L168 60 h12 l18-22 z"/>
+        <path class="glass" d="M198 25 q11-2 18 7 q-7 9-18 7 z"/>`,
     },
     helicopter: {
       vb: [190, 92], seats: 1, colour: '#5D7CA6', speed: 60, lane: 'upper', dir: 1,
       slots: [[70, 62, 15]],
-      art: `<circle cx="70" cy="62" r="24"/>${A('M92 56 H166 L166 68 H98')}${A('M166 56 V36')}
-        ${A('M70 38 V22')}<ellipse class="disc" cx="70" cy="22" rx="54" ry="7"/>
-        <line class="rotor" x1="16" y1="22" x2="124" y2="22"/>
-        <circle class="disc" cx="168" cy="44" r="11"/><line class="tailrotor" x1="157" y1="44" x2="179" y2="44"/>
-        ${A('M48 88 H98 M58 84 v8 M88 84 v8')}`,
+      art: `<path class="hull" d="M34 62 q0-30 36-30 q34 0 44 26 q2 6-4 10 H42 q-8 0-8-6 z"/>
+        <path class="hull" d="M112 54 L176 46 q8-1 8 6 q0 7-8 7 l-64 4 z"/>
+        <path class="hull" d="M40 72 q34 10 66 0 q-4 8-14 8 H54 q-10 0-14-8 z"/>
+        <path d="M70 32 V16"/>
+        <ellipse class="glass" cx="70" cy="12" rx="62" ry="5"/>
+        <circle class="thin" cx="180" cy="52" r="13"/>
+        <path class="thin" d="M180 39 V65 M167 52 H193"/>
+        <path class="thin" d="M46 84 H96"/>`,
     },
     car: {
       vb: [116, 62], seats: 1, colour: '#E0A030', speed: 80, lane: 'lap', dir: 1,
       slots: [[52, 32, 10]],
-      art: `${A('M8 44 L14 30 Q18 22 30 22 H72 Q84 22 90 30 L100 44')}${A('M4 44 H110 v6 H4 z')}
-        <circle class="wheel" cx="26" cy="52" r="7"/><circle class="wheel" cx="86" cy="52" r="7"/>`,
+      art: `<path class="hull" d="M6 48 L10 34 q3-9 14-9 h60 q11 0 15 9 l8 14 z"/>
+        <path class="glass" d="M24 32 q3-5 10-5 h38 q7 0 10 5 l3 8 H21 z"/>
+        <path class="hull" d="M2 46 H114 q4 0 4 5 v3 q0 4-4 4 H2 q-4 0-4-4 v-3 q0-5 4-5 z"/>
+        <circle class="solid" cx="28" cy="56" r="8"/>
+        <circle class="solid" cx="88" cy="56" r="8"/>`,
     },
     balloon: {
       vb: [128, 118], seats: 2, colour: '#A96FA0', speed: 24, lane: 'rise',
       slots: [[42, 101, 9], [86, 101, 9]],
-      art: `${A('M64 80 C14 56 16 22 64 6 C112 22 114 56 64 80 Z')}
-        ${A('M64 6 Q42 42 64 80 M64 6 Q86 42 64 80')}${A('M44 72 L46 90 M84 72 L82 90')}
-        <rect x="40" y="90" width="48" height="22" rx="3"/>
-        <path class="burner" d="M56 88 Q64 62 72 88 Z"/>`,
+      art: `<path class="hull" d="M64 6 q40 0 40 40 q0 26-24 44 H48 q-24-18-24-44 q0-40 40-40 z"/>
+        <path class="thin" d="M64 6 q-16 20-16 44 q0 22 10 40"/>
+        <path class="thin" d="M64 6 q16 20 16 44 q0 22-10 40"/>
+        <path class="thin" d="M44 92 L52 104 M84 92 L76 104"/>
+        <path class="hull" d="M46 102 h36 q4 0 4 5 v10 q0 4-4 4 H46 q-4 0-4-4 v-10 q0-5 4-5 z"/>
+        <path class="thin" d="M46 110 H86"/>`,
     },
     parachute: {
       vb: [108, 118], seats: 1, colour: '#6FA96B', speed: 29, lane: 'leaf',
       slots: [[54, 100, 13]],
-      art: `${A('M8 36 A46 42 0 0 1 100 36')}
-        ${A('M8 36 Q26 52 30 38 Q42 54 54 38 Q66 54 78 38 Q82 52 100 36')}
-        ${A('M30 40 L48 84 M54 40 L54 84 M78 40 L60 84')}`,
+      art: `<path class="hull" d="M8 52 q0-44 46-44 q46 0 46 44 q-20-10-46-10 q-26 0-46 10 z"/>
+        <path class="thin" d="M31 46 q6-30 23-38 M77 46 q-6-30-23-38"/>
+        <path class="thin" d="M8 52 L48 90 M54 42 L54 90 M100 52 L60 90"/>
+        <path class="hull" d="M40 86 h28 q5 0 5 6 v14 q0 6-5 6 H40 q-5 0-5-6 V92 q0-6 5-6 z"/>`,
       pivot: [54, 26],
     },
     rocket: {
       vb: [120, 132], seats: 1, colour: '#C2703D', speed: 200, lane: 'launch',
       slots: [[60, 34, 12]],
-      art: `${A('M60 6 C74 22 78 42 78 56 H42 C42 42 46 22 60 6 Z')}
-        ${A('M42 42 L26 68 H42 M78 42 L94 68 H78')}${A('M42 56 H78 v8 H42 z')}
-        <path class="flame outer" d="M44 64 Q60 110 76 64 Z"/>
-        <path class="flame inner" d="M52 64 Q60 94 68 64 Z"/>`,
+      art: `<path class="hull" d="M60 4 q24 22 24 58 v20 H36 V62 q0-36 24-58 z"/>
+        <path class="hull" d="M36 66 L14 92 q-2 14 6 18 l16-14 z"/>
+        <path class="hull" d="M84 66 L106 92 q2 14-6 18 l-16-14 z"/>
+        <path class="hull" d="M36 82 h48 v14 q0 6-6 6 H42 q-6 0-6-6 z"/>
+        <path class="thin" d="M44 74 H76"/>
+        <path class="solid" d="M52 104 q8 20 8 26 q0-6 8-26 z"/>`,
     },
   };
 
@@ -226,7 +248,7 @@
       return { x: (-0.15 + d * 1.3) * W, y: H * 0.30, rot: 0 };
     },
     lap: (p, v, W, H) => {
-      const m = 26, w = W - m * 2, h = H - m * 2, per = 2 * (w + h);
+      const m = lapMargin(v), w = W - m * 2, h = H - m * 2, per = 2 * (w + h);
       // brake into each corner
       const d = (p + 0.055 * Math.sin(p * Math.PI * 2 * 4)) * per;
       const s = ((d % per) + per) % per;
@@ -266,9 +288,24 @@
     },
   };
 
+  // How far the centre of a lapping vehicle must stay from the edge.
+  //
+  // This was a flat 26, written when the car artwork was 62px tall. Every
+  // vehicle then got its own scale and the car's grew to 1.6 — 179px on screen
+  // — so its centre ran 26px from each edge with 90px of car hanging off. It
+  // spent its entire 48-second lap clipped and was never once fully visible,
+  // while every other vehicle reached 100%. It is always oriented along its
+  // path, so what has to clear the edge is half its HEIGHT, whichever edge it
+  // is on.
+  // The +30 is not slack for its own sake. Several vehicles draw outside their
+  // declared viewBox — the car's wheels sit below its height, and every stroke
+  // is centred on its path so half of it hangs beyond — and `overflow: visible`
+  // means all of that paints. Half the box is not half the vehicle.
+  const lapMargin = (v) => 30 + (v.vb[1] * (v.scale ?? 1)) / 2;
+
   const LENGTH = {
     horizon: (W, H) => W * 1.3, upper: (W, H) => W * 1.3, hover: (W, H) => W * 1.3,
-    lap: (W, H) => 2 * ((W - 52) + (H - 52)),
+    lap: (W, H, v) => 2 * ((W - lapMargin(v) * 2) + (H - lapMargin(v) * 2)),
     leaf: (W, H) => H * 1.3, rise: (W, H) => H * 1.3, launch: (W, H) => H * 1.3,
   };
 
@@ -306,8 +343,15 @@
     const el = document.createElement('div');
     el.className = `flight ${name}`;
     el.style.setProperty('--vc', v.colour);
+    // Seats are drawn from the slots rather than hand-placed in every art
+    // string: they must line up with the faces exactly, and the faces are
+    // already derived from the same numbers.
+    const seats = riders.map((f, i) => {
+      const [cx, cy] = v.slots[i];
+      return `<circle class="seat" cx="${cx}" cy="${cy}" r="${faceRadius(v, i) * 0.92}"/>`;
+    }).join('');
     el.innerHTML =
-      `<svg viewBox="0 0 ${vw} ${vh}" width="${vw}" height="${vh}">${v.art}</svg>` +
+      `<svg viewBox="0 0 ${vw} ${vh}" width="${vw}" height="${vh}">${v.art}${seats}</svg>` +
       riders.map((f, i) => {
         const [cx, cy] = v.slots[i];
         const R = faceRadius(v, i);
@@ -334,11 +378,17 @@
     const W = layer.clientWidth || window.innerWidth;
     const H = layer.clientHeight || window.innerHeight;
     const jitter = 0.85 + Math.random() * 0.3;          // ±15%, so it never feels canned
-    const ms = LENGTH[lane](W, H) / (v.speed * jitter) * 1000;
 
     // Everything flies larger now, and the multi-seat bonus is gone: the faces
     // themselves already carry those vehicles.
     const scale = Math.min(1, W / 1024) * 1.8 * (SIZE[name] ?? 1);
+    // Carried on the per-flight copy so a path can ask how big it actually is.
+    // Set BEFORE the duration is worked out: the lap's length depends on its
+    // margin, and its margin depends on this. Computing ms first gave the car a
+    // path measured for a margin it was not going to use, and therefore the
+    // wrong speed.
+    v.scale = scale;
+    const ms = LENGTH[lane](W, H, v) / (v.speed * jitter) * 1000;
     el.style.setProperty('--vs', scale);
     layer.appendChild(el);
 
@@ -468,6 +518,14 @@
     // state and its own storage and reads nothing from app.js; this is the only
     // thing it publishes, and app.js omits the row when the module is absent.
     window.shabbosFlights = {
+      // Lets a flight be launched by name, which is the only way any of this
+      // can be tested or looked at deliberately: flights are otherwise random,
+      // minutes apart, and gone in seconds.
+      send: (name) => { try { fly(name ?? vehicleBag()[0]); } catch (e) { console.error(e); } },
+      names: () => Object.keys(VEHICLES),
+      // The artwork and seat slots, so a reference sheet can be rendered
+      // without waiting minutes for each vehicle to happen to fly past.
+      spec: (name) => (name ? VEHICLES[name] : VEHICLES),
       status: () => {
         if (settings.every === 'off') return 'off';
         if (!faces.length) {
