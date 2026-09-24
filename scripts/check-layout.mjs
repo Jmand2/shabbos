@@ -156,6 +156,27 @@ const MEASURE = () => {
     if (el.offsetParent === null && el.tagName !== 'DIV') continue;
     note(el.className.split(' ')[0], el, screen);
   }
+
+  // Panels must not clip their own contents. The cards are allowed to (they
+  // overflow: hidden by design and the fit loop keeps them honest), but a strip
+  // that quietly cuts off its own temperatures looks like a working strip.
+  for (const sel of ['.weather', '.datebox']) {
+    const el = document.querySelector(sel);
+    if (!el || el.offsetParent === null) continue;
+    if (el.scrollHeight > el.clientHeight + 1) out.overflow.push(`${sel} clips its contents`);
+  }
+
+  // Bands must not land on top of each other. A flex column with min-height: 0
+  // will happily shrink an item below its content and let it paint over the
+  // next one, which is what portrait was doing.
+  const bands = [...document.querySelectorAll('.topline, .weather, .shuls')]
+    .filter((el) => el.offsetParent !== null)
+    .map((el) => [el.className.split(' ')[0], el.getBoundingClientRect()]);
+  for (let i = 1; i < bands.length; i += 1) {
+    if (bands[i][1].top < bands[i - 1][1].bottom - 1) {
+      out.overflow.push(`${bands[i][0]} overlaps ${bands[i - 1][0]}`);
+    }
+  }
   if (document.documentElement.scrollWidth > window.innerWidth + 1) {
     out.overflow.push('the page itself scrolls sideways');
   }

@@ -162,6 +162,28 @@ body.locked .gear { visibility: hidden; }
    Hebrew date is the statement. */
 .datebox .hebrew { margin-top: 0.22em; }
 
+/* Three kinds of information, three surfaces.
+   Everything on this screen had become the same panel — same ground, same
+   rule, same radius — which is restful and also means the eye has no idea
+   which of them it is looking at. Each now has an identity, drawn from colours
+   already in the palette rather than from new ones, and none of it is loud
+   enough to compete with the numerals.
+   The tile is the day: a thin run of dawn into dusk into night down its edge,
+   the same three hues the zmanim inside it are set in. */
+.datebox { position: relative; }
+.datebox::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: clamp(10px, 1.6vh, 20px);
+  bottom: clamp(10px, 1.6vh, 20px);
+  width: 3px;
+  border-radius: 3px;
+  background: linear-gradient(to bottom,
+    var(--dawn) 0%, var(--dawn) 18%, var(--dusk) 58%, var(--night) 100%);
+  opacity: 0.85;
+}
+
 /* The clock's own size container. Its inline size comes from the 1fr track —
    a definite width — so inline-size containment costs nothing, and 1cqi is
    exactly one per cent of the room the clock actually has. */
@@ -531,17 +553,23 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
    the left, and the hours ahead spread across the rest. It takes its band out
    of the cards, which were taller than anything they had to say. */
 .weather {
-  /* Shrinkable. Its own contents set its height, but it gives way before the
-     cards do rather than after. */
+  /* Shrinkable, but never clipped. A max-height with overflow: hidden stopped
+     it starving the cards and started it cutting off its own temperatures
+     instead, which looks exactly like a working strip. It is made short by
+     being compact (see the portrait rules below), not by being cropped. */
   flex: 0 1 auto;
-  max-height: 24vh;
-  overflow: hidden;
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
   gap: clamp(12px, 1.8vw, 26px);
-  background: var(--panel);
-  border: 1px solid var(--rule);
+  /* The sky, so it sits a few degrees cooler than the panels around it and
+     carries less weight than the cards — it is context, not an instruction. */
+  background:
+    linear-gradient(to bottom,
+      color-mix(in srgb, var(--night) 7%, transparent),
+      color-mix(in srgb, var(--night) 2%, transparent)),
+    var(--panel);
+  border: 1px solid color-mix(in srgb, var(--rule) 80%, var(--night));
   border-radius: var(--radius);
   box-shadow: var(--lift);
   padding: clamp(10px, 1.5vh, 18px) clamp(14px, 1.8vw, 26px);
@@ -596,9 +624,7 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 .whead .wuntil {
   color: var(--mute);
   letter-spacing: 0.1em;
-  margin-left: 0.7em;
 }
-.whead .wuntil:first-child { margin-left: 0; }
 
 /* Equal tracks, so the hours are evenly spaced whatever the window holds — a
    four-column strip at the end of Shabbos reads as the same object as a
@@ -685,14 +711,27 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 /* Portrait has the height to spare and not the width. Twelve columns of
    numerals across 768px is about 55px each, which is where they stop being
    legible from a sofa — so the strip stacks instead of squeezing. */
+/* Portrait has the height to spare in principle and none of it in practice:
+   the dated tile is tall, the clock wants room and the cards have a floor. So
+   the strip stays side by side here rather than stacking — stacked it needed
+   nearly 300px, which was enough to push the tile down over it. It gives up
+   size instead of taking a second row. */
 @media (max-aspect-ratio: 1 / 1) {
-  .weather { grid-template-columns: 1fr; gap: clamp(8px, 1.2vh, 14px); }
-  .wnow {
-    border-right: 0;
-    border-bottom: 1px solid var(--rule);
-    padding-right: 0;
-    padding-bottom: clamp(8px, 1.2vh, 14px);
-  }
+  .weather { gap: clamp(8px, 1vw, 14px); padding: clamp(8px, 1vh, 12px) clamp(10px, 1.4vw, 16px); }
+  .wnow { gap: clamp(5px, 0.8vw, 10px); padding-right: clamp(8px, 1.2vw, 14px); }
+  .wnow .wicon { width: clamp(28px, 3.6vh, 40px); }
+  .wbig { font-size: clamp(22px, 3.2vh, 34px); }
+  /* The day's range and the apparent temperature are the first things to go:
+     the hours carry the same story across twelve columns. */
+  .wrange, .wfeels { display: none; }
+  .wicon { width: clamp(18px, 2.4vh, 26px); }
+  .wtemp { font-size: clamp(11px, 1.5vh, 16px); }
+  .whour, .wpop { font-size: clamp(8px, 1vh, 11px); }
+  .whead { margin-bottom: 0.35em; }
+  /* And the tile gives a little too, so the three bands fit without any of them
+     painting over another. */
+  .zmanim { gap: 0.5em; margin-top: 0.7em; padding-top: 0.7em; }
+  .datebox .edge { margin-top: 0.7em; padding-top: 0.7em; }
 }
 
 /* Shul cards ----------------------------------------------------------- */
@@ -716,9 +755,14 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   align-content: stretch;
   grid-auto-rows: minmax(0, 1fr);
 }
+/* The cards are the reference surface: the flattest, the most neutral and the
+   most present of the three. They carry the times somebody is walking to, so
+   nothing about them should be decorative. Deliberately NOT given a colour of
+   their own, and deliberately not one colour per shul — at three cards that
+   reads as a chart, and the shul's name is already the identifier. */
 .card {
   background: var(--panel);
-  border: 1px solid var(--rule);
+  border: 1px solid color-mix(in srgb, var(--rule) 100%, var(--text) 4%);
   border-radius: var(--radius);
   box-shadow: var(--lift);
   /* Trimmed from 2.6vh/2.2vw. The cards were carrying more padding than their
@@ -1007,6 +1051,31 @@ body.clock-only .clockwrap { margin: auto 0; }
   padding: 0.35em 0.6em;
 }
 input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
+
+/* System status. Read, never touched, so it is set as a table rather than as
+   more rows of controls. */
+.status {
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.srow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.2em;
+  padding: 0.55em 0.8em;
+  font-size: 13px;
+  border-bottom: 1px solid var(--rule);
+}
+.srow:last-child { border-bottom: 0; }
+.srow span { color: var(--dim); white-space: nowrap; }
+.srow b {
+  font-weight: 500;
+  color: var(--text);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
 
 @media (max-height: 560px) {
   .arc { padding: 20px 0 24px; }

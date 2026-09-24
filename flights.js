@@ -449,6 +449,14 @@
     layer.setAttribute('aria-hidden', 'true');
     (document.getElementById('screen') ?? document.body).appendChild(layer);
     mountSettings();
+    // One line for the status panel in Settings. This module keeps its own
+    // state and its own storage and reads nothing from app.js; this is the only
+    // thing it publishes, and app.js omits the row when the module is absent.
+    window.shabbosFlights = {
+      status: () => (settings.every === 'off' ? 'off'
+        : faces.length ? `${faces.length} unlocked · every ${settings.every} min`
+          : 'locked — passphrase not entered on this iPad'),
+    };
     try { faces = await loadFaces(); } catch { faces = []; }
     faceBag = bag(faces);
     schedule();

@@ -15,7 +15,7 @@
 // whole list into a fresh cache, so a half-updated cache cannot survive it.
 // Bump it for data/shuls.json too — that one is cache-first, so an edit to it
 // (a new shul, a havdalah offset) reaches the wall no other way.
-const VERSION = 'v11';
+const VERSION = 'v12';
 // caches.keys() is ORIGIN-wide, not per-worker. This is served from
 // jmand2.github.io/shabbos/, so every other project page on that account shares
 // the origin — and an activate that deleted everything it did not recognise

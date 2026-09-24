@@ -181,7 +181,7 @@ saved on the iPad.
 | --- | --- |
 | Shuls | any of the 23 Teaneck shuls |
 | Layout | Full board, or Clock only |
-| Times shown per shul | next 4, 8 or 12 |
+| Times shown per shul | Auto, or next 4, 8 or 12 |
 | Theme | night after dark, always night, always day |
 | Accent | brass, copper, sage, ice, purple |
 | Clock face | sturdy, classic, elegant, clean |
@@ -261,6 +261,50 @@ iPad without scrolling.
 
 Pick more than three shuls and the display pages through them every 45 seconds.
 
+## How many times fit
+
+**Auto**, which is the default, turns the usual question round. Instead of being
+told a count and then shrinking the type until it fits — which is how a board
+ends up at 10px and still clipped — it asks how many rows survive at a size
+worth reading across a room, and shows that many. A quiet Tuesday shows more
+than a crowded erev Yom Tov.
+
+Choosing 4, 8 or 12 still works, but only as a **ceiling**. If the board cannot
+fit that many at any size it shows fewer rather than clipping them, because an
+absent time is better than a cut one.
+
+The next minyan gets the whole row rather than one recoloured number: accent
+label, a tinted band and a NEXT marker, decided independently per card so
+neither shul becomes the more important one. It is a marker and not a countdown
+on purpose — the board is memoised on its own markup and repaints only when
+something genuinely changed, and "in 24 min" would rebuild all of it twice a
+minute.
+
+## Three surfaces
+
+The tile, the weather strip and the cards had become the same panel: same
+ground, same rule, same radius. Restful, and also no help to the eye. Each now
+has an identity, drawn from colours already in the palette:
+
+- the **tile** is the day — a thin run of dawn into dusk into night down its
+  edge, the same three hues the zmanim inside it are set in;
+- the **weather** sits a few degrees cooler and carries less weight, because it
+  is context rather than an instruction;
+- the **cards** are the reference surface, the flattest and most present of the
+  three. Deliberately not one colour per shul: at three cards that reads as a
+  chart, and the shul's name is already the identifier.
+
+## System status
+
+Settings has a read-only panel at the bottom: cache version, online state, wake
+lock, how many days of minyanim are on file and when they were scraped, when the
+forecast last arrived, whether the family photos are unlocked, and which source
+each shul on screen is currently using.
+
+It is there because the display is unattended and the person describing the
+problem is usually on the phone. The board itself stays a board — one line in
+the footer is the right amount out there.
+
 ## How far ahead the board reaches
 
 Today and tomorrow on an ordinary day. When a rest period is current or starts
@@ -321,9 +365,9 @@ forward with the hour instead: always the next twelve, whichever day of the chag
 it is. That is also why the code does not special-case long spans — a Tuesday and
 the second day of Succos take the same path.
 
-Each column carries the hour, a sky glyph, and the temperature. A chance of rain
-is printed only above 25% — a 10% under every column trains the eye to skip the
-row on the day it matters.
+Each column carries the hour, a sky glyph, the temperature, and the chance of
+rain on the hours that have one. The floor is 10%: below that the model is
+reporting noise, and above it the number is worth knowing before a walk to shul.
 
 The glyphs are drawn here rather than pulled from an icon set: overlapping discs
 and a rounded bar for the cloud, two circles differenced for the moon. All ten
@@ -462,7 +506,7 @@ so it also covers two-day Yom Tov and a Yom Tov that runs into Shabbos.
 
 ## Checking a change
 
-Both suites run in GitHub Actions on every push and pull request
+All three suites run in GitHub Actions on every push and pull request
 (`.github/workflows/check.yml`), and both exit non-zero when something is
 actually wrong. `check.mjs` used to print its problems and then call
 `process.exit(0)` regardless, which is worth nothing to a CI job — it now counts
@@ -471,9 +515,26 @@ failures and reports a verdict.
 To run them by hand:
 
 ```
-npm i --no-save jsdom
-TZ=America/New_York node scripts/check.mjs
+npm install
+npm test
 ```
+
+There is a third suite, and it is the one that can see a real box:
+
+```
+npx playwright install webkit
+npm run check:layout          # add --update-screenshots to keep the images
+```
+
+`check.mjs` and `check-ui.mjs` both run the app in jsdom, which computes no
+geometry at all — `fitBoard` detects that every card reports `clientHeight` 0
+and returns without fitting anything. So the most carefully tuned behaviour in
+the app, the thing that decides whether the wall is readable, was the one thing
+never tested. `check-layout.mjs` drives real WebKit, which is what the iPad
+runs, at the sizes the iPad runs at, and asserts that nothing overflows its box,
+that no band paints over another, that no panel clips its own contents, and that
+the numerals stay large enough to read across a room. It found ten failures
+across six views the first time it was run.
 
 There is a second suite for the behaviour a single frozen frame cannot show —
 the board repainting twice a minute, the horizon rolling over at nightfall, and

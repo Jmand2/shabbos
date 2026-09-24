@@ -937,8 +937,10 @@ function renderWeather(now, info) {
   const feelsLine = feels != null && temp != null && Math.abs(feels - temp) >= 3
     ? `<span class="wfeels">Feels ${feels}°</span>` : '';
 
+  // The separator is a character, not a margin. Letter-spaced small caps swallow
+  // a 0.7em gap between two inline spans and the heading read as SUCCOSTHROUGH.
   const heading = span.name && span.until
-    ? `${esc(span.name)}<span class="wuntil">through ${clockTime(span.until)}</span>`
+    ? `${esc(span.name)}<span class="wuntil"> &middot; through ${clockTime(span.until)}</span>`
     : `<span class="wuntil">Next ${rows.length} hours</span>`;
 
   // The hour, not the whole time: twelve columns of "2:00 PM" is a wall of
@@ -1086,7 +1088,71 @@ function tick() {
   paintDial(now);
 }
 
+/* Status ---------------------------------------------------------------- */
+// Everything an unattended appliance cannot tell you from across the room. It
+// lives behind Settings because the board itself should stay a board — the
+// footer's one line is the right amount out there, and this is the rest of it.
+
+const ago = (t) => {
+  if (!t) return 'never';
+  const mins = Math.round((Date.now() - new Date(t).getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 48) return `${hrs}h ago`;
+  return `${Math.round(hrs / 24)} days ago`;
+};
+
+async function cacheVersion() {
+  try {
+    const keys = await caches.keys();
+    const ours = keys.filter((k) => k.startsWith('shabbos-clock-'));
+    return ours.length ? ours.join(', ') : 'none yet';
+  } catch { return 'unavailable'; }
+}
+
+function shulSources(now) {
+  const today = isoOf(now);
+  return shuls.filter((s) => settings.shuls.includes(s.slug)).map((s) => {
+    const entry = minyanim.days?.[today]?.[s.slug];
+    if (!entry) return [s.name, 'no times for today'];
+    const src = entry.source === 'shul' ? 'own website' : 'teaneckminyanim.com';
+    return [s.name, `${src} · ${ago(entry.fetched_at ?? minyanim.generated_at)}`];
+  });
+}
+
+async function renderStatus() {
+  const el = $('status');
+  if (!el || $('sheet').hidden) return;
+  const now = new Date();
+  const days = Object.keys(minyanim.days ?? {}).sort();
+  const forward = days.filter((d) => d >= isoOf(now));
+  // flights.js owns the photos and its own passphrase; it publishes this if it
+  // is loaded, and the panel simply omits the row when it is not.
+  const flights = window.shabbosFlights?.status?.();
+
+  const rows = [
+    ['App cache', await cacheVersion()],
+    ['Network', navigator.onLine ? 'online' : 'offline'],
+    ['Screen wake lock', wakeState],
+    ['Minyan data', days.length
+      ? `${forward.length} day(s) ahead · ${days[0]} to ${days.at(-1)}` : 'none'],
+    ['Last scrape', ago(minyanim.generated_at)],
+    ['Weather', weather
+      ? `${weatherAge() === null ? 'age unknown' : ago(weather.observed_at)}`
+      + `${settings.showWeather ? '' : ' · hidden'}`
+      : 'never fetched'],
+    ...(flights ? [['Family photos', flights]] : []),
+    ...shulSources(now),
+  ];
+
+  el.innerHTML = rows.map(([k, v]) =>
+    `<div class="srow"><span>${esc(k)}</span><b>${esc(String(v))}</b></div>`).join('');
+}
+
 /* Settings -------------------------------------------------------------- */
+
+let statusTimer = null;
 
 function buildSettings() {
   $('shulPicker').innerHTML = shuls.map((s) =>
@@ -1114,8 +1180,18 @@ function buildSettings() {
     $(key).checked = settings[key];
     $(key).addEventListener('change', () => { settings[key] = $(key).checked; save(); render(); tick(); });
   }
-  $('gear').addEventListener('click', () => { $('sheet').hidden = false; });
-  $('close').addEventListener('click', () => { $('sheet').hidden = true; });
+  $('gear').addEventListener('click', () => {
+    $('sheet').hidden = false;
+    renderStatus();
+    // Refreshed while the sheet is open, so somebody watching can see the
+    // network come back rather than having to close and reopen it.
+    statusTimer ??= setInterval(renderStatus, 5000);
+  });
+  $('close').addEventListener('click', () => {
+    $('sheet').hidden = true;
+    clearInterval(statusTimer);
+    statusTimer = null;
+  });
 }
 
 /* Start ----------------------------------------------------------------- */
@@ -1168,10 +1244,19 @@ function scheduleOvernightReload() {
 //
 // Registered once, at start, and never removed. Re-requesting while the lock is
 // already held is harmless.
+// Remembered so the status panel can say which it is. "The screen keeps going
+// to sleep" is the most likely complaint about a wall display, and the answer
+// is usually either this or iPadOS Auto-Lock.
+let wakeState = 'not requested';
+
 async function keepAwake() {
   try {
     await navigator.wakeLock.request('screen');
-  } catch { /* iPad also needs Settings > Display > Auto-Lock set to Never */ }
+    wakeState = 'held';
+  } catch (err) {
+    wakeState = `unavailable — ${err?.name ?? 'refused'}`;
+    /* iPad also needs Settings > Display > Auto-Lock set to Never */
+  }
 }
 
 function watchWake() {
