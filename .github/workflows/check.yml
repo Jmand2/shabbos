@@ -37,6 +37,20 @@ jobs:
       # Real WebKit at real iPad sizes. Asserts that nothing overflows its box
       # and that the numerals stay large enough to read across a room — the one
       # thing jsdom cannot see, because it computes no geometry at all.
+  # The layout suite asserts real pixel sizes, so it has to run somewhere with
+  # the fonts the iPad actually has. A Linux runner substitutes DejaVu for
+  # Superclarendon and every measurement shifts — it would be testing the
+  # runner's font stack, not this app.
+  layout:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npx playwright install webkit
+
       - name: check:layout
         run: npm run check:layout
 

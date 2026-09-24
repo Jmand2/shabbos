@@ -126,6 +126,10 @@ const MEASURE = () => {
   const out = { overflow: [], timePx: null, clockPx: null, scale: null, cards: 0 };
   const px = (el) => (el ? parseFloat(getComputedStyle(el).fontSize) : null);
   out.scale = getComputedStyle(document.documentElement).getPropertyValue('--minyan-scale').trim();
+  // Which face actually resolved. These assertions are in real pixels, so a
+  // substituted font changes the answer — and that is exactly what makes a
+  // Linux runner disagree with an iPad about whether a board is readable.
+  out.face = getComputedStyle(document.querySelector('.clock')).fontFamily.split(',')[0];
   out.clockPx = px(document.querySelector('.clock'));
   out.timePx = px(document.querySelector('.card .body .time'));
   out.cards = document.querySelectorAll('.card').length;
@@ -228,10 +232,13 @@ for (const view of VIEWS) {
   await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
   // Let the board settle: the fit loop runs after the first paint, and the
   // weather arrives a tick later and takes a band off the cards.
-  await page.waitForTimeout(700);
+  // Generous: the fit loop runs after first paint and the forecast lands a tick
+  // later, and a shared CI runner is a great deal slower than a laptop.
+  await page.waitForTimeout(1500);
 
   const m = await page.evaluate(MEASURE);
-  console.log(`  ${view.name}  (${view.size.join('x')})  scale ${m.scale} · time ${m.timePx}px · clock ${m.clockPx}px`);
+  console.log(`  ${view.name}  (${view.size.join('x')})  scale ${m.scale}`
+    + ` · time ${m.timePx}px · clock ${m.clockPx}px · face ${m.face}`);
   ok(errors.length === 0, 'no page errors', errors.join('; '));
   ok(m.overflow.length === 0, 'nothing overflows its box', m.overflow.slice(0, 4).join(' | '));
   ok(m.clockPx >= MIN_CLOCK_PX, `the clock is at least ${MIN_CLOCK_PX}px (${m.clockPx})`);
