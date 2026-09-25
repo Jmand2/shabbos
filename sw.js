@@ -24,7 +24,7 @@
 // Data is not part of the shell: minyan times stay network-first with the last
 // confirmed copy behind them, and the forecast and version.json are not touched
 // at all.
-const VERSION = '5fe892c';   // rewritten on deploy by .github/workflows/stamp.yml
+const VERSION = 'bfb643d';   // rewritten on deploy by .github/workflows/stamp.yml
 // caches.keys() is ORIGIN-wide, not per-worker. This is served from
 // jmand2.github.io/shabbos/, so every other project page on that account shares
 // the origin — and an activate that deleted everything it did not recognise
