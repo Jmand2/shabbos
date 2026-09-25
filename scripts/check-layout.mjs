@@ -355,25 +355,38 @@ for (const view of VIEWS) {
     league, post: false, local: true, a, as: String(as), h, hs: String(hs),
     state: 'post', detail: 'Final', at: `${y}T23:30Z`, ...extra,
   });
-  current = {
-    at,
-    settings: { theme: 'night', sports: '2' },
-    scores: { leagues: {
-      NBA: { at: Date.parse(at), games: [
-        g('NBA', 'BKN', 128, 'NY', 131, { detail: 'Final/OT' }),
-        g('NBA', 'BOS', 109, 'PHI', 104),
-      ] },
-      MLB: { at: Date.parse(at), games: [
-        g('MLB', 'LAD', 3, 'SD', 2, { post: true, local: false, detail: 'Final/10' }),
-        g('MLB', 'TB', 4, 'NYY', 7),
-      ] },
-      NHL: { at: Date.parse(at), games: [
-        g('NHL', 'NJ', 2, 'NYR', 1, { state: 'in', detail: '3rd 04:12', at: `2026-09-24T11:30Z` }),
-      ] },
-    } },
+  const BUSY = {
+    NBA: { at: Date.parse(at), games: [
+      g('NBA', 'BKN', 128, 'NY', 131, { detail: 'Final/OT' }),
+      g('NBA', 'BOS', 109, 'PHI', 104),
+    ] },
+    MLB: { at: Date.parse(at), games: [
+      g('MLB', 'LAD', 3, 'SD', 2, { post: true, local: false, detail: 'Final/10' }),
+      g('MLB', 'TB', 4, 'NYY', 7),
+    ] },
+    NHL: { at: Date.parse(at), games: [
+      g('NHL', 'NJ', 2, 'NYR', 1, { state: 'in', detail: '3rd 04:12', at: `2026-09-24T11:30Z` }),
+    ] },
+  };
+  // A quiet night, which is most of them. Five games is the crush the band has
+  // to survive; two is what is actually on the wall on a Tuesday in February,
+  // and it is the case where each game gets a wide column and the sport marks
+  // have room to be worth looking at.
+  const QUIET = {
+    MLB: { at: Date.parse(at), games: [
+      g('MLB', 'LAD', 3, 'SD', 2, { post: true, local: false, detail: 'Final/10' }),
+    ] },
+    NHL: { at: Date.parse(at), games: [
+      g('NHL', 'NJ', 2, 'NYR', 1, { detail: 'Final' }),
+    ] },
   };
 
-  for (const size of [[1180, 820], [768, 1024]]) {
+  for (const [size, leagues, want, tag] of [
+    [[1180, 820], BUSY, 5, 'busy'],
+    [[768, 1024], BUSY, 5, 'busy'],
+    [[1180, 820], QUIET, 2, 'quiet'],
+  ]) {
+    current = { at, settings: { theme: 'night', sports: '2' }, scores: { leagues } };
     const page = await browser.newPage({ viewport: { width: size[0], height: size[1] } });
     await page.route('**/api.open-meteo.com/**', (r) => route_ok(r, forecast(at)));
     // Sealed off from the real scoreboard. Without this the startup warm-up
@@ -395,7 +408,7 @@ for (const view of VIEWS) {
     // none of it.
     if (keepShots) {
       await page.locator('.weather.sports').screenshot({
-        path: join(SHOTS, `scores-${size[0]}x${size[1]}.png`) });
+        path: join(SHOTS, `scores-${tag}-${size[0]}x${size[1]}.png`) });
     }
 
     const m = await page.evaluate(MEASURE);
@@ -436,9 +449,9 @@ for (const view of VIEWS) {
       return out;
     });
 
-    console.log(`    ${size.join('x')}  ${band.games} games · "${band.label}"`
+    console.log(`    ${size.join('x')} ${tag}  ${band.games} games · "${band.label}"`
       + ` · name-to-score ${Math.round(pairing.gap)}px`);
-    ok(band.games === 5, `all five are shown (${band.games})`);
+    ok(band.games === want, `all ${want} are shown (${band.games})`);
     ok(!band.clipped, 'none of them overflows the band');
     ok(m.overflow.length === 0, 'and nothing else on the screen does either',
       m.overflow.slice(0, 3).join(' | '));

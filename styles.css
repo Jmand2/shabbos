@@ -822,11 +822,24 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   grid-column: 1;
   grid-row: 2 / 4;
   align-self: center;
-  width: clamp(18px, 2.8vh, 34px);
+  /* The crowded size, and the one anything unexpected falls back to. */
+  width: clamp(20px, 3vh, 34px);
   height: auto;
   margin-right: 0.15em;
   overflow: visible;
 }
+/* Three games or fewer — which is most nights — and the marks get to be big.
+   The band is over a hundred pixels tall and a quiet night leaves most of it
+   empty, which is where they were going unseen. Five games is a different
+   story: on the narrow iPad the big marks pushed the whole page sideways, and
+   a crowded band is exactly where the scores need every pixel.
+
+   Written as :not(:has()) rather than :has() so the SMALL size is the default.
+   A browser without :has() drops this rule and gets the crowded size
+   everywhere, which is merely modest; the other way round it would get the big
+   size on a five-game night and scroll the wall sideways. */
+.sgames:not(:has(> .sgame:nth-child(4))) .sicon { width: clamp(30px, 7vh, 80px); }
+
 .sicon .sball {
   fill: none;
   stroke: currentColor;
