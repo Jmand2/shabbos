@@ -10,7 +10,7 @@
 // NOT TYPED BY HAND: .github/workflows/stamp.yml rewrites the line below with
 // the commit being deployed, the same way and at the same moment it rewrites
 // the worker's VERSION.
-const BUILD = '44f84f3';   // rewritten on deploy by .github/workflows/stamp.yml
+const BUILD = '7639bc7';   // rewritten on deploy by .github/workflows/stamp.yml
 
 /* Shabbos Clock — the handful of things every other file needs.
 
