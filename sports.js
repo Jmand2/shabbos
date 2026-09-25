@@ -113,20 +113,66 @@ async function refreshSports() {
   await fetchLeague(sportsNextLeague());
 }
 
+// YESTERDAY IS THE WHOLE POINT, AND IT WAS NEVER BEING FETCHED.
+//
+// The plain scoreboard endpoint answers for TODAY. At eight in the morning
+// that is a list of games which have not been played yet — so the band said
+// "Later today" over four fixtures, and last night's result, which is the one
+// thing this is for, was not in the payload at all. SPORTS_BACK_MS says a
+// finished game stays interesting for twenty hours, and it had nothing to keep:
+// the data was already gone before the filter saw it.
+//
+// So: yesterday as well, and merge. ESPN takes ?dates=YYYYMMDD for one day but
+// answers a date RANGE with something that is not JSON, so it has to be two
+// requests. The plain call is kept as the second of them rather than asking for
+// today by name, because NFL answers it with the whole current week — Sunday's
+// fixtures included — and asking for a single Thursday would throw that away.
+const espnDay = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`
+  + `${String(d.getDate()).padStart(2, '0')}`;
+
+// What makes two entries the same fixture.
+const espnKey = (e) => {
+  if (e?.id != null) return `id:${e.id}`;
+  const sides = e?.competitions?.[0]?.competitors ?? [];
+  return `${e?.date ?? ''}|${sides.map((c) => c?.team?.abbreviation ?? '').join('/')}`;
+};
+
 async function fetchLeague(league) {
   try {
-    const res = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/${league.id}/scoreboard`,
-      { cache: 'no-store' },
-    );
-    if (!res.ok) return;
-    const data = await res.json();
-    // An unexpected shape is not a scoreboard, and overwriting a good cache
-    // with it would lose the other leagues' games for nothing.
-    if (!Array.isArray(data?.events)) return;
+    const base = `https://site.api.espn.com/apis/site/v2/sports/${league.id}/scoreboard`;
+    const yesterday = new Date(Date.now() - 86400000);
+    const urls = [`${base}?dates=${espnDay(yesterday)}`, base];
+
+    const events = [];
+    const seen = new Set();
+    let answered = false;
+    for (const url of urls) {
+      const res = await fetch(url, { cache: 'no-store' }).catch(() => null);
+      if (!res?.ok) continue;
+      const data = await res.json().catch(() => null);
+      // An unexpected shape is not a scoreboard, and overwriting a good cache
+      // with it would lose the other leagues' games for nothing.
+      if (!Array.isArray(data?.events)) continue;
+      answered = true;
+      for (const e of data.events) {
+        // A game can appear in both answers — a late start is yesterday's date
+        // in one and today's slate in the other. Keyed on the id where there is
+        // one, and on the fixture itself where there is not: keying on the id
+        // ALONE quietly let every game through twice the moment a feed omitted
+        // it, and the band showed the same final side by side with itself.
+        const key = espnKey(e);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        events.push(e);
+      }
+    }
+    // Only a total failure keeps the old cache. A day that genuinely had no
+    // games is an empty list, not a reason to go on showing yesterday's.
+    if (!answered) return;
+
     sports.leagues[league.tag] = {
       at: Date.now(),
-      games: data.events.flatMap((e) => sportsPick(e, league)),
+      games: events.flatMap((e) => sportsPick(e, league)),
     };
     localStorage.setItem(SPORTS_CACHE, JSON.stringify(sports));
   } catch { /* this is the least important thing here; it fails silently */ }

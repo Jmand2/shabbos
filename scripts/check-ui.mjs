@@ -67,6 +67,10 @@ async function boot(startIso, { settings = null, killMatchMedia = false, forecas
   w.fetch = async (u) => {
     if (String(u).includes('open-meteo')) throw new Error('offline');
     if (String(u).includes('espn.com')) {
+      // Recorded so a test can assert WHICH days are asked for. The band's whole
+      // job is last night's result, and the app was only ever requesting today.
+      w.__espn = w.__espn ?? [];
+      w.__espn.push(String(u));
       const league = /sports\/([a-z]+\/[a-z]+)\//.exec(String(u))?.[1];
       if (!scores || !scores[league]) return { ok: true, json: async () => ({ events: [] }) };
       return { ok: true, json: async () => scores[league] };
@@ -1446,6 +1450,36 @@ console.log('\n=== SP13: changing the interval takes effect at once ===');
   // hours away from the frozen one the app is running on.
   const minute = await w.eval('new Date().getMinutes()');
   ok(minute === 4, `at :04, not waiting for :20 (:${minute})`);
+}
+
+console.log('\n=== SP15: yesterday is asked for, because that is the whole job ===');
+{
+  // The bug this exists for. The plain scoreboard endpoint answers for TODAY,
+  // so at eight in the morning the band held four fixtures that had not been
+  // played yet and last night's result — the only thing anybody wants from it
+  // — was never in the payload at all. SPORTS_BACK_MS says a finished game
+  // stays interesting for twenty hours and it had nothing to keep, because the
+  // data was gone before the filter ever saw it.
+  //
+  // Nothing in any suite could see this: every fixture here is handed straight
+  // to the parser, so the tests were answering a question the app was not
+  // asking.
+  const when = '2026-09-25T08:03:00-04:00';
+  const { w } = await withScores(when, {
+    'baseball/mlb': [game('TB', 4, 'NYY', 6, { at: '2026-09-24T23:05Z' })],
+  });
+
+  const asked = await w.eval('(window.__espn || []).join(" ")');
+  ok(asked.includes('dates=20260924'),
+    'yesterday is requested by name (dates=20260924)');
+  ok(/scoreboard(\?|$| )/.test(asked.replace(/dates=\d+/g, '')),
+    'and today is still requested too, which is what NFL answers with its week');
+
+  const kept = await w.eval('sportsGames().map((g) => `${g.a} ${g.as}@${g.h} ${g.hs}`)');
+  ok(kept.length === 1 && kept[0] === 'TB 4@NYY 6',
+    `last night's final survives into the morning (${kept.join(', ') || 'none'})`);
+  const label = await w.eval('sportsLabel(sportsGames(), new Date())');
+  ok(label === 'Last night', `and the band says so (${label})`);
 }
 
 console.log('\n=== SP14: switching Off takes the band back at once ===');

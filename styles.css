@@ -805,6 +805,12 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
    for. Name and number sit together now, and because both rows share the grid
    the two scores line up under each other. */
 .sgame {
+  /* So the sport mark can be sized against the room this game actually has.
+     Counting games did not work: the rule said "big when there are three or
+     fewer", a normal evening has four, and the marks sat small in a half-empty
+     band — which is exactly what was reported, twice. Width is the thing that
+     was really being asked about, so width is what it measures. */
+  container-type: inline-size;
   display: grid;
   grid-template-columns: auto auto auto;
   justify-content: start;
@@ -813,32 +819,29 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   row-gap: 0.12em;
   min-width: 0;
 }
-.sleague, .sstate { grid-column: 1 / -1; }
+/* Column 2 onward: the mark owns column 1 for the whole height of the game. */
+.sleague, .sstate { grid-column: 2 / -1; }
 /* The sport mark, down the left of the two team rows.
    It spans both so it gets real size — at the league label's 11px a crown is
    a smudge — and it is the row height, not a fixed pixel count, that sets it,
    so it tracks the rest of the strip as the board scales. */
 .sicon {
   grid-column: 1;
-  grid-row: 2 / 4;
+  /* Beside the whole game — league, both teams, status — rather than just the
+     two score rows. Spanning only those two, a big mark made them taller than
+     their own text and the entire band grew with it, which moves every card on
+     the board down the moment the scores swap in. Across all four rows the
+     block is already tall enough to hold it and nothing below moves. */
+  grid-row: 1 / 5;
   align-self: center;
-  /* The crowded size, and the one anything unexpected falls back to. */
-  width: clamp(20px, 3vh, 34px);
+  /* A quarter of the game's own column, floored so it never disappears and
+     capped so a lone game does not turn the band into a poster. A crowded band
+     gives each game a narrow column and the marks step back on their own. */
+  width: clamp(22px, 26cqi, 56px);
   height: auto;
   margin-right: 0.15em;
   overflow: visible;
 }
-/* Three games or fewer — which is most nights — and the marks get to be big.
-   The band is over a hundred pixels tall and a quiet night leaves most of it
-   empty, which is where they were going unseen. Five games is a different
-   story: on the narrow iPad the big marks pushed the whole page sideways, and
-   a crowded band is exactly where the scores need every pixel.
-
-   Written as :not(:has()) rather than :has() so the SMALL size is the default.
-   A browser without :has() drops this rule and gets the crowded size
-   everywhere, which is merely modest; the other way round it would get the big
-   size on a five-game night and scroll the wall sideways. */
-.sgames:not(:has(> .sgame:nth-child(4))) .sicon { width: clamp(30px, 7vh, 80px); }
 
 .sicon .sball {
   fill: none;
