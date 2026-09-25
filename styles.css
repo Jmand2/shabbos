@@ -898,6 +898,11 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   display: flex;
   flex-direction: column;
   animation: fade-in 0.45s ease-out;
+  /* Re-declared here so a per-card --minyan-scale actually reaches it. A custom
+     property substitutes its own var() references where it is DECLARED, so the
+     copy on :root has already baked in the board-wide scale by the time it is
+     inherited — setting the scale on a card would otherwise do nothing. */
+  --minyan: calc(clamp(22px, 4.2vh, 44px) * var(--minyan-scale));
   overflow: hidden;
   transition: background 1.2s ease, border-color 1.2s ease;
 }

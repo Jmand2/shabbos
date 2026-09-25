@@ -139,7 +139,13 @@ const MEASURE = () => {
   // Linux runner disagree with an iPad about whether a board is readable.
   out.face = getComputedStyle(document.querySelector('.clock')).fontFamily.split(',')[0];
   out.clockPx = px(document.querySelector('.clock'));
-  out.timePx = px(document.querySelector('.card .body .time'));
+  // The smallest on the board, not the first card's. Cards carry their own
+  // scale, so the first is often the one that grew — asserting on it would pass
+  // while the card beside it sat under the readable floor.
+  const times = [...document.querySelectorAll('.card .body .time')]
+    .map((el) => parseFloat(getComputedStyle(el).fontSize)).filter((n) => n > 0);
+  out.timePx = times.length ? Math.min(...times) : null;
+  out.timePxMax = times.length ? Math.max(...times) : null;
   out.cards = document.querySelectorAll('.card').length;
 
   const note = (what, el, box) => {
@@ -247,7 +253,7 @@ for (const view of VIEWS) {
 
   const m = await page.evaluate(MEASURE);
   console.log(`  ${view.name}  (${view.size.join('x')})  scale ${m.scale}`
-    + ` · time ${m.timePx}px · clock ${m.clockPx}px · face ${m.face}`);
+    + ` · time ${m.timePx}\u2013${m.timePxMax}px · clock ${m.clockPx}px · face ${m.face}`);
   ok(errors.length === 0, 'no page errors', errors.join('; '));
   ok(m.overflow.length === 0, 'nothing overflows its box', m.overflow.slice(0, 4).join(' | '));
   ok(m.clockPx >= MIN_CLOCK_PX, `the clock is at least ${MIN_CLOCK_PX}px (${m.clockPx})`);
@@ -258,7 +264,11 @@ for (const view of VIEWS) {
     // allowed to overflow, which is asserted for every view above.
     if (!view.settings?.perShul) {
       ok(m.timePx === null || m.timePx >= MIN_TIME_PX,
-        `minyan times are at least ${MIN_TIME_PX}px (${m.timePx})`);
+        `every card's times are at least ${MIN_TIME_PX}px (smallest ${m.timePx})`);
+      // A card may grow into its own spare room, but not so far that the board
+      // stops looking like one board.
+      ok(m.timePxMax === null || m.timePxMax <= m.timePx * 1.5,
+        `and no card outgrows another by more than half (${m.timePx}\u2013${m.timePxMax})`);
     }
   }
 

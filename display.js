@@ -230,6 +230,14 @@ function paintBoard(html) {
   $('shuls').innerHTML = html;
 }
 
+// Cleared before every measurement, or a card keeps the size it was given for
+// different content and the search starts from a lie.
+function resetCardScales() {
+  for (const card of document.querySelectorAll('.card')) {
+    card.style.removeProperty('--minyan-scale');
+  }
+}
+
 function renderShuls(now, days) {
   const list = shownShuls();
   if (!list.length) {
@@ -431,6 +439,7 @@ function fitBoard() {
   const rows = cards.map((c) => [c.querySelector('.body'),
     [...c.querySelectorAll('.time, .label, .group')]]).filter(([b]) => b);
   const root = document.documentElement;
+  resetCardScales();
   const fits = (v) => {
     root.style.setProperty('--minyan-scale', v);
     if (!boxes.every((b) => b.scrollHeight <= b.clientHeight + 1
@@ -445,7 +454,7 @@ function fitBoard() {
     });
   };
 
-  if (fits(MAX_SCALE)) return achieved(true);   // everything fits at the ceiling
+  if (fits(MAX_SCALE)) { stretchCards(MAX_SCALE); return achieved(true); }
   // Cannot fit even at the floor. It used to return here and leave the board
   // clipped at 0.3; now it says so, and the caller shows fewer rows instead.
   if (!fits(MIN_SCALE)) return achieved(false);
@@ -457,16 +466,68 @@ function fitBoard() {
     if (fits(mid)) lo = mid; else hi = mid;
   }
   fits(lo);
+  stretchCards(lo);
   return achieved(true);
+}
+
+// How far a quiet card may outgrow a busy one beside it. Unbounded, a card with
+// three rows next to one with eight ends up at twice the type and the two stop
+// looking like the same board.
+const CARD_STRETCH = 1.45;
+
+// The board scale is set by the FULLEST card, because one size has to fit all
+// of them. That leaves a shul with three minyanim showing them in the top two
+// thirds of its box with the rest empty — which is most of what "so much empty
+// space" is.
+//
+// So after the board settles, each card is allowed to grow into whatever room
+// it has left, on its own. Bounded, because a card is still part of a board.
+function stretchCards(base) {
+  for (const card of document.querySelectorAll('.card')) {
+    const body = card.querySelector('.body');
+    if (!body) continue;
+    const marks = [...card.querySelectorAll('.time, .label, .group')];
+    if (!marks.length) continue;
+
+    const fitsAt = (v) => {
+      card.style.setProperty('--minyan-scale', v);
+      if (body.scrollHeight > body.clientHeight + 1
+        || body.scrollWidth > body.clientWidth + 1) return false;
+      const box = body.getBoundingClientRect();
+      return marks.every((el) => {
+        const r = el.getBoundingClientRect();
+        return r.right <= box.right + 1 && r.bottom <= box.bottom + 1
+          && r.left >= box.left - 1;
+      });
+    };
+
+    const ceiling = Math.min(MAX_SCALE, base * CARD_STRETCH);
+    if (ceiling <= base || fitsAt(ceiling)) continue;   // already as big as allowed
+    let lo = base;
+    let hi = ceiling;
+    for (let i = 0; i < 7; i += 1) {
+      const mid = (lo + hi) / 2;
+      if (fitsAt(mid)) lo = mid; else hi = mid;
+    }
+    fitsAt(lo);
+  }
 }
 
 // The size the numerals actually came out at, which is the only thing that
 // answers "can this be read from the sofa". null means there was nothing to
 // measure — jsdom, or a board of unavailable cards.
 function achieved(fitted) {
-  const el = document.querySelector('.card .body .time');
-  if (!el) return { px: null, fitted };
-  return { px: parseFloat(getComputedStyle(el).fontSize) || null, fitted };
+  // The SMALLEST numerals anywhere on the board, not the first card's.
+  //
+  // Cards carry their own scale now, so the first card is often the one that
+  // was allowed to grow — and Auto decides how many rows to show from this
+  // number. Reading the stretched card told it the board was comfortable while
+  // the card beside it had been squeezed under the readable floor.
+  const sizes = [...document.querySelectorAll('.card .body .time')]
+    .map((el) => parseFloat(getComputedStyle(el).fontSize))
+    .filter((n) => n > 0);
+  if (!sizes.length) return { px: null, fitted };
+  return { px: Math.min(...sizes), fitted };
 }
 
 // The numerals carry the information and the meridiem only disambiguates them,

@@ -325,11 +325,26 @@ async function main() {
       // A day the parser did not produce is left for the aggregator rather than
       // written as undefined and counted as covered.
       if (!entry) continue;
+      const clean = normaliseSections(entry);
       days[date] ??= {};
-      days[date][shul.slug] = {
-        ...normaliseSections(entry), fetched_at: new Date().toISOString(),
-      };
-      filled.add(key(shul.slug, date));
+      days[date][shul.slug] = { ...clean, fetched_at: new Date().toISOString() };
+
+      // A PARSE IS NOT COVERAGE.
+      //
+      // These widgets are the shul's calendar, not its minyan board: on a given
+      // day one may list a sukkah party, a shiur and candle lighting, and not a
+      // single service. That parsed fine — both sections present, so not null —
+      // and the day was marked covered, which stopped the aggregator filling
+      // it. Beth Aaron ran for weeks with no shacharis and no mincha on the
+      // wall while teaneckminyanim had the lot.
+      //
+      // So a day counts as covered only if the shul's own site actually gave up
+      // a service. Anything else and the aggregator gets its turn, keeping the
+      // edge times below, which are the shul's own and better than a
+      // calculation.
+      const services = SECTIONS.reduce(
+        (n, g) => n + (clean[g.toLowerCase()]?.length ?? 0), 0);
+      if (services) filled.add(key(shul.slug, date));
     }
   }
 
@@ -343,11 +358,18 @@ async function main() {
       if (useDateParam) dateParamWorks = true;
       fetched += 1;
       days[date] ??= {};
+      // The shul's own candle lighting and havdalah survive the aggregator
+      // writing over the day. They are the times its members actually keep, and
+      // the aggregator does not carry them — dropping them here would mean
+      // falling back to a computed tzeis for a shul that publishes its own.
+      const ownEdge = days[date][shul.slug]?.edge;
       // Stamped per shul-day. generated_at goes fresh if ANY fetch in the run
       // succeeded, so a shul still showing an entry retained from a previous
       // run looked exactly as current as one just confirmed.
       days[date][shul.slug] = {
-        ...normaliseSections(parsed), fetched_at: new Date().toISOString(),
+        ...normaliseSections(parsed),
+        ...(ownEdge ? { edge: ownEdge } : {}),
+        fetched_at: new Date().toISOString(),
       };
     }
   }

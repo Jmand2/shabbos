@@ -304,6 +304,42 @@ the clock's own tick, never rendered into the board: the board is memoised on
 its markup, and a changing string in there would rebuild every card twice a
 minute. The markup carries the moment; the text is painted over it.
 
+## A parse is not coverage
+
+A shul's own site is read first, because a shul is the authority on its own
+schedule. But those widgets are its **calendar**, not its minyan board: on a
+given day one may list a sukkah party, a shiur and candle lighting, and not a
+single service. That parses perfectly well — both sections present, nothing
+null — and the day was then marked as covered, which stopped the aggregator
+filling it.
+
+Beth Aaron ran with **no shacharis and no mincha at all** on most days while
+teaneckminyanim had the lot. A day counts as covered now only if the shul's own
+site actually gave up a service; anything else and the aggregator gets its turn.
+
+The shul's own candle lighting and havdalah survive the aggregator writing over
+the day. They are the times its members actually keep, the aggregator does not
+carry them, and dropping them would mean falling back to a computed tzeis for a
+shul that publishes its own.
+
+## Every card uses its own box
+
+The board scale is set by the **fullest** card, because one size has to fit all
+of them — which leaves a shul with three minyanim showing them in the top two
+thirds of its box with the rest empty. After the board settles, each card is
+allowed to grow into whatever room it has left, on its own.
+
+Bounded at 1.45×, because a card is still part of a board: unbounded, three rows
+beside eight ends at twice the type and the two stop looking like the same
+thing.
+
+This changed what "the board fits" means, and one thing had to move with it. The
+fit loop reported the first card's numerals, and Auto decides how many rows to
+show from that number — so once the first card was often the one that had grown,
+Auto was told the board was comfortable while the card beside it had been
+squeezed under the readable floor. It reports the **smallest** on the board now,
+and the layout suite asserts against the smallest too.
+
 ## How a card is set
 
 A service and its time are one thing, so they sit together. The times used to be
