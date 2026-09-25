@@ -199,10 +199,14 @@ for (let i = 0; i < 365; i += 1) {
   const d = new Date(Date.UTC(2026, 8, 1 + i, 21, 0));
   const w = await boot(d.toISOString());
   const out = [clockOf(w), text(w, 'edge'), text(w, 'hebrewDate')];
-  const locked = w.document.body.classList.contains('locked');
-  const edgeRequired = locked || !w.document.getElementById('edge').hidden;
+  // The edge tile no longer carries candle lighting or havdalah on the normal
+  // board — each shul's own are in its own card now — so it is empty and
+  // hidden on every day here. What still has to hold is that it never renders
+  // GARBAGE, which the NaN check below covers, and that a hidden tile is an
+  // empty one rather than a stale line left behind by the last render.
+  const edgeClean = w.document.getElementById('edge').hidden === !out[1];
   if (!/^\d{1,2}:\d{2}(am|pm)$/.test(out[0]) || !out[2]
-      || (edgeRequired && !out[1])
+      || !edgeClean
       || /NaN|undefined|Invalid/.test(out.join(''))) {
     bad += 1;
     console.log('  BAD', d.toISOString().slice(0, 10), JSON.stringify(out));

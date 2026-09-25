@@ -159,7 +159,58 @@ function havdalahLines(now) {
   return ['Havdalah', ...per.map((r) => `${r.name} <b>${clockTime(r.at)}</b>`)];
 }
 
+/* A shul's own edges, in a shul's own box ----------------------------------
+
+   Candle lighting and havdalah used to live in the tile beside the clock: one
+   candle time for a town whose two shuls light at 6:30 and 6:31, and a
+   havdalah that had to print each shul's NAME beside it because they differ by
+   minutes. Both scrapers now bring back each shul's own published edges, so
+   they belong in that shul's own box beside its own minyanim, where nothing
+   needs labelling to say whose it is.
+
+   The shul's published time wins. The fallback is a calculation, and it is
+   only there so a shul that publishes nothing still shows something. */
+function edgeRowsFor(slug, day) {
+  const out = [];
+  const published = minyanim.days?.[isoOf(day)]?.[slug]?.edge ?? {};
+  const jc = new JewishDay(day).jc;
+  const resting = jc.isAssurBemelacha();
+  const more = jc.isTomorrowShabbosOrYomTov();
+
+  if (more) {
+    // Into Shabbos, lighting is at the usual time. Into a SECOND day of Yom
+    // Tov nothing is lit until nightfall, and a computed candle lighting would
+    // be three quarters of an hour early and simply wrong.
+    const afterDark = resting && day.getDay() !== 5;
+    const at = timeToDate(day, published.candles ?? '')
+      ?? toDate(afterDark ? zmanim(day).getTzais() : zmanim(day).getCandleLighting());
+    if (at) out.push({ label: afterDark ? 'Candles after' : 'Candles', at });
+  }
+  // Havdalah belongs to the day the rest actually ENDS, not to each day of it.
+  if (resting && !more) {
+    const at = havdalahFor(slug, day);
+    if (at) out.push({ label: 'Havdalah', at });
+    else {
+      // This shul publishes no havdalah and keeps no offset we know of, so it
+      // does not get handed somebody else's. Nightfall is the town-wide fact
+      // and is named as such rather than dressed up as this shul's practice.
+      const dark = toDate(zmanim(day).getTzais());
+      if (dark) out.push({ label: 'Nightfall', at: dark });
+    }
+  }
+  return out;
+}
+
 function renderEdge(now, info) {
+  // The board carries these in the cards now, one shul at a time. This tile is
+  // kept for the clock-only layout, which hides the cards altogether — take it
+  // away there and the one mode with nothing else on screen would be the one
+  // mode that never says when Shabbos is out.
+  if (settings.layout !== 'clock') {
+    $('edge').innerHTML = '';
+    $('edge').hidden = true;
+    return;
+  }
   const jc = info.civil.jc;
   const candles = toDate(info.cal.getCandleLighting());
   const restingNow = jc.isAssurBemelacha() && now < info.tzeis;
@@ -321,7 +372,7 @@ function renderShuls(now, days) {
 
   // Counted per card, not pooled. Averaging across the board let one heavy shul
   // hide behind two light ones and clip its own times.
-  const build = (cap) => {
+  const build = (cap, withEdges = true) => {
   const perCardLines = [];
   let lines = 0;
 
@@ -417,6 +468,15 @@ function renderShuls(now, days) {
             + times.map((r) => `<span class="time${r === next ? ' next' : ''}">${clockFace(r.time)}</span>`).join('')
             + `</span>` });
       }
+
+      // The shul's own candle lighting and havdalah, under that day's times.
+      for (const e of withEdges ? edgeRowsFor(shul.slug, rows[0].at) : []) {
+        lines += 1;
+        blocks.push({ head: false, lines: 1,
+          html: `<span class="label ${day} edgerow">${esc(e.label)}</span>`
+            + `<span class="times ${day} edgerow">`
+            + `<span class="time edgetime">${clockFace(clockTimeLong(e.at))}</span></span>` });
+      }
     }
     // Lines per column, not per card, once the content is split.
     perCardLines.push(Math.ceil(lines / columns));
@@ -452,23 +512,41 @@ function renderShuls(now, days) {
   const auto = settings.perShul === 'auto';
   const ceiling = auto ? AUTO_MAX : Number(settings.perShul);
   const floor = auto ? AUTO_MIN_PX : 0;
-  const goodAt = (cap) => {
-    const r = build(cap);
+  const goodAt = (cap, withEdges = true) => {
+    const r = build(cap, withEdges);
     // No geometry to measure (jsdom, or a board with no times on it) — take the
     // requested count at face value rather than searching against nothing.
     if (r.px === null) return true;
     return r.fitted && r.px >= floor;
   };
 
+  const search = (withEdges) => {
+    let lo = AUTO_MIN_ROWS;
+    let hi = ceiling;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (goodAt(mid, withEdges)) lo = mid; else hi = mid - 1;
+    }
+    return lo;
+  };
+
   if (goodAt(ceiling)) { paintCountdowns(now); return; }
-  let lo = AUTO_MIN_ROWS;
-  let hi = ceiling;
-  while (lo < hi) {
-    const mid = Math.ceil((lo + hi) / 2);
-    if (goodAt(mid)) lo = mid; else hi = mid - 1;
+  const rowsShown = search(true);
+
+  // Candle lighting and havdalah are rows like any other, and on a small enough
+  // board they are rows the type cannot afford. Once the minyanim are already
+  // down to the fewest Auto will show, they are the only lever left before
+  // clipping — and a time nobody can read across the room is worth less than
+  // one fewer line. They go last, and only here.
+  if (auto && !goodAt(rowsShown, true)) {
+    if (goodAt(ceiling, false)) { paintCountdowns(now); return; }
+    build(search(false), false);
+    paintCountdowns(now);
+    return;
   }
+
   // The search leaves the board at whatever it probed last, so paint the answer.
-  build(lo);
+  build(rowsShown);
   paintCountdowns(now);
 }
 

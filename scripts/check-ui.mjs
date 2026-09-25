@@ -306,7 +306,7 @@ console.log('\n=== G1b: the board stays chronological across repeated labels ===
   // Booted the evening BEFORE, so the whole of 2026-09-17 is still ahead; this
   // date needs no data of its own, only 09-17 does.
   const { w } = await boot('2026-09-16T21:46:00-04:00', { settings: { shuls: ['beth-aaron'] } });
-  const mins = [...w.document.querySelectorAll('.card .time')].map((n) => {
+  const mins = [...w.document.querySelectorAll('.card .time:not(.edgetime)')].map((n) => {
     const m = /^(\d{1,2}):(\d{2})(am|pm)$/.exec(n.textContent.trim());
     let h = Number(m[1]) % 12;
     if (m[3] === 'pm') h += 12;
@@ -390,16 +390,19 @@ console.log('\n=== G4: "Times shown per shul" actually caps ===');
   for (const cap of ['4', '8', '12']) {
     const { w } = await boot('2026-09-22T05:00:00-04:00',
       { settings: { shuls: ['bnai-yeshurun'], perShul: cap } });
-    const times = w.document.querySelectorAll('.card .time').length;
+    // :not(.edgetime) — the cap is a cap on MINYANIM. Candle lighting and
+    // havdalah are rows in the same card but they are not something you daven,
+    // and counting them would mean choosing "4 times" and getting three.
+    const times = w.document.querySelectorAll('.card .time:not(.edgetime)').length;
     ok(times > 0 && times <= Number(cap),
-      `perShul=${cap} yields ${times} times (<= ${cap})`);
+      `perShul=${cap} yields ${times} minyan times (<= ${cap})`);
   }
   // A stored value from the old option set must fall back, not blank the card.
   // The default is Auto now, and Auto with no geometry to measure — which is
   // every run in jsdom — takes its own ceiling rather than guessing.
   const { w } = await boot('2026-09-22T05:00:00-04:00',
     { settings: { shuls: ['bnai-yeshurun'], perShul: '3' } });
-  const times = w.document.querySelectorAll('.card .time').length;
+  const times = w.document.querySelectorAll('.card .time:not(.edgetime)').length;
   ok(times > 0 && times <= 14,
     `a stale perShul="3" falls back to Auto, not NaN (${times} times)`);
   ok(w.document.getElementById('perShul').value === 'auto',
@@ -412,21 +415,28 @@ console.log('\n=== G6/E5: empty edge is hidden; every card counts lines ===');
   const { w } = await boot('2026-09-01T17:00:00-04:00');   // ordinary Tuesday
   ok($(w, 'edge').hidden, 'edge is hidden on a day with no transition to announce');
 }
+// Each shul's own card, by name. The point of moving these out of the tile is
+// that the box says whose they are, so that is what the tests read.
+const cardOf = (w, name) => [...w.document.querySelectorAll('.card')]
+  .find((c) => c.querySelector('h2')?.textContent === name)?.textContent ?? '';
+
 {
   const { w } = await boot('2026-09-18T14:05:00-04:00');   // a Friday
-  const edge = $(w, 'edge');
   // Both ends. When Shabbos comes in is half the question; when it goes out is
   // the other half, and the wall is the only place either gets read.
-  ok(!edge.hidden && /Candles/.test(edge.textContent) && /Havdalah/.test(edge.textContent),
-    'erev Shabbos announces both candles and havdalah',
-    `(hidden=${edge.hidden} "${edge.textContent}")`);
-  ok(edge.querySelectorAll('.line').length >= 2,
-    'the ends are stacked, not joined by a separator that wraps');
+  const ba = cardOf(w, 'Beth Aaron');
+  ok(/Candles/.test(ba) && /Havdalah/.test(ba),
+    "erev Shabbos announces both ends in the shul's own card", `("${ba.slice(-90)}")`);
+  ok($(w, 'edge').hidden,
+    'and the tile beside the clock no longer carries them');
   // Beth Aaron makes havdalah 9 minutes after its 7:42 maariv, Ohr Saadya 8
-  // after its 7:40. Both are minutes later than the computed tzeis of 7:38, and
-  // they differ from each other, so each has to be named.
-  ok(/Beth Aaron 7:51p/.test(edge.textContent) && /Ohr Saadya 7:48p/.test(edge.textContent),
-    'each shul gets its own havdalah, off its own maariv', `("${edge.textContent}")`);
+  // after its 7:40. Both are minutes later than the computed tzeis of 7:38 and
+  // they differ from each other — which is the whole reason these belong in
+  // the boxes: no name has to be printed to say which is which.
+  ok(/7:51p/.test(ba), "Beth Aaron's own havdalah, off its own maariv", `("${ba.slice(-60)}")`);
+  const os = cardOf(w, 'Ohr Saadya');
+  ok(/7:48p/.test(os) && !/7:51p/.test(os),
+    "and Ohr Saadya's own, in its own box", `("${os.slice(-60)}")`);
 }
 {
   // Ohr Saadya publishes "Fast Ends 7:45pm" on its own site for Yom Kippur.
@@ -434,29 +444,31 @@ console.log('\n=== G6/E5: empty edge is hidden; every card counts lines ===');
   // evening bucket, so measuring off it produced 6:43p, an hour early.
   const { w } = await boot('2026-09-20T15:30:00-04:00',
     { settings: { shuls: ['ohr-saadya'] } });
-  const edge = $(w, 'edge');
-  ok(/7:45p/.test(edge.textContent) && !/6:43p/.test(edge.textContent),
+  const os = cardOf(w, 'Ohr Saadya');
+  ok(/7:45p/.test(os) && !/6:43p/.test(os),
     "a shul's own published fast-end time beats the maariv arithmetic",
-    `("${edge.textContent}")`);
+    `("${os.slice(-70)}")`);
 }
 {
-  // A shul with no published practice must not be handed one. On its own the
-  // tile falls back to tzeis, unlabelled, because that is the town-wide answer.
+  // A shul with no published practice must not be handed one. Its own box
+  // falls back to nightfall, NAMED as nightfall — the town-wide fact, not a
+  // havdalah it never claimed.
   const { w } = await boot('2026-09-18T14:05:00-04:00',
     { settings: { shuls: ['bnai-yeshurun'] } });
-  const edge = $(w, 'edge');
-  ok(/Havdalah 7:38p/.test(edge.textContent) && !/Bnai/.test(edge.textContent),
-    'a shul with no offset falls back to tzeis, unnamed', `("${edge.textContent}")`);
+  const by = cardOf(w, 'Bnai Yeshurun');
+  ok(/Nightfall/.test(by) && /7:38p/.test(by) && !/Havdalah/.test(by),
+    'a shul with no practice of its own shows nightfall, not a borrowed havdalah',
+    `("${by.slice(-70)}")`);
 }
 {
-  // Mixed: naming only the shuls that have a practice, never inventing one for
-  // the third. An unlabelled time here would read as speaking for all three.
+  // Mixed: no shul is handed another's practice, which was the exact failure
+  // an unlabelled time in the shared tile could produce.
   const { w } = await boot('2026-09-18T14:05:00-04:00',
     { settings: { shuls: ['beth-aaron', 'ohr-saadya', 'bnai-yeshurun'] } });
-  const edge = $(w, 'edge');
-  ok(/Beth Aaron 7:51p/.test(edge.textContent) && !/Bnai/.test(edge.textContent),
-    'a shul without an offset is omitted, not given the others\' time',
-    `("${edge.textContent}")`);
+  ok(/7:51p/.test(cardOf(w, 'Beth Aaron')), 'Beth Aaron keeps its own');
+  const by = cardOf(w, 'Bnai Yeshurun');
+  ok(!/7:51p/.test(by) && !/7:48p/.test(by),
+    "and the shul without one is not given the others'", `("${by.slice(-70)}")`);
 }
 {
   // Every shul unavailable: the clock must not inflate to its sparse multiplier.
@@ -745,9 +757,9 @@ console.log('\n=== Y3: the cap still wins, and every day still gets a share ==='
   for (const cap of ['4', '8', '12']) {
     const { w } = await boot('2027-04-21T15:00:00-04:00',
       { minyanim: schedule(PESACH), settings: { shuls: ['beth-aaron'], perShul: cap } });
-    const times = w.document.querySelectorAll('.card .body .time').length;
+    const times = w.document.querySelectorAll('.card .body .time:not(.edgetime)').length;
     const groups = groupsOn(w).length;
-    ok(times <= Number(cap), `perShul=${cap} yields ${times} times (<= ${cap})`);
+    ok(times <= Number(cap), `perShul=${cap} yields ${times} minyan times (<= ${cap})`);
     ok(groups >= 2, `and still spans ${groups} days rather than spending it all on today`);
   }
 }
@@ -1069,8 +1081,17 @@ console.log('\n=== AP: meridiems are am and pm, not a and p ===');
   const hours = [...w.document.querySelectorAll('.whour')].map((n) => n.textContent);
   ok(hours.every((h) => h === 'Now' || /^\d{1,2}(am|pm)$/.test(h)),
     `weather hours read 3pm, not 3p (${hours.slice(0, 4).join(' ')})`);
-  const edge = $(w, 'edge').textContent;
-  ok(!/\d[ap](?![m])/.test(edge), `and so do the candle/havdalah times (${edge.slice(0, 40)})`);
+}
+{
+  // Read off the CARDS, on a Friday the fixture actually covers. This used to
+  // read the tile beside the clock, and once the candle and havdalah times
+  // moved into the shuls' own boxes that string was always empty — the
+  // assertion went on passing while testing nothing at all.
+  const { w } = await boot('2026-09-18T14:05:00-04:00');
+  const edges = [...w.document.querySelectorAll('.time.edgetime')].map((n) => n.textContent);
+  ok(edges.length > 0, `erev Shabbos has candle and havdalah rows (${edges.length})`);
+  ok(edges.every((t) => /^\d{1,2}:\d{2}(am|pm)$/.test(t.trim())),
+    `and they read 6:41pm, not 6:41p (${edges.join(' ') || 'none'})`);
 }
 
 /* SP — scores ------------------------------------------------------------ */

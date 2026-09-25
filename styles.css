@@ -1059,6 +1059,17 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 /* The first heading in a column never carries the top margin that separates it
    from a row above, because there is no row above it. */
 .card .body .col > .group:first-child { margin-top: 0; }
+
+/* Candle lighting and havdalah, in the shul's own box. Set apart from the
+   minyanim — they are not something you daven, and the eye should not have to
+   read the label to know that — but not so far apart that they stop belonging
+   to the day above them. */
+.label.edgerow {
+  color: var(--accent);
+  opacity: 0.85;
+  letter-spacing: 0.04em;
+}
+.times.edgerow .time { color: var(--accent); font-weight: 600; }
 .card .body .times {
   display: flex;
   flex-wrap: wrap;
