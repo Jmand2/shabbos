@@ -908,6 +908,22 @@ function paintCountdowns(now = new Date()) {
       : mins > 1 ? `Next · ${mins}m`
         : 'Next · soon';
     if (el.textContent !== text) el.textContent = text;
+
+    // [11] Urgency as a STATE, written on the element, not as a size.
+    //
+    // Three steps: ordinary, close, and about to go. The treatment gets
+    // stronger in colour and weight and never in metrics — nothing here
+    // changes the line height, because the row is in a grid with its
+    // neighbours and a taller "Next" row drags the whole column with it. And
+    // nothing blinks: this display is opposite a table for three days of a
+    // chag.
+    const near = mins >= 0 && mins <= 5 ? 'now'
+      : mins >= 0 && mins <= 15 ? 'soon' : '';
+    if (el.dataset.urgency !== near) {
+      el.dataset.urgency = near;
+      const row = el.closest('.label');
+      if (row) row.dataset.urgency = near;
+    }
   }
 }
 

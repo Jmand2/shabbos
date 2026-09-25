@@ -1063,8 +1063,11 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   font-weight: 600;
   font-size: clamp(18px, 2.8vh, 32px);
   letter-spacing: -0.015em;
-  padding-bottom: 0.36em;
-  margin-bottom: 0.48em;
+  /* [9] About 18% less than it was (0.36/0.48), given back to the schedule.
+     The rule and the size still carry the hierarchy; the air was doing none of
+     the work. */
+  padding-bottom: 0.29em;
+  margin-bottom: 0.40em;
   border-bottom: 1px solid var(--rule);
 }
 /* Today is what matters now; tomorrow steps back a tone so the two are told
@@ -1082,6 +1085,25 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
    Reaching the end of a three-day Yom Tov puts three or four on a card, at
    which point the headings alone overflow the body and took the times down to
    nothing with them. Margins are in em so they come along. */
+/* [10] A day heading is not another schedule row, and at a glance it was
+   reading as one. A short accent dash in front of it and real air above give
+   the eye something to catch when it is scanning three days of a chag. Not a
+   full-width rule: this is a card, not a table, and the heavier the separator
+   the more the card reads as several cards. */
+.card .body .group::before {
+  content: '';
+  display: inline-block;
+  width: calc(var(--minyan) * 0.42);
+  height: 2px;
+  margin-right: calc(var(--minyan) * 0.22);
+  vertical-align: middle;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.45;
+}
+.card .body .group + * { margin-top: calc(var(--minyan) * 0.06); }
+.card .body .group:not(:first-child) { margin-top: calc(var(--minyan) * 0.34); }
+
 .group {
   /* It was 0.34, which came out SMALLER than the labels it introduces — seven
      pixels on a settled board. A heading that loses to its own contents is not
@@ -1110,8 +1132,13 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
      label and times together no longer fit, scrollWidth grows and the loop
      shrinks the type, which is the right thing to give up. */
   grid-template-columns: minmax(min-content, max-content) 1fr;
-  column-gap: calc(var(--minyan) * 0.5);
-  row-gap: calc(var(--minyan) * 0.3);
+  /* [8] Tighter than it was in both directions. A label and its time have to
+     read as ONE thing from across the room, and half the type size between
+     them was enough to read as two columns of unrelated words. The row gap
+     comes down too — the separation that matters is between DAYS, and giving
+     every gap the same value spent the card's height saying nothing. */
+  column-gap: calc(var(--minyan) * 0.38);
+  row-gap: calc(var(--minyan) * 0.23);
   align-items: baseline;
   /* align-content: start, deliberately. space-evenly distributed the rows into
      the cell, but alignment overflow is not scroll overflow — rows pushed past
@@ -1143,8 +1170,13 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(min-content, max-content) 1fr;
-  column-gap: calc(var(--minyan) * 0.5);
-  row-gap: calc(var(--minyan) * 0.3);
+  /* [8] Tighter than it was in both directions. A label and its time have to
+     read as ONE thing from across the room, and half the type size between
+     them was enough to read as two columns of unrelated words. The row gap
+     comes down too — the separation that matters is between DAYS, and giving
+     every gap the same value spent the card's height saying nothing. */
+  column-gap: calc(var(--minyan) * 0.38);
+  row-gap: calc(var(--minyan) * 0.23);
   align-items: baseline;
   align-content: start;
 }
@@ -1284,7 +1316,12 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 }
 .card .body .nextflag {
   display: block;
-  margin-top: 0.15em;
+  /* [11] No growth. Every one of the states below changes colour and weight
+     and leaves the box alone: the label shares a grid row with its times and a
+     taller flag would push the whole column down, which is the one thing the
+     row anybody is looking for must not do. */
+  margin-top: 0.1em;
+  line-height: 1.1;
   font-size: calc(var(--minyan) * 0.3);
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -1294,6 +1331,18 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   white-space: nowrap;
 }
 .card .body .time.next .ap { font-weight: 600; }
+
+/* Within fifteen minutes: the flag stops being a caption and starts being a
+   notice. Within five: as strong as this board goes. Steady at every step. */
+.card .body .nextflag[data-urgency='soon'] { opacity: 1; }
+.card .body .nextflag[data-urgency='now'] {
+  opacity: 1;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-radius: 0.35em;
+  padding: 0 0.3em;
+  margin-left: -0.3em;
+}
 .none, .unavailable {
   font-size: calc(var(--minyan) * 0.46);
   color: var(--dim);
@@ -1421,16 +1470,28 @@ body.clock-only .clockwrap { margin: auto 0; }
 .move[disabled] { opacity: 0.25; cursor: default; }
 
 /* Which page of the shuls is up. */
-.pager { display: inline-flex; align-items: center; gap: 6px; margin-left: 0.9em; }
+/* [28] The dots say there are more shuls than are on screen, which is the one
+   thing in the footer somebody needs to ACT on — and they were set fainter than
+   the provenance text beside them, so the board looked like all there was.
+   Ahead of the freshness line now, and large enough to register, without
+   becoming something the eye has to keep returning to. */
+.pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: 0;
+  margin-right: 0.9em;
+  order: -1;
+}
 .pager[hidden] { display: none; }
 .pager i {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--text) 25%, transparent);
+  background: color-mix(in srgb, var(--text) 40%, transparent);
   transition: background 0.4s ease;
 }
-.pager i.on { background: var(--accent); }
+.pager i.on { background: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
 .row {
   display: flex;
   align-items: center;

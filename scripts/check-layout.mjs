@@ -190,6 +190,38 @@ const MEASURE = () => {
     } : null;
   }
 
+  // [9] What the shul's NAME costs. It is a heading on a card, not a masthead:
+  // every pixel it takes is a pixel the schedule does not get, and on a short
+  // card it was taking a fifth of the box.
+  // [11] And what the NEXT row costs. It shares a grid row with its times, so a
+  // flag that grows drags the whole column down — the one row anybody is
+  // looking for is the one row that must not move the others.
+  out.titles = [];
+  out.nextRows = [];
+  for (const card of document.querySelectorAll('.card')) {
+    const h2 = card.querySelector('h2');
+    const box = card.getBoundingClientRect();
+    if (h2 && box.height) {
+      const cs = getComputedStyle(h2);
+      const used = h2.getBoundingClientRect().height
+        + parseFloat(cs.marginBottom || 0);
+      out.titles.push(Math.round((used / box.height) * 100));
+    }
+    // What the FLAG costs, not what the label costs. "Mincha / Kabbalas
+    // Shabbos" wraps to three lines and is tall whether or not it is next —
+    // comparing the whole row to a one-word neighbour measures the wording, so
+    // this measures the thing actually under test.
+    const flag = card.querySelector('.nextflag');
+    if (flag) {
+      const label = flag.closest('.label');
+      const line = parseFloat(getComputedStyle(label).fontSize) || 1;
+      out.nextRows.push({
+        flag: Math.round(flag.getBoundingClientRect().height),
+        line: Math.round(line),
+      });
+    }
+  }
+
   out.orphans = [];
   out.columns = [];
   out.widthUsed = [];
@@ -379,6 +411,15 @@ for (const view of VIEWS) {
     ok(m.cards > 0, 'the board rendered cards');
     ok(m.orphans.length === 0, 'every column opens on a day, none left behind',
       m.orphans.join(' | '));
+    // A heading, not a masthead.
+    ok((m.titles ?? []).every((p2) => p2 <= 26),
+      `the shul name leaves the schedule its room (${(m.titles ?? []).join('%, ')}%)`);
+    // The NEXT row may be taller — it carries a second line — but not so much
+    // taller that it shifts the rows beside it into a different rhythm.
+    for (const r of m.nextRows ?? []) {
+      ok(r.flag <= r.line * 1.9,
+        `the NEXT flag costs a line, not a row (${r.flag}px on ${r.line}px type)`);
+    }
     // The strip fills its band rather than leaving a precipitation row's worth
     // of height empty on a dry day — but it may never GROW the band, because
     // the scores borrow it and every card below would move.
