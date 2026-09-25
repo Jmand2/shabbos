@@ -633,7 +633,23 @@ borrowed band and nothing else. One league per pass in rotation, because each
 scoreboard is about 280KB and all four every ten minutes is a megabyte an hour
 for something nobody is waiting on.
 
-A plain rotation at ten minutes is plenty: last night's result does not change.
+**A cached state may only claim what it can still prove.** One league is
+refreshed about every forty minutes. That is exactly right for a final — it does
+not change, so an old snapshot of it is still true — and wrong for everything
+else. A game cached as in-play went on saying "3rd 04:12" long after the period
+ended, and a game cached as not-started went on advertising a start time that
+had been and gone, because eligibility was decided from the SCHEDULED time
+rather than the age of the snapshot. So a final may be old; a live score has to
+be recent; an unstarted game has to be either genuinely unstarted or confirmed
+unstarted *since* its own start time, which is what a real delay looks like.
+
+Every league is fetched once at startup, and again the moment Scores is switched
+on. The rotation is a bandwidth measure for a display that has been running for
+days; on a first install it would otherwise leave the picture a quarter complete
+for ten minutes and three quarters complete for thirty.
+
+A plain rotation at ten minutes is plenty otherwise: last night's result does
+not change.
 An earlier version chased whichever league had a game in progress and tightened
 to two minutes to keep up with it — which was solving for standing at the screen
 following a game, and that is the opposite of the point.

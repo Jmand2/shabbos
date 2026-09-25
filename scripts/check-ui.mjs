@@ -35,6 +35,16 @@ const ok = (cond, msg, extra = '') => {
   else { fail += 1; console.log('  FAIL', msg, extra); }
 };
 
+// READING APP STATE FROM A TEST.
+//
+// Only function declarations escape the eval that loaded the app. `let` and
+// `const` at the top level of an eval are scoped to it, so `w.eval('sports')`
+// or `w.eval('sportsAt = ...')` does not touch the module's own binding — it
+// throws, or silently creates a NEW global and leaves the real one alone. That
+// has caught three tests here already, one of which passed for reasons
+// unconnected to the app. Drive behaviour through a declared function
+// (render, tick, sportsGames, sportsAges) rather than reaching for a variable.
+
 // A clock that advances: each `new Date()` returns base + however far we've stepped.
 async function boot(startIso, { settings = null, killMatchMedia = false, forecast = null, minyanim = null, scores = null } = {}) {
   const dom = new JSDOM(file('index.html'),
@@ -1175,8 +1185,11 @@ console.log('\n=== SP3c: the label tells the truth about which it is ===');
 console.log('\n=== SP4: the band is borrowed, then given back ===');
 {
   const when = '2026-09-22T20:00:00-04:00';
+  // A final, deliberately: the clock is advanced twenty-one minutes below to
+  // reach the interval, and a LIVE fixture would — correctly — stop being
+  // trustworthy on the way. A result does not go stale, which is the point.
   const boots = await withScores(when,
-    { 'hockey/nhl': [game('NJ', 2, 'NYR', 1, { state: 'in', detail: '2nd' })] });
+    { 'hockey/nhl': [game('NJ', 2, 'NYR', 1, { state: 'post', detail: 'Final' })] });
   const { w, advance } = boots;
   const band = $(w, 'weather');
   ok(band.querySelector('.sgame') === null, 'the band starts as the weather');
@@ -1212,6 +1225,41 @@ console.log('\n=== SP5: nothing to say, nothing said ===');
   ok($(off.w, 'weather').querySelector('.sgame') === null, 'and Off means off');
 }
 
+console.log('\n=== SP5b: a cached state may only claim what it can still prove ===');
+{
+  // One league is refreshed about every forty minutes. That is right for a
+  // result and useless for anything in motion.
+  const when = '2026-09-23T20:00:00-04:00';
+
+  const fresh = await withScores(when, {
+    'hockey/nhl': [game('NJ', 2, 'NYR', 1, { state: 'in', detail: '2nd 8:24', at: '2026-09-23T23:00Z' })],
+  });
+  ok(await fresh.w.eval('sportsGames().length') === 1, 'a live score just fetched is shown');
+  // Twenty minutes later the same snapshot is no longer evidence of anything.
+  fresh.advance(20 * 60000);
+  ok(await fresh.w.eval('sportsGames().length') === 0,
+    'and is dropped once the snapshot it came from is old');
+
+  // A result from the same snapshot survives, because a result does not change.
+  const done = await withScores(when, {
+    'hockey/nhl': [game('NJ', 2, 'NYR', 1, { state: 'post', detail: 'Final', at: '2026-09-23T23:00Z' })],
+  });
+  done.advance(6 * 3600 * 1000);
+  ok(await done.w.eval('sportsGames().length') === 1,
+    'a final is still true six hours after it was fetched');
+
+  // And a game cached as "not started" must not go on saying so through the
+  // game itself. Eligibility used to be decided from the scheduled time, so it
+  // advertised a 7:05 start all evening.
+  const stale = await withScores('2026-09-23T18:00:00-04:00', {
+    'baseball/mlb': [game('TB', 0, 'NYY', 0, { state: 'pre', detail: '7:05 PM', at: '2026-09-23T23:05Z' })],
+  });
+  ok(await stale.w.eval('sportsGames().length') === 1, 'before the start it is shown');
+  stale.advance(3 * 3600 * 1000);          // an hour into the game
+  ok(await stale.w.eval('sportsGames().length') === 0,
+    'and not once its own start time has been and gone');
+}
+
 console.log('\n=== SP6: the fetch is a plain rotation ===');
 {
   // An earlier version chased whichever league had a game in progress and
@@ -1230,6 +1278,39 @@ console.log('\n=== SP6: the fetch is a plain rotation ===');
     'in a steady rotation, whatever is being played');
 }
 
+console.log('\n=== SP7: everything is fetched once, then rotated ===');
+{
+  const when = '2026-09-23T08:00:00-04:00';
+  const { w } = await boot(when, { scores: feed({
+    'baseball/mlb': [game('NYM', 4, 'ATL', 3, { state: 'post' })],
+    'football/nfl': [game('NYG', 20, 'DAL', 17, { state: 'post' })],
+    'hockey/nhl': [game('NJ', 2, 'NYR', 1, { state: 'post' })],
+    'basketball/nba': [game('BKN', 101, 'NY', 98, { state: 'post' })],
+  }) });
+  // start() warms all four; without that the picture is a quarter complete for
+  // ten minutes and three quarters complete for thirty.
+  await new Promise((r) => setTimeout(r, 120));
+  const ages = await w.eval('sportsAges()');
+  ok(['MLB', 'NFL', 'NHL', 'NBA'].every((t) => ages.includes(t)),
+    `every league is loaded at startup (${ages})`);
+}
+
+console.log('\n=== SP7b: switching Scores on starts loading at once ===');
+{
+  const when = '2026-09-23T08:00:00-04:00';
+  const { w } = await boot(when, {
+    settings: { sports: 'off' },
+    scores: feed({ 'baseball/mlb': [game('NYM', 4, 'ATL', 3, { state: 'post' })] }),
+  });
+  ok(await w.eval('sportsAges()') === 'none fetched yet', 'Off fetched nothing');
+  const sel = w.document.getElementById('sports');
+  sel.value = '20';
+  sel.dispatchEvent(new w.Event('change'));
+  await new Promise((r) => setTimeout(r, 120));
+  ok((await w.eval('sportsAges()')).includes('MLB'),
+    'turning it on warms the cache rather than waiting for the rotation');
+}
+
 console.log('\n=== SP8: every interval offered is one the app accepts ===');
 {
   const { w } = await boot('2026-09-22T14:05:00-04:00');
@@ -1243,6 +1324,24 @@ console.log('\n=== SP8: every interval offered is one the app accepts ===');
     ok(v.document.getElementById('sports').value === value,
       `and the select shows ${value} rather than blanking`);
   }
+}
+
+console.log('\n=== SP9: a stored "false" is not true ===');
+{
+  const { w } = await boot('2026-09-22T14:05:00-04:00',
+    { settings: { showWeather: 'false', seconds: 'false' } });
+  // Read from the sheet, not from localStorage: the app only writes there on a
+  // change, so reading it back here would just be reading this test's own seed.
+  // buildSettings ticks each box from the sanitised value, so the box IS the
+  // observable.
+  const seconds = w.document.getElementById('seconds').checked;
+  const weather = w.document.getElementById('showWeather').checked;
+  // Not "becomes false" — each falls back to its OWN default, true for the
+  // weather and false for the dial. The bug being fixed is that Boolean("false")
+  // is true, so the dial would have switched itself on.
+  ok(seconds === false, `the string "false" does not turn the dial on (${seconds})`);
+  ok(weather === true,
+    `and a non-boolean falls back to the default rather than being coerced (${weather})`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -562,7 +562,11 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
      weather do. Without a floor the band would shrink when they arrive and grow
      back when they leave, and every card below would jump twice an hour — on a
      display nobody is touching, movement is the one thing that gets noticed. */
-  min-height: clamp(96px, 15vh, 156px);
+  /* High enough that BOTH states sit on it. At 15vh the weather band was
+     naturally taller than the floor, so the floor never bound and the cards
+     still shifted nine pixels each time the scores came and went. A floor only
+     stops a jump if it is above what either side reaches on its own. */
+  min-height: clamp(108px, 17.5vh, 172px);
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;

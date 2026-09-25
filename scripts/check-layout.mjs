@@ -43,16 +43,21 @@ const TYPES = {
 
 // The page under test, with the clock frozen and settings injected before
 // app.js runs. Nothing else about index.html is changed.
-async function pageHtml(at, settings) {
+async function pageHtml(at, settings, scores) {
   const src = await readFile(join(ROOT, 'index.html'), 'utf8');
   const boot = `<script>
     (() => {
       const Real = Date; const fixed = new Real(${JSON.stringify(at)}).getTime();
+      let skew = 0;
+      // Nudgeable, so a test can reach a timed event — the scores band appears
+      // on an interval — without waiting it out in real seconds.
+      window.__advance = (ms) => { skew += ms; };
       window.Date = class extends Real {
-        constructor(...a) { super(...(a.length ? a : [fixed])); }
-        static now() { return fixed; }
+        constructor(...a) { super(...(a.length ? a : [fixed + skew])); }
+        static now() { return fixed + skew; }
       };
       localStorage.setItem('shabbos-clock-settings', ${JSON.stringify(JSON.stringify(settings))});
+      ${scores ? `localStorage.setItem('shabbos-clock-sports', ${JSON.stringify(JSON.stringify(scores))});` : ''}
     })();
   </script>`;
   return src.replace('<script src="vendor/kosher-zmanim.min.js"></script>',
@@ -66,7 +71,7 @@ const server = createServer(async (req, res) => {
   try {
     if (path === '/' || path === '/index.html') {
       res.writeHead(200, { 'content-type': 'text/html' });
-      res.end(await pageHtml(current.at, current.settings));
+      res.end(await pageHtml(current.at, current.settings, current.scores));
       return;
     }
     // The forecast never leaves this process: a layout test must not depend on
@@ -113,6 +118,9 @@ function forecast(at) {
     current: { time: stamp(base), temperature_2m: 61, apparent_temperature: 55, weather_code: 3, is_day: 1 },
   };
 }
+
+const route_ok = (r, body) =>
+  r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
 let pass = 0;
 let fail = 0;
@@ -223,9 +231,10 @@ for (const view of VIEWS) {
     settings: { shuls: ['beth-aaron', 'ohr-saadya'], theme: 'night', ...(view.settings ?? {}) },
   };
   const page = await browser.newPage({ viewport: { width: view.size[0], height: view.size[1] } });
-  // Keep the forecast local and deterministic.
+  // Keep the forecast local and deterministic, and the scoreboard out entirely.
   await page.route('**/api.open-meteo.com/**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(forecast(view.at)) }));
+  await page.route('**site.api.espn.com**', (route) => route.abort());
 
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -257,6 +266,76 @@ for (const view of VIEWS) {
   await page.close();
 }
 
+/* The scores band ---------------------------------------------------------
+   The densest thing on the display and the newest: five games, three-digit
+   basketball scores, a playoff label, a long status, and the narrowest iPad.
+   It borrows the weather band, so it also must not resize it — everything
+   below would jump twice an hour. */
+{
+  console.log('  scores band');
+  const at = '2026-09-24T08:00:00-04:00';
+  const y = '2026-09-23';
+  const g = (league, a, as, h, hs, extra = {}) => ({
+    league, post: false, local: true, a, as: String(as), h, hs: String(hs),
+    state: 'post', detail: 'Final', at: `${y}T23:30Z`, ...extra,
+  });
+  current = {
+    at,
+    settings: { theme: 'night', sports: '2' },
+    scores: { leagues: {
+      NBA: { at: Date.parse(at), games: [
+        g('NBA', 'BKN', 128, 'NY', 131, { detail: 'Final/OT' }),
+        g('NBA', 'BOS', 109, 'PHI', 104),
+      ] },
+      MLB: { at: Date.parse(at), games: [
+        g('MLB', 'LAD', 3, 'SD', 2, { post: true, local: false, detail: 'Final/10' }),
+        g('MLB', 'TB', 4, 'NYY', 7),
+      ] },
+      NHL: { at: Date.parse(at), games: [
+        g('NHL', 'NJ', 2, 'NYR', 1, { state: 'in', detail: '3rd 04:12', at: `2026-09-24T11:30Z` }),
+      ] },
+    } },
+  };
+
+  for (const size of [[1180, 820], [768, 1024]]) {
+    const page = await browser.newPage({ viewport: { width: size[0], height: size[1] } });
+    await page.route('**/api.open-meteo.com/**', (r) => route_ok(r, forecast(at)));
+    // Sealed off from the real scoreboard. Without this the startup warm-up
+    // fetches ESPN for real and replaces the fixture with whatever is on
+    // tonight — the test then measures a board nobody chose.
+    await page.route('**site.api.espn.com**', (r) => r.abort());
+    await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
+    await page.waitForTimeout(1200);
+
+    const before = await page.evaluate(() =>
+      Math.round(document.querySelector('.card').getBoundingClientRect().top));
+
+    // Reach the interval through the real scheduler.
+    await page.evaluate(() => { tick(); window.__advance(3 * 60000); tick(); });
+    await page.waitForTimeout(300);
+
+    const m = await page.evaluate(MEASURE);
+    const band = await page.evaluate(() => ({
+      games: document.querySelectorAll('.sgame').length,
+      top: Math.round(document.querySelector('.card').getBoundingClientRect().top),
+      label: document.querySelector('.ssub')?.textContent ?? '',
+      clipped: [...document.querySelectorAll('.sgame')].some((el) => {
+        const box = el.closest('.weather').getBoundingClientRect();
+        const r = el.getBoundingClientRect();
+        return r.right > box.right + 1 || r.bottom > box.bottom + 1;
+      }),
+    }));
+
+    console.log(`    ${size.join('x')}  ${band.games} games · "${band.label}"`);
+    ok(band.games === 5, `all five are shown (${band.games})`);
+    ok(!band.clipped, 'none of them overflows the band');
+    ok(m.overflow.length === 0, 'and nothing else on the screen does either',
+      m.overflow.slice(0, 3).join(' | '));
+    ok(band.top === before, `the band does not resize when it swaps (${before} -> ${band.top})`);
+    await page.close();
+  }
+}
+
 /* The flight layer -------------------------------------------------------
    The car laps the screen boundary, so unlike everything else that flies past
    it should be whole the entire time. Its margin was a constant written when
@@ -269,6 +348,7 @@ for (const view of VIEWS) {
   current = { at: '2026-09-25T14:00:00-04:00', settings: { theme: 'night' } };
   const page = await browser.newPage({ viewport: { width: 1180, height: 820 } });
   await page.route('**/api.open-meteo.com/**', (r) => r.abort());
+  await page.route('**site.api.espn.com**', (r) => r.abort());
   await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
   await page.waitForTimeout(1200);
 

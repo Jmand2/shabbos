@@ -29,6 +29,11 @@ const SPORTS_MAX = 5;
 // days out is not.
 const SPORTS_BACK_MS = 20 * 3600 * 1000;
 const SPORTS_AHEAD_MS = 14 * 3600 * 1000;
+// A live score is only as true as the snapshot it came from. One league is
+// refreshed about every forty minutes, which is fine for a result and useless
+// for a game in play — past this, "2nd 8:24" is a guess wearing a fact's
+// clothes.
+const SPORTS_LIVE_TRUST_MS = 15 * 60000;
 
 // Abbreviations are scoped per league deliberately. "Rangers" is NYR in hockey
 // and TEX in baseball, "Giants" is NYG in football and SF in baseball, and
@@ -90,9 +95,22 @@ function sportsNextLeague() {
   return league;
 }
 
+// Every league at once, once. The rotation is a bandwidth measure for a display
+// that has been running for days; on a first install, after a cache clear, or
+// the moment Scores is switched on, it means the picture is a quarter complete
+// for ten minutes and three quarters complete for thirty. Four responses one
+// time is nothing against making the first thing somebody sees true.
+async function warmSports() {
+  if (settings.sports === 'off') return;
+  await Promise.allSettled(LEAGUES.map((l) => fetchLeague(l)));
+}
+
 async function refreshSports() {
   if (settings.sports === 'off') return;
-  const league = sportsNextLeague();
+  await fetchLeague(sportsNextLeague());
+}
+
+async function fetchLeague(league) {
   try {
     const res = await fetch(
       `https://site.api.espn.com/apis/site/v2/sports/${league.id}/scoreboard`,
@@ -111,6 +129,28 @@ async function refreshSports() {
   } catch { /* this is the least important thing here; it fails silently */ }
 }
 
+// What a cached game is still entitled to claim.
+//
+// The scoreboard is fetched one league at a time and each is refreshed only
+// every forty minutes or so. That is exactly right for a final — it does not
+// change, so an old snapshot of it is still true — and wrong for everything
+// else. A game cached as `in` goes on saying "2nd 8:24" long after the period
+// ended; a game cached as `pre` goes on advertising a start time that has been
+// and gone, and because eligibility was decided from the SCHEDULED time rather
+// than the age of the snapshot, it stayed on screen through the whole game it
+// claimed had not started.
+//
+// So: a final may be old. A live score has to be recent. An unstarted game has
+// to be either genuinely unstarted, or confirmed unstarted since its own start
+// time — which is what a real delay looks like.
+function sportsTrustworthy(game, snapshotAt, t) {
+  if (game.state === 'post') return true;
+  if (game.state === 'in') return t - snapshotAt <= SPORTS_LIVE_TRUST_MS;
+  const start = Date.parse(game.at);
+  if (Number.isNaN(start)) return false;
+  return t < start || snapshotAt > start;
+}
+
 // FINISHED GAMES FIRST, most recent first.
 //
 // This is the whole point and the first version had it upside down. What
@@ -123,11 +163,14 @@ function sportsGames(now = new Date()) {
   const t = now.getTime();
   const rank = (g) => (g.state === 'post' ? 0 : g.state === 'in' ? 2 : 4) + (g.local ? 0 : 1);
   return Object.values(sports.leagues ?? {})
-    .flatMap((l) => l.games ?? [])
+    // Carry each league's fetch time onto its games. It was stored and then
+    // dropped here, which is how a stale state could pass as a current one.
+    .flatMap((l) => (l.games ?? []).map((g) => ({ ...g, snap: l.at ?? 0 })))
     .filter((g) => {
       const when = Date.parse(g.at);
       if (Number.isNaN(when)) return false;
-      return when > t - SPORTS_BACK_MS && when < t + SPORTS_AHEAD_MS;
+      if (when <= t - SPORTS_BACK_MS || when >= t + SPORTS_AHEAD_MS) return false;
+      return sportsTrustworthy(g, g.snap, t);
     })
     .sort((a, b) => rank(a) - rank(b)
       // A result: the latest one is the one you have not seen. Anything else:
@@ -162,9 +205,23 @@ function sportsLabel(games, now) {
   const lead = games[0];
   if (!lead) return 'NY &amp; NJ';
   if (lead.state === 'in') return 'Live now';
-  if (lead.state !== 'post') return 'Later today';
+  if (lead.state !== 'post') {
+    // The window reaches fourteen hours ahead, which crosses midnight in the
+    // evening — a game at one tomorrow afternoon is not "later today".
+    const start = new Date(Date.parse(lead.at));
+    return start.toDateString() === now.toDateString() ? 'Later today' : 'Tomorrow';
+  }
   const when = new Date(Date.parse(lead.at));
   return when.toDateString() === now.toDateString() ? 'Final' : 'Last night';
+}
+
+// One line for the status panel: how old each league's scoreboard is.
+function sportsAges() {
+  const now = Date.now();
+  const parts = LEAGUES
+    .filter((l) => sports.leagues?.[l.tag]?.at)
+    .map((l) => `${l.tag} ${Math.round((now - sports.leagues[l.tag].at) / 60000)}m`);
+  return parts.length ? parts.join(' · ') : 'none fetched yet';
 }
 
 let lastSports = '';

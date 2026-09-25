@@ -35,7 +35,9 @@ function sanitise(raw) {
   }
   if (!Array.isArray(out.shuls)) out.shuls = DEFAULTS.shuls;
   for (const key of ['seconds', 'showHorizon', 'showZmanim', 'showWeather']) {
-    out[key] = Boolean(out[key]);
+    // Not Boolean(): a legacy or hand-edited value of the STRING "false" is
+    // truthy, and the setting would come back on every time it was read.
+    out[key] = typeof out[key] === 'boolean' ? out[key] : DEFAULTS[key];
   }
   return out;
 }
@@ -112,7 +114,10 @@ async function renderStatus() {
       ? `${buildStamp.commit} · ${ago(buildStamp.built_at)}` : 'unstamped'],
     ['App cache', await cacheVersion()],
     ['Scores', settings.sports === 'off' ? 'off'
-      : `${sportsGames().length} on screen · every ${settings.sports} min`],
+      : `${sportsGames().length} shown · band every ${settings.sports} min`],
+    // Age, not count. "Why does that say the Rangers are in the second period?"
+    // is answered by how old the snapshot is, and by nothing else.
+    ...(settings.sports === 'off' ? [] : [['Score data', sportsAges()]]),
     ['Network', navigator.onLine ? 'online' : 'offline'],
     ['Screen wake lock', wakeState],
     ['Minyan data', days.length
@@ -190,7 +195,15 @@ function buildSettings() {
     // same span and the same hours — only different numbers. Clear the cache or
     // the board keeps the degrees it already had.
     $(id).addEventListener('change', () => {
-      settings[key] = $(id).value; lastWeather = ''; save(); render();
+      const was = settings[key];
+      settings[key] = $(id).value;
+      lastWeather = '';
+      save();
+      // Switching Scores on from Off means there is nothing cached at all: the
+      // generic handler would save, repaint, and leave the band empty until the
+      // rotation happened to come round. Start loading now.
+      if (key === 'sports' && was === 'off' && settings.sports !== 'off') warmSports();
+      render();
     });
   }
   for (const key of ['seconds', 'showHorizon', 'showZmanim', 'showWeather']) {

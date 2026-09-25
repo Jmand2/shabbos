@@ -28,7 +28,8 @@ async function start() {
   refreshMinyanim();
 
   refreshWeather();
-  refreshSports();
+  // Everything once, then the cheap rotation.
+  warmSports();
 
   setInterval(render, 30000);
   setInterval(refreshMinyanim, 1800000);
