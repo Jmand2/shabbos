@@ -264,6 +264,47 @@ function sportsAges() {
 
 let lastSports = '';
 
+
+/* Sport marks -------------------------------------------------------------
+
+   A shape reads from across the room before three capitals do, and the whole
+   point of this strip is that you can take it in on the way out of the door.
+   The league tag stays next to it: a baseball and a basketball are both a
+   circle with lines on it at this size, and the letters are what tell them
+   apart when the icon is only a hint.
+
+   Drawn rather than fetched. An emoji is a different glyph on every device and
+   a sprite sheet is another file to keep in step with the app shell, whereas
+   these cost nothing and inherit their colour from the text beside them.
+
+   A postseason game wears a crown. October baseball is worth a glance whoever
+   is playing, and a crown says that in less width than "· Playoff" did. */
+const SPORT_ART = {
+  MLB: '<circle cx="12" cy="12" r="8.6"/>'
+    + '<path d="M6 6.1c2.5 2.5 2.5 9.3 0 11.8M18 6.1c-2.5 2.5-2.5 9.3 0 11.8"/>',
+  NBA: '<circle cx="12" cy="12" r="8.6"/>'
+    + '<path d="M12 3.4v17.2M3.4 12h17.2M6.1 6c2.6 2.6 2.6 8.8 0 11.4M17.9 6c-2.6 2.6-2.6 8.8 0 11.4"/>',
+  // Laces only, no seam line down the middle: at thirty pixels a horizontal
+  // rule with four ticks crossing it closed up into a solid blob.
+  NFL: '<ellipse cx="12" cy="12" rx="8.8" ry="5.6"/>'
+    + '<path d="M9.4 10.5v3M12 10.1v3.8M14.6 10.5v3"/>',
+  NHL: '<ellipse cx="12" cy="9.2" rx="7.8" ry="2.9"/>'
+    + '<path d="M4.2 9.2v5c0 1.6 3.5 2.9 7.8 2.9s7.8-1.3 7.8-2.9v-5"/>',
+};
+// Path data only: three peaks and a band, sitting above the ball's box.
+const SPORT_CROWN = 'M4.3 -1.4 5.5 -8.8 9.2 -5.2 12 -10 14.8 -5.2 18.5 -8.8 19.7 -1.4Z';
+
+function sportsIcon(tag, post) {
+  const art = SPORT_ART[tag];
+  if (!art) return '';
+  // The crown sits ABOVE the ball rather than shrinking it, so a postseason
+  // game and an ordinary one show the same size ball and only differ by what
+  // is on top of it.
+  return `<svg class="sicon" viewBox="${post ? '0 -11 24 35' : '0 0 24 24'}" aria-hidden="true">`
+    + (post ? `<path class="scrown" d="${SPORT_CROWN}"/>` : '')
+    + `<g class="sball">${art}</g></svg>`;
+}
+
 function renderSports(now = new Date()) {
   const el = $('weather');
   const games = sportsGames(now);
@@ -280,8 +321,9 @@ function renderSports(now = new Date()) {
     const an = Number(g.as);
     const hn = Number(g.hs);
     const decided = !pending && !Number.isNaN(an) && !Number.isNaN(hn) && an !== hn;
-    return `<div class="sgame${g.state === 'in' ? ' live' : ''}">`
-      + `<div class="sleague">${esc(g.league)}${g.post ? ' · Playoff' : ''}</div>`
+    return `<div class="sgame${g.state === 'in' ? ' live' : ''}${g.post ? ' post' : ''}">`
+      + `<div class="sleague">${esc(g.league)}</div>`
+      + sportsIcon(g.league, g.post)
       + score(g.a, g.as, decided && an > hn)
       + score(g.h, g.hs, decided && hn > an)
       + `<div class="sstate">${esc(g.detail)}</div></div>`;

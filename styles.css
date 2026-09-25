@@ -791,7 +791,10 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
-  gap: clamp(8px, 1.2vw, 20px);
+  /* Wider than it was. Each game now opens with a sport mark, and at the old
+     spacing the next game's ball sat hard against the previous game's score —
+     it read as though the icon belonged to the number before it. */
+  gap: clamp(14px, 1.9vw, 26px);
   min-width: 0;
   align-items: center;
 }
@@ -803,7 +806,7 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
    the two scores line up under each other. */
 .sgame {
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: auto auto auto;
   justify-content: start;
   align-content: center;
   column-gap: 0.55em;
@@ -811,6 +814,31 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   min-width: 0;
 }
 .sleague, .sstate { grid-column: 1 / -1; }
+/* The sport mark, down the left of the two team rows.
+   It spans both so it gets real size — at the league label's 11px a crown is
+   a smudge — and it is the row height, not a fixed pixel count, that sets it,
+   so it tracks the rest of the strip as the board scales. */
+.sicon {
+  grid-column: 1;
+  grid-row: 2 / 4;
+  align-self: center;
+  width: clamp(18px, 2.8vh, 34px);
+  height: auto;
+  margin-right: 0.15em;
+  overflow: visible;
+}
+.sicon .sball {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--text-2);
+  opacity: 0.85;
+}
+/* The one thing on the strip allowed to be gold besides a live game. */
+.sicon .scrown { fill: var(--accent); stroke: none; }
+.sgame.live .sicon .sball { color: var(--accent); opacity: 1; }
 .sleague {
   font-size: clamp(8px, 1.05vh, 11px);
   font-weight: 600;
@@ -832,12 +860,18 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 /* The winner keeps full weight; the other steps back. Nothing is coloured —
    this is a scoreboard, not a result anybody here is invested in. */
 .steam.lead { color: var(--text); font-weight: 700; }
+/* Placed explicitly. .steam is display: contents, so these are grid items of
+   .sgame itself — and once the icon took column 1, letting them auto-flow put
+   the home team's abbreviation into the icon's column and pushed its score off
+   the end of the row. */
 .sabbr {
+  grid-column: 2;
   font-size: clamp(12px, 1.8vh, 21px);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 .sscore {
+  grid-column: 3;
   font-size: clamp(15px, 2.2vh, 26px);
   font-weight: 600;
   font-variant-numeric: tabular-nums lining-nums;

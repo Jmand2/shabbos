@@ -390,6 +390,14 @@ for (const view of VIEWS) {
     await page.evaluate(() => { tick(); window.__advance(3 * 60000); tick(); });
     await page.waitForTimeout(300);
 
+    // The band is its own picture. It is the densest thing on the display and
+    // the sport marks live only here, so a full-screen shot of the board shows
+    // none of it.
+    if (keepShots) {
+      await page.locator('.weather.sports').screenshot({
+        path: join(SHOTS, `scores-${size[0]}x${size[1]}.png`) });
+    }
+
     const m = await page.evaluate(MEASURE);
     const band = await page.evaluate(() => ({
       games: document.querySelectorAll('.sgame').length,
