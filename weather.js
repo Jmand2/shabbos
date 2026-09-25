@@ -54,8 +54,19 @@ function localHour(iso) {
   return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : null;
 }
 
-const degrees = (f) => (f == null || Number.isNaN(f) ? null
-  : Math.round(settings.units === 'C' ? (f - 32) * (5 / 9) : f));
+// Always fetched in Fahrenheit and converted here, so the toggle costs no
+// refetch and goes on working with no network at all.
+const degrees = (f) => {
+  if (f == null || Number.isNaN(f)) return null;
+  const c = (f - 32) * (5 / 9);
+  if (settings.units === 'C') return Math.round(c);
+  if (settings.units === 'K') return Math.round(c + 273.15);
+  return Math.round(f);
+};
+
+// Kelvin is not a degree — it is written 291 K, with a space and no ring. The
+// ring is hard-coded in four places, so the mark lives here instead.
+const degreeMark = () => (settings.units === 'K' ? '\u202fK' : '\u00b0');
 
 // WMO code -> the glyph to draw and what to call it. Grouped the way someone
 // glancing at a wall groups them: the difference between 61 and 63 is "rain",
@@ -283,7 +294,7 @@ const WEATHER_MM_FLOOR = 0.2;
 function amountOf(mm) {
   const v = Number(mm);
   if (!Number.isFinite(v) || v < WEATHER_MM_FLOOR) return null;
-  if (settings.units === 'C') {
+  if (settings.units !== 'F') {
     return `<span class="wpop wamt">${v < 10 ? v.toFixed(1) : Math.round(v)}mm</span>`;
   }
   const inches = v / 25.4;
@@ -330,7 +341,7 @@ function weatherNote(rows) {
 
 let lastWeather = '';
 
-function renderWeather(now, info) {
+function renderWeather(now, info, withWet = true) {
   const el = $('weather');
   const { span, rows } = weatherWindow(now, info);
   el.hidden = !settings.showWeather || !rows.length;
@@ -353,7 +364,7 @@ function renderWeather(now, info) {
   // change what you put on. Otherwise it is noise beside the real number.
   const feels = degrees(cur.apparent_temperature);
   const feelsLine = feels != null && temp != null && Math.abs(feels - temp) >= 3
-    ? `<span class="wfeels">Feels ${feels}°</span>` : '';
+    ? `<span class="wfeels">Feels ${feels}${degreeMark()}</span>` : '';
 
   // The separator is a character, not a margin. Letter-spaced small caps swallow
   // a 0.7em gap between two inline spans and the heading read as SUCCOSTHROUGH.
@@ -380,19 +391,19 @@ function renderWeather(now, info) {
     // separate them either: 61, 63 and 65 are light, moderate and heavy rain
     // and all three draw the same raindrop. The amount is the answer to the
     // question somebody is actually asking at the tile.
-    const wet = amountOf(r.mm) ?? (r.pop >= WEATHER_POP_FLOOR
-      ? `<span class="wpop">${Math.round(r.pop)}%</span>` : '');
+    const wet = !withWet ? '' : (amountOf(r.mm) ?? (r.pop >= WEATHER_POP_FLOOR
+      ? `<span class="wpop">${Math.round(r.pop)}%</span>` : ''));
     return `<div class="wcol${i === 0 ? ' now' : ''}">`
       + `<span class="whour">${i === 0 ? 'Now' : esc(hourOf(r.at))}</span>`
       + skyGlyph(r.sky.kind)
-      + `<span class="wtemp">${t == null ? '' : `${t}°`}</span>`
+      + `<span class="wtemp">${t == null ? '' : `${t}${degreeMark()}`}</span>`
       + `${wet}</div>`;
   }).join('');
 
   const html = `<div class="wnow">${skyGlyph(sky.kind)}`
-    + `<div class="wnow-read"><span class="wbig">${temp == null ? '--' : `${temp}°`}</span>`
+    + `<div class="wnow-read"><span class="wbig">${temp == null ? '--' : `${temp}${degreeMark()}`}</span>`
     + `<span class="wlabel">${esc(sky.label)}</span>`
-    + (range ? `<span class="wrange">${range.hi}° / ${range.lo}°</span>` : '')
+    + (range ? `<span class="wrange">${range.hi}${degreeMark()} / ${range.lo}${degreeMark()}</span>` : '')
     + `${feelsLine}</div></div>`
     + `<div class="whours"><p class="whead">${heading}${noted}</p>`
     + `<div class="wcols">${cols}</div></div>`;
@@ -401,6 +412,82 @@ function renderWeather(now, info) {
     lastWeather = html;
     el.innerHTML = html;
   }
+  fitWeather(el, () => renderWeather(now, info, false));
+}
+
+/* Filling the band ---------------------------------------------------------
+
+   The band's height is fixed on purpose: the scores borrow it, and a band that
+   changed size would move every card below it twice an hour. But the CONTENT
+   was fixed too — every size a clamp against the viewport — so how full the
+   band looked depended on what the weather happened to be doing. A dry night
+   has no precipitation row at all, and simply left that row's worth of height
+   empty rather than giving it to the temperatures.
+
+   So the strip is fitted to its band the way the cards are fitted to theirs:
+   grow until it would no longer fit, then stop. And if it cannot be read even
+   at the smallest size — twelve columns on a narrow iPad, every one of them
+   carrying an amount — the wet row is what goes, because a temperature nobody
+   can read is worth less than knowing it might rain. */
+const WX_MIN = 0.8;
+const WX_MAX = 1.9;
+
+function fitWeather(el, withoutWet) {
+  const hours = el.querySelector('.whours');
+  if (!hours || el.hidden || !el.clientHeight) return;
+
+  // MEASURED, NOT ASKED.
+  //
+  // The first version of this pinned the band's height and then trusted
+  // scrollHeight to report the overflow. It does not: for a grid with
+  // overflow: visible the browser reports scrollHeight === clientHeight to the
+  // pixel while the content spills out of both ends, which is the same
+  // blindness fitBoard() carries a paragraph about. The strip inflated to 1.32
+  // and pushed the band from its 143px floor to 155px, moving every card below
+  // it — which is the one thing this band's floor exists to prevent, since the
+  // scores borrow the same space.
+  //
+  // So the content is measured directly, against the height the band is
+  // entitled to: its floor, or its natural height at rest where that is taller.
+  el.style.setProperty('--wx-scale', 1);
+  const pad = parseFloat(getComputedStyle(el).paddingTop) * 2;
+  const target = el.clientHeight - pad;
+  if (!(target > 0)) return;
+
+  const parts = () => [...el.querySelectorAll('.wnow, .whours')];
+  const contentHeight = () => {
+    const boxes = parts().map((n) => n.getBoundingClientRect());
+    if (!boxes.length) return 0;
+    return Math.max(...boxes.map((r) => r.bottom)) - Math.min(...boxes.map((r) => r.top));
+  };
+
+  const fits = (v) => {
+    el.style.setProperty('--wx-scale', v);
+    if (contentHeight() > target + 1) return false;
+    // Width still matters: twelve columns can run off the side long before
+    // they run out of height.
+    const box = el.getBoundingClientRect();
+    return [...el.querySelectorAll('.wcol, .wnow-read, .whead')].every((n) => {
+      const r = n.getBoundingClientRect();
+      return r.right <= box.right + 1 && r.left >= box.left - 1;
+    });
+  };
+
+  if (!fits(WX_MIN)) {
+    // Nothing left to shrink. Drop the wet row and fit what remains.
+    if (withoutWet && el.querySelector('.wpop')) { withoutWet(); return; }
+    el.style.setProperty('--wx-scale', WX_MIN);
+    return;
+  }
+  if (fits(WX_MAX)) return;
+
+  let lo = WX_MIN;
+  let hi = WX_MAX;
+  for (let i = 0; i < 8; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) lo = mid; else hi = mid;
+  }
+  fits(lo);
 }
 
 async function refreshWeather() {

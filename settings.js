@@ -21,7 +21,7 @@ const CHOICES = {
   accent: ['brass', 'copper', 'sage', 'ice', 'purple'],
   clockSize: ['0.8', '1', '1.25'],
   face: ['sturdy', 'classic', 'elegant', 'clean'],
-  units: ['F', 'C'],
+  units: ['F', 'C', 'K'],
   sports: ['off', '2', '5', '10', '20', '30'],
 };
 

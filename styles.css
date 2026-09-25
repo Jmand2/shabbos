@@ -557,6 +557,11 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
    the left, and the hours ahead spread across the rest. It takes its band out
    of the cards, which were taller than anything they had to say. */
 .weather {
+  /* How much of its own band the strip is spending. Set by fitWeather(), which
+     grows the text until it would no longer fit — the band's HEIGHT is fixed so
+     the cards below never move, and this is what stops a fixed height meaning a
+     half-empty one on a dry day. */
+  --wx-scale: 1;
   /* Shrinkable, but never clipped. A max-height with overflow: hidden stopped
      it starving the cards and started it cutting off its own temperatures
      instead, which looks exactly like a working strip. It is made short by
@@ -667,7 +672,7 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   min-width: 0;
 }
 .whour {
-  font-size: clamp(9px, 1.3vh, 13px);
+  font-size: calc(clamp(9px, 1.3vh, 13px) * var(--wx-scale));
   font-weight: 600;
   letter-spacing: 0.06em;
   /* Not uppercased. "7P" and "12A" read as part numbers; the lower-case
@@ -678,14 +683,14 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 /* The hour you are standing in, told apart from the eleven that follow it. */
 .wcol.now .whour { color: var(--accent); }
 .wtemp {
-  font-size: clamp(13px, 2.1vh, 24px);
+  font-size: calc(clamp(13px, 2.1vh, 24px) * var(--wx-scale));
   font-weight: 600;
   font-variant-numeric: tabular-nums lining-nums;
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
 .wpop {
-  font-size: clamp(9px, 1.2vh, 12px);
+  font-size: calc(clamp(9px, 1.2vh, 12px) * var(--wx-scale));
   font-weight: 600;
   color: var(--night);
   font-variant-numeric: tabular-nums lining-nums;
@@ -696,7 +701,9 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
    it is in and no shape can be filled by accident. */
 .wicon {
   display: block;
-  width: clamp(26px, 4.2vh, 44px);
+  /* The glyph grows with the numerals under it, or a filled band is a band of
+     big temperatures under unchanged little clouds. */
+  width: calc(clamp(26px, 4.2vh, 44px) * var(--wx-scale));
   height: auto;
   aspect-ratio: 1;
   fill: none;

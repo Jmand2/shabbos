@@ -1153,6 +1153,24 @@ console.log('\n=== WN: the weather says something only when there is something =
   ok(/^Dropping to \d+\u00b0 by /.test(dropping), `and so is a big fall (${dropping})`);
 }
 
+console.log('\n=== K: Kelvin ===');
+{
+  const when = '2026-09-25T14:05:00-04:00';
+  const read = async (units) => {
+    const { w } = await boot(when, { forecast: forecastFrom(when), settings: { units } });
+    return $(w, 'weather').querySelector('.wbig')?.textContent ?? '';
+  };
+  const f = await read('F');
+  const c = await read('C');
+  const k = await read('K');
+  ok(/^\d+\u00b0$/.test(f), `Fahrenheit is a degree (${f})`);
+  ok(/^\d+\u00b0$/.test(c), `so is Celsius (${c})`);
+  // 273 K, not 273°. Kelvin is not a degree and is not written as one.
+  ok(/^\d+\u202fK$/.test(k), `Kelvin is not (${k})`);
+  const n = (t) => Number(String(t).replace(/[^\d-]/g, ''));
+  ok(n(k) - n(c) === 273, `and it is Celsius plus 273 (${n(c)} -> ${n(k)})`);
+}
+
 console.log('\n=== AP: meridiems are am and pm, not a and p ===');
 {
   const when = '2026-09-25T14:05:00-04:00';

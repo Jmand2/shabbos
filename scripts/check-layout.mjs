@@ -163,6 +163,19 @@ const MEASURE = () => {
     }
   };
 
+  // The weather strip's fit: how much of the band it is spending, and whether
+  // what it drew still sits inside it.
+  const wx = document.getElementById('weather');
+  if (wx && !wx.hidden && !wx.classList.contains('sports') && wx.clientHeight) {
+    const parts = [...wx.querySelectorAll('.wnow, .whours')].map((n) => n.getBoundingClientRect());
+    out.wx = parts.length ? {
+      scale: Math.round(parseFloat(getComputedStyle(wx).getPropertyValue('--wx-scale')) * 100) / 100,
+      content: Math.round(Math.max(...parts.map((r) => r.bottom))
+        - Math.min(...parts.map((r) => r.top))),
+      room: Math.round(wx.clientHeight - (parseFloat(getComputedStyle(wx).paddingTop) * 2)),
+    } : null;
+  }
+
   out.orphans = [];
   out.columns = [];
   out.widthUsed = [];
@@ -323,6 +336,14 @@ for (const view of VIEWS) {
     ok(m.cards > 0, 'the board rendered cards');
     ok(m.orphans.length === 0, 'every column opens on a day, none left behind',
       m.orphans.join(' | '));
+    // The strip fills its band rather than leaving a precipitation row's worth
+    // of height empty on a dry day — but it may never GROW the band, because
+    // the scores borrow it and every card below would move.
+    if (m.wx) {
+      ok(m.wx.scale >= 1, `the weather fills its band (scale ${m.wx.scale})`);
+      ok(m.wx.content <= m.wx.room + 1,
+        `and does not outgrow it (${m.wx.content} in ${m.wx.room})`);
+    }
     if (view.wide) {
       ok(m.columns.every((n) => n >= 2),
         `a wide board splits its cards into columns (${m.columns.join(', ')})`);

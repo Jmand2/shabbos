@@ -380,6 +380,10 @@ function renderSports(now = new Date()) {
     + `<div class="sgames">${cols}</div>`;
   if (html !== lastSports) {
     lastSports = html;
+    // The band is shared, and the strip leaves its fit behind on the element.
+    // A scale chosen for twelve hours of weather has nothing to do with five
+    // scores, and it would be inherited by them.
+    el.style.removeProperty('--wx-scale');
     el.className = 'weather sports';
     el.innerHTML = html;
   }
