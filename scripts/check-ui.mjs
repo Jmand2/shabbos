@@ -1344,5 +1344,52 @@ console.log('\n=== SP9: a stored "false" is not true ===');
     `and a non-boolean falls back to the default rather than being coerced (${weather})`);
 }
 
+console.log('\n=== SP10: the band lands on the clock, not on uptime ===');
+{
+  // Started at an awkward moment on purpose. "Every five minutes" has to mean
+  // :00, :05, :10 — so somebody can look at the numerals and know the scores
+  // are ninety seconds off — not "five minutes after whenever this booted".
+  const when = '2026-09-23T08:03:17-04:00';
+  const { w } = await withScores(when,
+    { 'baseball/mlb': [game('NYM', 4, 'ATL', 3, { state: 'post', at: '2026-09-22T23:10Z' })] },
+    { settings: { sports: '5' } });
+
+  const minuteOf = (t) => new Date(t).getMinutes();
+
+  // The boundary itself, which is a pure function and can simply be asked.
+  const next = await w.eval('sportsBoundary(5, Date.now())');
+  ok(minuteOf(next) === 5, `from 08:03:17 the next showing is :05 (got :${minuteOf(next)})`);
+  const after = await w.eval(`sportsBoundary(5, ${next + 1})`);
+  ok(minuteOf(after) === 10, `then :10, not five minutes from whenever it fired (:${minuteOf(after)})`);
+  for (const mins of [2, 10, 20, 30]) {
+    const b = await w.eval(`sportsBoundary(${mins}, Date.now())`);
+    ok(minuteOf(b) % mins === 0,
+      `every ${mins} min lands on a multiple of ${mins} (:${String(minuteOf(b)).padStart(2, '0')})`);
+  }
+}
+
+console.log('\n=== SP10b: and it really waits for the boundary ===');
+{
+  // Driven through the scheduler rather than by reading sportsNext, which is a
+  // `let` and therefore invisible from here — see the note at the top.
+  const when = '2026-09-23T08:03:17-04:00';
+  const boots = await withScores(when,
+    { 'baseball/mlb': [game('NYM', 4, 'ATL', 3, { state: 'post', at: '2026-09-22T23:10Z' })] },
+    { settings: { sports: '5' } });
+  const { w, advance } = boots;
+  const band = $(w, 'weather');
+
+  w.eval('tick()');                     // arms it: next boundary is 08:05:00
+  ok(band.querySelector('.sgame') === null, 'nothing yet at 08:03:17');
+
+  advance(100 * 1000);                  // 08:04:57, still short of it
+  w.eval('tick()');
+  ok(band.querySelector('.sgame') === null, 'still nothing at 08:04:57');
+
+  advance(5 * 1000);                    // 08:05:02
+  w.eval('tick()');
+  ok(band.querySelector('.sgame') !== null, 'and it appears once the clock reaches :05');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

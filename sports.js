@@ -180,6 +180,25 @@ function sportsGames(now = new Date()) {
     .slice(0, SPORTS_MAX);
 }
 
+// On the wall clock, not on however long ago this happened to start.
+//
+// "Every five minutes" now means :00, :05, :10 — so somebody can glance at the
+// numerals above and know the scores are ninety seconds away, rather than
+// having to catch them by luck. That is the whole reason for choosing a short
+// interval: to wait for it deliberately, on the way out.
+//
+// Every interval offered divides an hour, so the boundaries are the same every
+// hour. They are computed from the epoch, which lands on the same minutes in
+// any timezone offset by a whole number of hours.
+//
+// This is deliberately NOT true of the family photos. Those should stay
+// unpredictable — it is the information that wants a timetable, not the
+// whimsy.
+function sportsBoundary(mins, now) {
+  const step = mins * 60000;
+  return Math.ceil((now + 1) / step) * step;
+}
+
 // Checked once per second by the clock's tick, but only actually evaluated when
 // the interval is up — sorting every game every second for a strip that shows
 // twice an hour would be silly.
@@ -187,9 +206,9 @@ function sportsTick() {
   const mins = Number(settings.sports);
   if (!mins) { sportsAt = 0; sportsNext = 0; return; }
   const now = Date.now();
-  if (!sportsNext) { sportsNext = now + mins * 60000; return; }
+  if (!sportsNext) { sportsNext = sportsBoundary(mins, now); return; }
   if (now < sportsNext) return;
-  sportsNext = now + mins * 60000;
+  sportsNext = sportsBoundary(mins, now);
   if (!sportsGames().length) return;      // nothing to say, so nothing is said
   sportsAt = now;
   render();

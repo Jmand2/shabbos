@@ -620,6 +620,15 @@ The interval in Settings is **how long you wait for the band to come round**, no
 how fresh the numbers are. Two minutes is there so somebody with their coat on
 can wait for it.
 
+And it lands on the **wall clock**, not on however long ago the display booted.
+Every five minutes means `:00`, `:05`, `:10` — so you can glance at the numerals
+above and know the scores are ninety seconds away, rather than having to catch
+them by luck. Every interval offered divides an hour, so the boundaries are the
+same every hour.
+
+That is deliberately **not** true of the family photos. Those should stay
+unpredictable: it is the information that wants a timetable, not the whimsy.
+
 Team abbreviations are scoped per league, which is the whole trap: **Rangers is
 NYR in hockey and TEX in baseball, Giants is NYG in football and SF in baseball,
 and Jets is NYJ and WPG.** A flat list of names would quietly follow three wrong

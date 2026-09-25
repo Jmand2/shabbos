@@ -795,12 +795,22 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   min-width: 0;
   align-items: center;
 }
+/* A two-column grid rather than a stack of full-width rows.
+   The rows were space-between across the whole column, so a game read as
+   "NYM · · · · · · 4" with the number stranded at the far edge — the eye had to
+   travel to pair a team with its score, which is the only thing the strip is
+   for. Name and number sit together now, and because both rows share the grid
+   the two scores line up under each other. */
 .sgame {
-  display: flex;
-  flex-direction: column;
-  gap: 0.18em;
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  align-content: center;
+  column-gap: 0.55em;
+  row-gap: 0.12em;
   min-width: 0;
 }
+.sleague, .sstate { grid-column: 1 / -1; }
 .sleague {
   font-size: clamp(8px, 1.05vh, 11px);
   font-weight: 600;
@@ -811,12 +821,12 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Two rows, away over home, so the eye reads a result rather than a sentence. */
+/* Two rows, away over home, so the eye reads a result rather than a sentence.
+   display: contents, so the abbreviation and the score become grid items of
+   .sgame itself and align with the row above. Colour and weight are inherited
+   properties, so .lead still reaches the children. */
 .steam {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5em;
+  display: contents;
   color: var(--text-2);
 }
 /* The winner keeps full weight; the other steps back. Nothing is coloured —
@@ -831,6 +841,8 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   font-size: clamp(15px, 2.2vh, 26px);
   font-weight: 600;
   font-variant-numeric: tabular-nums lining-nums;
+  /* Right-aligned so 128 over 98 still lines up on the units. */
+  text-align: right;
 }
 .sstate {
   font-size: clamp(8px, 1.05vh, 11px);

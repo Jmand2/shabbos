@@ -326,12 +326,43 @@ for (const view of VIEWS) {
       }),
     }));
 
-    console.log(`    ${size.join('x')}  ${band.games} games · "${band.label}"`);
+    // A team and its score have to read as one thing. They used to be
+    // space-between across the whole column — "NYM · · · · · · 4" — so the eye
+    // had to travel to pair them, which is the only thing this strip is for.
+    // Geometry, because display: contents changes layout and not the DOM, so
+    // this cannot be seen from jsdom at all.
+    const pairing = await page.evaluate(() => {
+      const out = { gap: 0, misaligned: 0 };
+      for (const g of document.querySelectorAll('.sgame')) {
+        const abbrs = [...g.querySelectorAll('.sabbr')];
+        const scores = [...g.querySelectorAll('.sscore')];
+        abbrs.forEach((a, i) => {
+          const s2 = scores[i];
+          if (!s2) return;
+          out.gap = Math.max(out.gap, s2.getBoundingClientRect().left
+            - a.getBoundingClientRect().right);
+        });
+        // The two scores of one game should sit under each other.
+        if (scores.length === 2) {
+          const d = Math.abs(scores[0].getBoundingClientRect().right
+            - scores[1].getBoundingClientRect().right);
+          if (d > 1) out.misaligned += 1;
+        }
+      }
+      return out;
+    });
+
+    console.log(`    ${size.join('x')}  ${band.games} games · "${band.label}"`
+      + ` · name-to-score ${Math.round(pairing.gap)}px`);
     ok(band.games === 5, `all five are shown (${band.games})`);
     ok(!band.clipped, 'none of them overflows the band');
     ok(m.overflow.length === 0, 'and nothing else on the screen does either',
       m.overflow.slice(0, 3).join(' | '));
     ok(band.top === before, `the band does not resize when it swaps (${before} -> ${band.top})`);
+    ok(pairing.gap <= 24,
+      `a score sits beside its team, not across the column (${Math.round(pairing.gap)}px)`);
+    ok(pairing.misaligned === 0,
+      `and the two scores of a game line up under each other (${pairing.misaligned} do not)`);
     await page.close();
   }
 }
