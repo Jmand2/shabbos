@@ -439,9 +439,20 @@
   // interval can ever offer.
   const PARADE_MIN = 7;
   const PARADE_MAX = 10;
-  // Close enough together to read as one event, far enough apart that ten
-  // vehicles do not leave stacked on top of one another.
+  // Close enough together that the whole parade is in the air at once — a lap
+  // takes the better part of a minute, so everything launched inside a few
+  // seconds is on screen together, which is the point of it.
   const PARADE_STAGGER_MS = 340;
+  // Two of the SAME vehicle share a lane and a path, so a nudge is not enough:
+  // the second would be hidden under the first for most of the way across.
+  // They get a real gap between them instead.
+  const PARADE_SAME_KIND_MS = 1100;
+  // Nothing launches later than this, so the last one out is still crossing
+  // while the first is. It is short because the rocket is: it clears the screen
+  // in under two seconds, where the train takes the better part of twenty, and
+  // a window measured against the train would have the rocket gone before the
+  // rest had left.
+  const PARADE_WINDOW_MS = 2200;
 
   // `force` is the deliberate launch, from the settings sheet or a test. It
   // skips the same guards send() skips: those are about whether the hour should
@@ -452,20 +463,38 @@
       if (!faces.length) return 0;
     }
     const n = PARADE_MIN + Math.floor(Math.random() * (PARADE_MAX - PARADE_MIN + 1));
-    // Drawn ONE AT A TIME rather than as one batch of n. The bag refuses to
-    // repeat within a single draw, so asking it for ten when there are eight
-    // vehicles returns eight and spins its guard doing it. Drawn singly it
-    // hands back its whole shuffled pool before reshuffling, so a parade of ten
-    // is eight different things and then two more — the most variety available,
-    // and any repeat is at least a full pool behind its twin rather than
-    // beside it.
-    const names = Array.from({ length: n }, () => vehicleBag()[0]).filter(Boolean);
-    names.forEach((name, i) => {
+    // Drawn freely, repeats and all — there are eight vehicles and up to ten
+    // going, so insisting on all-different would only mean a shorter parade.
+    const kinds = Object.keys(VEHICLES);
+    const used = new Map();
+    const lastOut = new Map();
+    let at = 0;
+    let sent = 0;
+    for (let i = 0; i < n; i += 1) {
+      // Free, except that nothing goes more than twice. Purely random draws
+      // clump — a kind pulled four times has to be spaced four times, and the
+      // tail of the parade ended up ten seconds behind its head, which is no
+      // longer one event. Twice is enough for a repeat to read as deliberate.
+      let name = kinds[Math.floor(Math.random() * kinds.length)];
+      for (let tries = 0; (used.get(name) ?? 0) >= 2 && tries < 20; tries += 1) {
+        name = kinds[Math.floor(Math.random() * kinds.length)];
+      }
+      used.set(name, (used.get(name) ?? 0) + 1);
+      at += PARADE_STAGGER_MS * (0.7 + (Math.random() * 0.6));
+      // The window caps the ordinary stagger; it never overrides the gap between
+      // two of the same vehicle. Clamping AFTER that push was a way of putting
+      // two identical trains on the path at the same instant, which is the one
+      // thing the push exists to prevent.
+      const base = Math.min(at, PARADE_WINDOW_MS);
+      const twin = lastOut.get(name);
+      const go = twin === undefined ? base : Math.max(base, twin + PARADE_SAME_KIND_MS);
+      lastOut.set(name, go);
       setTimeout(() => {
         try { fly(name); } catch (err) { console.error(err); }
-      }, (i * PARADE_STAGGER_MS) + (Math.random() * 220));
-    });
-    return names.length;
+      }, go);
+      sent += 1;
+    }
+    return sent;
   }
 
   // On the wall clock, not on however long this tab has happened to be open —
