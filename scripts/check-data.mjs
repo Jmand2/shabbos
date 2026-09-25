@@ -8,7 +8,7 @@
 //
 //   node scripts/check-data.mjs
 import { readFile } from 'node:fs/promises';
-import { cleanLabel, cleanTime, normaliseSections } from './fetch-minyanim.mjs';
+import { cleanLabel, cleanTime, normaliseSections, coversRange } from './fetch-minyanim.mjs';
 
 const OUT = new URL('../data/minyanim.json', import.meta.url);
 const GROUPS = ['shacharis', 'mincha', 'maariv'];
@@ -76,8 +76,8 @@ for (const day of days) {
 
    The wall's shuls are the ones with a site of their own in shuls.json, which
    is also what settings.js defaults to. */
-const WALL = JSON.parse(await readFile(new URL('../data/shuls.json', import.meta.url), 'utf8'))
-  .filter((s) => s.site).map((s) => s.slug);
+const WALL_ALL = JSON.parse(await readFile(new URL('../data/shuls.json', import.meta.url), 'utf8'));
+const WALL = WALL_ALL.filter((s) => s.site).map((s) => s.slug);
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
 for (const day of days.filter((d) => d >= today)) {
@@ -89,6 +89,59 @@ for (const day of days.filter((d) => d >= today)) {
     const morning = entry.shacharis?.length ?? 0;
     fail(`${day} ${slug}: ${morning} shacharis and nothing after — no mincha, no maariv. `
       + 'Either the source dropped it or data/overrides.json needs extending.');
+  }
+}
+
+/* [19] The override file is validated, not merely read -----------------------
+
+   `covers` is enforced by the merge, but everything else about an entry was
+   taken on trust: a typo in a slug, a service that does not exist, a time in a
+   shape cleanTime would reject, a range whose end precedes its start. All of
+   those fail SILENTLY — the entry simply does nothing, which is the worst
+   possible outcome for a file whose entire job is to be the last source of
+   times nobody else publishes. A hand-entered Yom Tov schedule that quietly
+   does not apply is indistinguishable from not having written it. */
+const OVERRIDES = JSON.parse(
+  await readFile(new URL('../data/overrides.json', import.meta.url), 'utf8'));
+const SLUGS = new Set(WALL_ALL.map((s) => s.slug));
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+const realDate = (d) => ISO.test(d) && !Number.isNaN(Date.parse(`${d}T12:00:00Z`))
+  && new Date(`${d}T12:00:00Z`).toISOString().slice(0, 10) === d;
+
+for (const [i, entry] of (OVERRIDES.entries ?? []).entries()) {
+  const at = `overrides[${i}]${entry.shul ? ` ${entry.shul}` : ''}`;
+  if (!entry.shul) fail(`${at}: no shul named`);
+  else if (!SLUGS.has(entry.shul)) fail(`${at}: not a shul in shuls.json`);
+  if (!entry.source) fail(`${at}: no source recorded — provenance is the point of this file`);
+
+  const range = coversRange(entry);
+  if (!range) {
+    fail(`${at}: "covers" is missing or malformed (want YYYY-MM-DD/YYYY-MM-DD, got ${JSON.stringify(entry.covers)})`);
+  } else {
+    if (!realDate(range.from) || !realDate(range.to)) fail(`${at}: covers names a date that does not exist (${entry.covers})`);
+    else if (range.from > range.to) fail(`${at}: covers ends before it starts (${entry.covers})`);
+  }
+
+  for (const [date, sections] of Object.entries(entry.days ?? {})) {
+    if (!realDate(date)) { fail(`${at}: "${date}" is not a date`); continue; }
+    if (range && (date < range.from || date > range.to)) {
+      fail(`${at}: ${date} is outside covers ${entry.covers} — it would never be applied`);
+    }
+    for (const [group, list] of Object.entries(sections)) {
+      if (group === 'edge') {
+        for (const [k, v] of Object.entries(list ?? {})) {
+          if (!['candles', 'havdalah'].includes(k)) fail(`${at} ${date}: "${k}" is not an edge time`);
+          else if (cleanTime(v) !== v) fail(`${at} ${date}: edge ${k} "${v}" is not a clean time`);
+        }
+        continue;
+      }
+      if (!GROUPS.includes(group)) { fail(`${at} ${date}: "${group}" is not a service`); continue; }
+      if (!Array.isArray(list)) { fail(`${at} ${date} ${group}: not a list`); continue; }
+      for (const row of list) {
+        if (cleanTime(row?.time) !== row?.time) fail(`${at} ${date} ${group}: time "${row?.time}"`);
+        if (cleanLabel(row?.label) !== row?.label) fail(`${at} ${date} ${group}: label "${row?.label}"`);
+      }
+    }
   }
 }
 

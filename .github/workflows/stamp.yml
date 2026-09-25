@@ -82,18 +82,22 @@ jobs:
           # an old shell forever. Deriving it from the commit is the only way
           # that promise survives a tired evening.
           perl -pi -e "s/^const VERSION = '[^']*';/const VERSION = '\Q$SHA\E';/" sw.js
+          # The same commit into the shell itself, so the RUNNING page can say
+          # what it is rather than having it inferred from a cache name.
+          perl -pi -e "s/^const BUILD = '[^']*';/const BUILD = '\Q$SHA\E';/" util.js
 
           grep -n "^const VERSION" sw.js
           cat version.json
           # A stamp that did not take would be silent and would break updates.
           grep -q "^const VERSION = '$SHA';" sw.js || { echo "sw.js was not stamped"; exit 1; }
+          grep -q "^const BUILD = '$SHA';" util.js || { echo "util.js was not stamped"; exit 1; }
 
       - name: Commit if changed
         if: env.skip != 'yes'
         run: |
           git config user.name  "shabbos-clock-bot"
           git config user.email "actions@github.com"
-          git add version.json sw.js
+          git add version.json sw.js util.js
           git diff --staged --quiet && exit 0
           # Skips CI on purpose: this commit is a stamp, not a change to test.
           git commit -m "Stamp build [skip ci]"

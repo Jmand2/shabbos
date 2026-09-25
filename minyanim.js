@@ -46,14 +46,31 @@ function daysShown(now, info) {
   return out;
 }
 
+// AN EMPTY PARSE IS NOT A SCHEDULE WITH NOTHING IN IT.
+//
+// `known` used to mean "an entry object exists", and the scraper produces one
+// whenever a page rendered the right date — including a page that listed no
+// services at all, which the aggregator serves as a normal 200 saying "there
+// are no Mincha minyanim scheduled". The board then read that as a schedule it
+// had confirmed, and said "Done for today. Tomorrow's times not confirmed yet"
+// about a shul whose times it had simply never obtained.
+//
+// The three states are genuinely different and the board says different things
+// about them:
+//   unavailable — nothing usable was ever obtained. Say so.
+//   awaiting    — services ARE on file for these days; today's have all been
+//                 and gone. That is a real "done for today".
+//   ok          — there is something still to come.
 function scheduleFor(slug, now, days) {
   const rows = [];
   let known = false;
   for (const day of days) {
     const entry = minyanim.days?.[isoOf(day)]?.[slug];
     if (!entry) continue;
-    known = true;
-    rows.push(...flatten(entry, day));
+    const some = flatten(entry, day);
+    // An entry only counts as knowledge if it carries a service.
+    if (some.length) known = true;
+    rows.push(...some);
   }
   if (!known) return { state: 'unavailable' };
 

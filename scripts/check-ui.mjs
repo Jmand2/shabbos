@@ -1013,6 +1013,40 @@ console.log('\n=== S4: the worker keeps one entry per path, and it is the newest
   ok(stored.length === 0, `and no scoreboard key exists to collapse (${stored.length})`);
 }
 
+console.log('\n=== E0: an empty parse is not a confirmed schedule ===');
+{
+  // The aggregator serves "there are no Mincha minyanim scheduled" as an
+  // ordinary 200, and the scraper writes an entry for it because the page did
+  // render the right date. That is not a schedule; it is a page with nothing on
+  // it, and the board used to announce it as "Done for today. Tomorrow's times
+  // not confirmed yet" — about a shul whose times it had never obtained.
+  const empty = { generated_at: new Date().toISOString(), days: {
+    '2026-09-22': { 'beth-aaron': { shacharis: [], mincha: [], maariv: [], fetched_at: '2026-09-22T06:00:00Z' } },
+    '2026-09-23': { 'beth-aaron': { shacharis: [], mincha: [], maariv: [], fetched_at: '2026-09-22T06:00:00Z' } },
+  } };
+  const { w } = await boot('2026-09-22T05:00:00-04:00',
+    { minyanim: empty, settings: { shuls: ['beth-aaron'] } });
+  const card = w.document.querySelector('.card').textContent;
+  ok(/unavailable/i.test(card), `it says the times are unavailable (${card.slice(0, 60)})`);
+  ok(!/Done for today/i.test(card), 'and not that the shul is done for today');
+}
+
+console.log('\n=== E0b: a real schedule that has been and gone still says so ===');
+{
+  // The other side of it: services ARE on file, and today's have all passed.
+  // That is a genuine "done for today" and must not be flattened into
+  // "unavailable" by the fix above.
+  const past = { generated_at: new Date().toISOString(), days: {
+    '2026-09-22': { 'beth-aaron': {
+      shacharis: [{ label: 'Shacharis', time: '6:30 AM' }],
+      mincha: [], maariv: [], fetched_at: '2026-09-22T06:00:00Z' } },
+  } };
+  const { w } = await boot('2026-09-22T23:30:00-04:00',
+    { minyanim: past, settings: { shuls: ['beth-aaron'] } });
+  const card = w.document.querySelector('.card').textContent;
+  ok(/Done for today/i.test(card), `a real schedule that has passed says so (${card.slice(0, 60)})`);
+}
+
 console.log('\n=== O: the board follows the order the person chose ===');
 {
   const four = ['ohr-saadya', 'beth-aaron', 'rinat', 'bnai-yeshurun'];

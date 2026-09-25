@@ -314,7 +314,7 @@ async function grab(slug, date, useDateParam) {
 // and still inside its covers is put back a moment later; anything that has
 // been removed from that file correctly disappears rather than living on as a
 // fossil nothing can account for.
-function stripHand(entry) {
+export function stripHand(entry) {
   const out = {};
   for (const [slug, e] of Object.entries(entry)) {
     if (!e?.hand) { out[slug] = e; continue; }
@@ -324,6 +324,12 @@ function stripHand(entry) {
       clean.edge = { ...clean.edge };
       for (const k of e.hand.edge) delete clean.edge[k];
       if (!Object.keys(clean.edge).length) delete clean.edge;
+    }
+    if (clean.sources) {
+      clean.sources = { ...clean.sources };
+      for (const g of e.hand.sections ?? []) delete clean.sources[g];
+      if (e.hand.edge?.length) delete clean.sources.edge;
+      if (!Object.keys(clean.sources).length) delete clean.sources;
     }
     delete clean.hand;
     out[slug] = clean;
@@ -336,6 +342,8 @@ function coversRange(entry) {
   const m = /^(\d{4}-\d{2}-\d{2})\/(\d{4}-\d{2}-\d{2})$/.exec(String(entry?.covers ?? ''));
   return m ? { from: m[1], to: m[2] } : null;
 }
+
+export { coversRange };
 
 export function applyOverrides(days, overrides) {
   let filled = 0;
@@ -400,9 +408,13 @@ export function applyOverrides(days, overrides) {
       // scrape's fetched_at, so the typed rows also looked twenty minutes old.
       // Provenance is the thing somebody reads to decide whether to trust a
       // time, so it has to say which time.
+      const sources = { ...(existing?.sources ?? {}) };
+      for (const g of handed) sources[g] = 'manual';
+      if (handedEdge.length) sources.edge = 'manual';
       days[date][entry.shul] = {
         ...normaliseSections(merged),
         ...(merged.edge ? { edge: merged.edge } : {}),
+        ...(Object.keys(sources).length ? { sources } : {}),
         fetched_at: existing?.fetched_at,
         hand: {
           source: entry.source,
@@ -484,9 +496,14 @@ async function main() {
       // a service. Anything else and the aggregator gets its turn, keeping the
       // edge times below, which are the shul's own and better than a
       // calculation.
+      const sources = {};
       for (const g of groups) {
-        if (clean[g]?.length) filled.add(key(shul.slug, date, g));
+        if (!clean[g]?.length) continue;
+        filled.add(key(shul.slug, date, g));
+        sources[g] = 'shul';
       }
+      if (clean.edge?.candles || clean.edge?.havdalah) sources.edge = 'shul';
+      if (Object.keys(sources).length) days[date][shul.slug].sources = sources;
     }
   }
 
@@ -540,10 +557,25 @@ async function main() {
       for (const g of groups) {
         keep[g] = filled.has(key(shul.slug, date, g)) ? (own?.[g] ?? []) : (fresh[g] ?? []);
       }
+      // [17] WHICH SOURCE SUPPLIED WHICH SERVICE, section by section.
+      //
+      // Provenance was a property of the DAY, and the day is now assembled from
+      // two or three places at once: a Shacharis off the shul's own site, a
+      // Mincha off the aggregator, a Maariv typed in from a PDF. One label for
+      // all of it could only ever be wrong about most of it, and provenance is
+      // exactly what somebody reads when they are deciding whether to believe a
+      // time.
+      const sources = { ...(own?.sources ?? {}) };
+      for (const g of groups) {
+        if (!filled.has(key(shul.slug, date, g)) && fresh[g]?.length) {
+          sources[g] = 'aggregator';
+        }
+      }
       days[date][shul.slug] = {
         ...fresh,
         ...keep,
         ...(ownEdge ? { edge: ownEdge } : {}),
+        ...(Object.keys(sources).length ? { sources } : {}),
         fetched_at: new Date().toISOString(),
       };
     }

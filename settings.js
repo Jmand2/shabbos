@@ -75,13 +75,29 @@ async function cacheVersion() {
 // days: a shul's own site covers today and tomorrow, and the aggregator covers
 // what is past that. When something looks wrong, which day came from where is
 // the question, so this answers it rather than averaging it away.
+// [17] WHICH SOURCE GAVE WHICH SERVICE. A day is assembled from two or three
+// places at once now — a Shacharis off the shul's own site, a Mincha off the
+// aggregator, a Maariv typed in from a calendar — and one label for the day
+// could only ever be right about part of it.
+const SOURCE_SHORT = { shul: 'site', aggregator: 'agg', manual: 'manual' };
+function sourceSummary(entry) {
+  const src = entry?.sources;
+  if (!src) return entry?.source === 'shul' ? 'site' : 'agg';
+  const parts = [];
+  for (const [g, label] of [['shacharis', 'Shacharis'], ['mincha', 'Mincha'],
+    ['maariv', 'Maariv'], ['edge', 'Candles']]) {
+    if (src[g]) parts.push(`${label} ${SOURCE_SHORT[src[g]] ?? src[g]}`);
+  }
+  return parts.join(' · ') || 'none';
+}
+
 function shulSources(now, days) {
   return chosenShuls().map((s) => {
     const parts = days.map((day) => {
       const entry = minyanim.days?.[isoOf(day)]?.[s.slug];
       const label = dayName(now, day).label.split(' · ')[0];
       if (!entry) return `${label} —`;
-      return `${label} ${entry.source === 'shul' ? 'site' : 'agg'}`
+      return `${label} ${sourceSummary(entry)}`
         + ` ${ago(entry.fetched_at ?? minyanim.generated_at)}`;
     });
     return [s.name, parts.join('  ·  ')];
@@ -121,18 +137,28 @@ async function renderStatus() {
   //
   // One VERSION is one generation and activate deletes the others, so the cache
   // name IS the running build.
+  // [20] THREE DIFFERENT BUILDS, and on the day it matters they are three
+  // different commits:
+  //   the PAGE you are looking at — BUILD, stamped into the shell itself;
+  //   the generation the worker has INSTALLED, which the next reload will run;
+  //   what is DEPLOYED on the server.
+  // The panel used to infer the first from the second, and a cache name says
+  // where files came from and not what is executing — after an install the new
+  // generation exists while the page in front of you is still the old one,
+  // which is exactly the window in which somebody asks.
   const shipped = buildStamp?.commit ?? null;
   const cached = await cacheVersion();
-  const running = cached.replace(/shabbos-clock-/g, '');
-  const known = running && !/^(none yet|unavailable)$/.test(running);
-  const behind = known && shipped && running !== shipped;
+  const installed = cached.replace(/shabbos-clock-/g, '');
+  const haveInstalled = installed && !/^(none yet|unavailable)$/.test(installed);
+  const page = typeof BUILD === 'string' ? BUILD : 'unknown';
+  const pending = haveInstalled && page !== 'dev' && installed !== page;
+  const behind = shipped && page !== 'dev' && page !== shipped;
 
   const rows = [
-    ['App build', known
-      ? `${running}${behind ? ' · older than deployed' : ' · current'}`
-      : `not cached yet${shipped ? ` · deployed ${shipped}` : ''}`],
-    ['Deployed', shipped
-      ? `${shipped} · ${ago(buildStamp.built_at)}${behind ? ' · reload to take it' : ''}`
+    ['Running page', `${page}${pending ? ' · update ready, reload pending' : ''}`],
+    ['Installed worker', haveInstalled ? installed : 'none yet'],
+    ['Latest deployed', shipped
+      ? `${shipped} · ${ago(buildStamp.built_at)}${behind && !pending ? ' · reload to take it' : ''}`
       : 'unstamped'],
     ['Scores', settings.sports === 'off' ? 'off'
       : `${sportsGames().length} shown · band every ${settings.sports} min`],

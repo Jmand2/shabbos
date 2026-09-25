@@ -11,6 +11,7 @@ const APP_FILES = [
 import { readFileSync } from 'node:fs';
 import {
   toText, renderedDate, parseSections, cleanLabel, cleanTime, normaliseSections,
+  applyOverrides, stripHand,
 } from './fetch-minyanim.mjs';
 
 const file = (name) => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
@@ -191,6 +192,58 @@ for (const [input, want] of [
   }
   must(dirty === 0, `data/minyanim.json carries ${dirty} row(s) normalisation would change`);
   console.log(dirty ? '' : '  data/minyanim.json is clean');
+}
+
+console.log('\n=== Overrides: fill only, never replace ===');
+{
+  const entry = {
+    shul: 'beth-aaron',
+    covers: '2026-09-25/2026-09-27',
+    source: 'the shul calendar',
+    entered_at: '2026-09-25',
+    days: {
+      '2026-09-25': { mincha: [{ label: 'Mincha', time: '6:35 PM' }] },
+      '2026-09-26': {
+        mincha: [{ label: 'Mincha', time: '6:25 PM' }],
+        edge: { havdalah: '7:39 PM' },
+      },
+      // Outside covers on purpose: it must never be written.
+      '2026-10-09': { maariv: [{ label: 'Maariv', time: '8:00 PM' }] },
+    },
+  };
+
+  const days = {
+    // A live Mincha already on file — the override must lose to it.
+    '2026-09-25': { 'beth-aaron': { shacharis: [{ label: 'Shacharis', time: '6:20 AM' }],
+      mincha: [{ label: 'Mincha', time: '6:40 PM' }], maariv: [] } },
+    // Nothing on file for Mincha — the override fills it.
+    '2026-09-26': { 'beth-aaron': { shacharis: [{ label: 'Shacharis', time: '7:00 AM' }],
+      mincha: [], maariv: [], edge: { candles: '7:37 PM' } } },
+    '2026-10-09': { 'beth-aaron': { shacharis: [], mincha: [], maariv: [] } },
+  };
+
+  applyOverrides(days, { entries: [entry] });
+  const d25 = days['2026-09-25']['beth-aaron'];
+  const d26 = days['2026-09-26']['beth-aaron'];
+  const d09 = days['2026-10-09']['beth-aaron'];
+
+  must(d25.mincha[0].time === '6:40 PM',
+    `a live source wins over a hand-entered one (${d25.mincha[0].time})`);
+  must(d26.mincha[0].time === '6:25 PM',
+    `and fills where nothing was published (${d26.mincha?.[0]?.time})`);
+  must(d26.edge.candles === '7:37 PM' && d26.edge.havdalah === '7:39 PM',
+    'edges merge key by key rather than replacing the map');
+  must(d26.sources?.mincha === 'manual', 'provenance is recorded per section');
+  must(!d09.maariv?.length, 'a day outside covers is never written');
+
+  // stripHand takes back exactly what applyOverrides put in, so the next run
+  // re-derives provenance instead of reading its own work as a live source.
+  const back = stripHand(days['2026-09-26']);
+  must(!back['beth-aaron'].mincha?.length, 'stripHand removes the hand-entered section');
+  must(back['beth-aaron'].shacharis.length === 1, 'and leaves the scraped one alone');
+  must(back['beth-aaron'].edge?.candles === '7:37 PM', 'and the scraped edge');
+  must(back['beth-aaron'].edge?.havdalah === undefined, 'but not the hand-entered edge');
+  must(back['beth-aaron'].hand === undefined, 'and the marker itself is gone');
 }
 
 console.log('\n=== A year of daily renders ===');
