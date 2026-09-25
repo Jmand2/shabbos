@@ -40,6 +40,7 @@ async function start() {
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   watchWake();
+  watchNetwork();
   keepAwake();
 }
 
@@ -96,6 +97,41 @@ async function keepAwake() {
 function watchWake() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') keepAwake();
+  });
+}
+
+// Catching up after the network comes back -----------------------------------
+//
+// Everything here refreshes on a timer, and the timers are long because the
+// data is: half an hour for minyanim, longer for the forecast. That is right
+// for a display that has been sitting there all day, and wrong for one that has
+// just come back from an hour of dead wifi — it would go on showing whatever it
+// managed to keep until the next tick happened to come round, with no way for
+// anybody to ask it to try again short of reloading.
+//
+// So the two moments where something has plainly changed get a catch-up:
+// reconnecting, and the screen being looked at again. Throttled, because iPadOS
+// fires visibilitychange freely and these hit three networks.
+let caughtUpAt = 0;
+const CATCH_UP_GAP_MS = 60000;
+
+function catchUp(why) {
+  if (Date.now() - caughtUpAt < CATCH_UP_GAP_MS) return;
+  caughtUpAt = Date.now();
+  console.info(`catching up after ${why}`);
+  refreshMinyanim();
+  refreshWeather();
+  warmSports();
+  render();
+}
+
+function watchNetwork() {
+  window.addEventListener('online', () => catchUp('reconnect'));
+  document.addEventListener('visibilitychange', () => {
+    // navigator.onLine is only trustworthy when it says false.
+    if (document.visibilityState === 'visible' && navigator.onLine !== false) {
+      catchUp('the screen waking');
+    }
   });
 }
 

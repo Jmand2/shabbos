@@ -546,6 +546,10 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 }
 .sun[hidden] { display: none; }
 
+/* Same colour as a percentage, deliberately. Mixed down a row of twelve tiles,
+   a differently coloured cell reads as something being wrong rather than as a
+   different KIND of fact — and the unit already says which it is. */
+.wpop.wamt { font-variant-numeric: tabular-nums; }
 .edge[hidden] { display: none; }
 
 /* Weather strip --------------------------------------------------------- */

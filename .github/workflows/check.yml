@@ -15,6 +15,11 @@ on:
     paths-ignore:
       - 'data/minyanim.json'
       - 'screenshots/**'
+      # Stamping now hangs off this workflow completing, and a README edit has
+      # no business minting a new app-shell generation for every iPad to
+      # download. Ignored here means no checks and therefore no stamp, which is
+      # what it used to get from its own paths-ignore list.
+      - 'README.md'
   pull_request:
   workflow_dispatch:
 

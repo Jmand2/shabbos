@@ -1080,10 +1080,52 @@ console.log('\n=== WN: the weather says something only when there is something =
   });
   ok(/^Rain likely 4pm\u20137pm$/.test(rain), `one spell, named by its span (${rain})`);
 
-  const heavy = await noteOn((f) => {
-    for (const i of [2, 3]) f.hourly.precipitation_probability[i] = 90;
+  // AN AMOUNT WHERE THERE IS ONE, A CHANCE WHERE THERE IS NOT.
+  //
+  // The strip only ever printed a percentage, so a near-certain drizzle and a
+  // cloudburst read identically at 90% against 90%, and the icon did not
+  // separate them either — 61, 63 and 65 are light, moderate and heavy rain
+  // and all three draw the same raindrop. How much is the question somebody is
+  // actually asking at the tile.
+  {
+    const f = base();
+    f.hourly.precipitation = f.hourly.precipitation_probability.map(() => 0);
+    f.hourly.precipitation_probability[3] = 70;   // likely, but nothing to measure
+    f.hourly.precipitation_probability[4] = 70;
+    f.hourly.precipitation[4] = 5.1;              // a fifth of an inch
+    const { w } = await boot(when, { forecast: f });
+    const cells = [...w.document.querySelectorAll('.wcol')]
+      .map((c) => c.querySelector('.wpop')?.textContent ?? '');
+    ok(cells.some((t) => /^0\.2\u2033$/.test(t)),
+      `a measurable hour shows how much (${cells.filter(Boolean).join(' ')})`);
+    ok(cells.some((t) => /^70%$/.test(t)),
+      'and an hour with nothing to measure still shows the chance');
+  }
+
+  // HEAVY IS AN INTENSITY, NOT A CERTAINTY.
+  //
+  // This used to raise the probability to 90 and expect "Heavy rain", because
+  // that is what the code did: it took the highest chance of ANY rain and
+  // called 80% a soaking. So a near-certain drizzle was announced as a downpour
+  // and a merely likely cloudburst was not. The forecast says which it is —
+  // WMO 61/63/65 are light, moderate, heavy — and that is what is read now.
+  const certain = await noteOn((f) => {
+    for (const i of [2, 3]) {
+      f.hourly.precipitation_probability[i] = 95;
+      f.hourly.weather_code[i] = 61;                 // light rain, near certain
+    }
   });
-  ok(/^Heavy rain likely/.test(heavy), `a soaking is called one (${heavy})`);
+  ok(/^Rain likely/.test(certain) && !/Heavy/.test(certain),
+    `a near-certain drizzle is not a downpour (${certain})`);
+
+  const heavy = await noteOn((f) => {
+    for (const i of [2, 3]) {
+      f.hourly.precipitation_probability[i] = 65;
+      f.hourly.weather_code[i] = 65;                 // heavy rain, merely likely
+    }
+  });
+  ok(/^Heavy rain likely/.test(heavy),
+    `and heavy rain is called heavy on the code, not the odds (${heavy})`);
 
   const single = await noteOn((f) => { f.hourly.precipitation_probability[3] = 70; });
   ok(/around 5pm$/.test(single), `a single wet hour is "around", not a range (${single})`);

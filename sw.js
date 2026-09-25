@@ -94,6 +94,16 @@ self.addEventListener('fetch', (e) => {
   // which build this is would be the most misleading thing on the screen.
   if (url.pathname.endsWith('version.json')) return;
 
+  // Nor the scoreboard, and for exactly the reason given above for the
+  // forecast. sports.js stamps every answer with `at: Date.now()` and then
+  // decides what a game may still claim from that stamp — a live score is only
+  // shown for fifteen minutes after the snapshot it came from. A worker replay
+  // of a cached scoreboard is a 200 like any other, so a slow network past the
+  // timeout handed back an old board and it was dated NOW, buying a licence it
+  // had not earned. The app keeps its own copy in localStorage where it is
+  // parsed data it can date honestly.
+  if (url.hostname.endsWith('espn.com')) return;
+
   // The shell: served from this generation's cache, full stop. No timeout, no
   // background refresh, no per-file staleness — the whole point is that these
   // cannot disagree with one another. A miss can only mean install did not

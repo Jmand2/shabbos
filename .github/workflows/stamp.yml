@@ -12,13 +12,34 @@ name: Stamp version
 # the entire shell. The scraper commits three times a day. Minyan times are
 # deliberately not part of the shell; this is what keeps that true in practice
 # rather than only in the comments.
+#
+# That exclusion now lives in check.yml's paths-ignore rather than here: this
+# hangs off Checks completing, so a push that runs no checks mints no
+# generation, which is the same rule arrived at from the other end.
+#
+# ONLY AFTER THE CHECKS PASS.
+#
+# GitHub Pages deploys straight off a push and nothing gates it — main is not a
+# protected branch, and turning that on is a repository setting, not something
+# a workflow can do for itself. So a red build shipped, and did so twice in one
+# afternoon while the layout job was still running.
+#
+# This is the gate that can be built from here, and it works because of how the
+# worker is written rather than in spite of it. One VERSION is one immutable
+# shell generation: an iPad serves its cached generation and only takes a new
+# one when a new VERSION appears and installs COMPLETELY. Withhold the stamp and
+# the new files sit in the Pages bucket untouched, because nothing has told any
+# display to go and get them.
+#
+# What this does NOT cover, stated plainly: a browser with no worker yet — a
+# first visit, or one whose storage was cleared — fetches from Pages directly
+# and will get the unstamped files. The wall display is not that browser, which
+# is what this is for. Protecting the branch is still the complete answer.
 on:
-  push:
+  workflow_run:
+    workflows: ['Checks']
+    types: [completed]
     branches: [main]
-    paths-ignore:
-      - 'data/minyanim.json'
-      - 'README.md'
-      - 'screenshots/**'
 
 permissions:
   contents: write
@@ -30,9 +51,27 @@ concurrency:
 jobs:
   stamp:
     runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      # The checks ran against one commit; main may already have moved. Stamping
+      # anyway would put the seal of a tested commit on an untested one. The
+      # newer commit has its own run coming, so there is nothing to do here.
+      - name: Only stamp the commit that was actually tested
+        run: |
+          TESTED="${{ github.event.workflow_run.head_sha }}"
+          HEAD="$(git rev-parse HEAD)"
+          if [ "$HEAD" != "$TESTED" ]; then
+            echo "main is at $HEAD but $TESTED is what passed — leaving it for that commit's own run"
+            echo "skip=yes" >> "$GITHUB_ENV"
+          fi
+
       - name: Stamp the build into version.json and sw.js
+        if: env.skip != 'yes'
         run: |
           SHA="$(git rev-parse --short HEAD)"
           printf '{\n  "commit": "%s",\n  "built_at": "%s"\n}\n' \
@@ -50,6 +89,7 @@ jobs:
           grep -q "^const VERSION = '$SHA';" sw.js || { echo "sw.js was not stamped"; exit 1; }
 
       - name: Commit if changed
+        if: env.skip != 'yes'
         run: |
           git config user.name  "shabbos-clock-bot"
           git config user.email "actions@github.com"

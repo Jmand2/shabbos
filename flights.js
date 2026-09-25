@@ -443,15 +443,17 @@
   // takes the better part of a minute, so everything launched inside a few
   // seconds is on screen together, which is the point of it.
   const PARADE_STAGGER_MS = 340;
-  // Two of the SAME vehicle share a lane and a path, so a nudge is not enough:
-  // the second would be hidden under the first for most of the way across.
-  // They get a real gap between them instead.
-  const PARADE_SAME_KIND_MS = 1100;
-  // Nothing launches later than this, so the last one out is still crossing
-  // while the first is. It is short because the rocket is: it clears the screen
-  // in under two seconds, where the train takes the better part of twenty, and
-  // a window measured against the train would have the rocket gone before the
-  // rest had left.
+  // Two of the SAME vehicle share a lane and a path, so the gap between them is
+  // not a nudge — it is a fraction of the lap. At 1.1s against a lap of twenty
+  // to fifty seconds they came out two or three percent apart, which is to say
+  // directly on top of one another, and that is exactly what it looked like.
+  //
+  // Eight seconds puts a repeat a good part of the way behind its twin while
+  // both are still crossing, because this gap only has to be small against the
+  // LAP — not against the parade.
+  const PARADE_SAME_KIND_MS = 8000;
+  // The ordinary stagger is over inside this, so the parade reads as one event.
+  // Only a repeat pushes past it, and a repeat has to.
   const PARADE_WINDOW_MS = 2200;
 
   // `force` is the deliberate launch, from the settings sheet or a test. It

@@ -96,7 +96,8 @@ function forecast(at) {
   const stamp = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
     + `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const hourly = {
-    time: [], temperature_2m: [], precipitation_probability: [], weather_code: [], is_day: [],
+    time: [], temperature_2m: [], precipitation_probability: [], precipitation: [],
+    weather_code: [], is_day: [],
   };
   const daily = { time: [], temperature_2m_max: [], temperature_2m_min: [] };
   for (let i = 0; i < 96; i += 1) {
@@ -104,6 +105,9 @@ function forecast(at) {
     hourly.time.push(stamp(d));
     hourly.temperature_2m.push(60 + (i % 12));
     hourly.precipitation_probability.push([0, 40, 5, 10, 60, 8][i % 6]);
+    // Two of the six hours carry a measurable amount, so the strip is rendered
+    // with both kinds of cell side by side — which is how it looks in life.
+    hourly.precipitation.push([0, 0, 0, 0, 1.4, 0][i % 6]);
     hourly.weather_code.push([0, 2, 3, 61, 71, 95][i % 6]);
     hourly.is_day.push(d.getHours() >= 7 && d.getHours() < 19 ? 1 : 0);
     const day = stamp(d).slice(0, 10);
@@ -520,8 +524,12 @@ for (const view of VIEWS) {
     // that it is on screen TOGETHER, and the vehicles do not last equally long
     // — the rocket clears in under two seconds and the train takes twenty — so
     // a single count taken late measures the slow ones and nothing else.
+    // Sampled across the WHOLE spread. A repeat waits eight seconds behind its
+    // twin — small against a lap of twenty to fifty seconds, but far longer
+    // than the ordinary stagger — so a sampling window of a few seconds counts
+    // the head of the parade and calls the tail missing.
     let peak = 0;
-    for (let i = 0; i < 24; i += 1) {
+    for (let i = 0; i < 80; i += 1) {
       await new Promise((r) => setTimeout(r, 150));
       peak = Math.max(peak, document.querySelectorAll('.flight').length);
     }

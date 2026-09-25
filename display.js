@@ -519,12 +519,28 @@ function renderShuls(now, days) {
   const auto = settings.perShul === 'auto';
   const ceiling = auto ? AUTO_MAX : Number(settings.perShul);
   const floor = auto ? AUTO_MIN_PX : 0;
+  // Each probe REBUILDS every card and then measures it, which is the most
+  // expensive thing the board does and the reason the search is a binary one.
+  // The probes were not remembered, so the re-probe below repeated one the
+  // search had just done, and the final paint repeated whichever one it landed
+  // on — two full rebuilds per render that had already been performed.
+  const probed = new Map();
+  let painted = null;
   const goodAt = (cap, withEdges = true) => {
+    const memo = `${cap}|${withEdges}`;
+    if (probed.has(memo)) return probed.get(memo);
+    painted = memo;
     const r = build(cap, withEdges);
     // No geometry to measure (jsdom, or a board with no times on it) — take the
     // requested count at face value rather than searching against nothing.
-    if (r.px === null) return true;
-    return r.fitted && r.px >= floor;
+    const good = r.px === null ? true : (r.fitted && r.px >= floor);
+    probed.set(memo, good);
+    return good;
+  };
+
+  // Only if the board is not already showing it.
+  const paint = (cap, withEdges = true) => {
+    if (painted !== `${cap}|${withEdges}`) build(cap, withEdges);
   };
 
   const search = (withEdges) => {
@@ -547,13 +563,14 @@ function renderShuls(now, days) {
   // one fewer line. They go last, and only here.
   if (auto && !goodAt(rowsShown, true)) {
     if (goodAt(ceiling, false)) { paintCountdowns(now); return; }
-    build(search(false), false);
+    paint(search(false), false);
     paintCountdowns(now);
     return;
   }
 
-  // The search leaves the board at whatever it probed last, so paint the answer.
-  build(rowsShown);
+  // The search leaves the board at whatever it probed last, so paint the answer
+  // — unless that is already what is on it.
+  paint(rowsShown);
   paintCountdowns(now);
 }
 

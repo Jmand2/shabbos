@@ -109,10 +109,31 @@ async function renderStatus() {
   // is loaded, and the panel simply omits the row when it is not.
   const flights = window.shabbosFlights?.status?.();
 
+  // WHICH BUILD IS RUNNING, not which one is published.
+  //
+  // "App build" read version.json, which the worker deliberately never caches —
+  // so it always told you the newest DEPLOYED commit. The code actually
+  // executing comes from the worker's cache, which is cache-first and changes
+  // only when a new generation has installed completely. The two differ exactly
+  // when it matters: in the window after a deploy, when the question being
+  // asked across the room is "has the iPad taken it yet", the panel answered
+  // with the thing that was true of the server and not of the screen.
+  //
+  // One VERSION is one generation and activate deletes the others, so the cache
+  // name IS the running build.
+  const shipped = buildStamp?.commit ?? null;
+  const cached = await cacheVersion();
+  const running = cached.replace(/shabbos-clock-/g, '');
+  const known = running && !/^(none yet|unavailable)$/.test(running);
+  const behind = known && shipped && running !== shipped;
+
   const rows = [
-    ['App build', buildStamp?.commit
-      ? `${buildStamp.commit} · ${ago(buildStamp.built_at)}` : 'unstamped'],
-    ['App cache', await cacheVersion()],
+    ['App build', known
+      ? `${running}${behind ? ' · older than deployed' : ' · current'}`
+      : `not cached yet${shipped ? ` · deployed ${shipped}` : ''}`],
+    ['Deployed', shipped
+      ? `${shipped} · ${ago(buildStamp.built_at)}${behind ? ' · reload to take it' : ''}`
+      : 'unstamped'],
     ['Scores', settings.sports === 'off' ? 'off'
       : `${sportsGames().length} shown · band every ${settings.sports} min`],
     // Age, not count. "Why does that say the Rangers are in the second period?"

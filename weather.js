@@ -13,7 +13,8 @@ const WEATHER_CACHE = 'shabbos-clock-weather';
 // screen, so the units toggle costs no refetch and works offline.
 const WEATHER_URL = `https://api.open-meteo.com/v1/forecast?latitude=${PLACE.lat}`
   + `&longitude=${PLACE.lon}`
-  + '&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,is_day'
+  + '&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,'
+  + 'weather_code,is_day'
   + '&current=temperature_2m,apparent_temperature,weather_code,is_day'
   + '&daily=temperature_2m_max,temperature_2m_min'
   + `&temperature_unit=fahrenheit&timezone=${encodeURIComponent(PLACE.tz)}&forecast_days=4`;
@@ -175,6 +176,14 @@ function hoursWithin(now, span) {
       temp: h.temperature_2m?.[i],
       feels: h.apparent_temperature?.[i],
       pop: h.precipitation_probability?.[i],
+      // The raw code as well as the rendered sky. skyOf() throws away the
+      // number, and the number is the only thing that says how HARD it is
+      // going to rain — the probability says how likely, which is a different
+      // question the note used to answer as though it were the same one.
+      code: h.weather_code?.[i],
+      // How MUCH, in millimetres. The probability says how likely it is to rain
+      // at all and says nothing about whether to bother with a coat.
+      mm: h.precipitation?.[i],
       sky: skyOf(h.weather_code?.[i], h.is_day?.[i] !== 0),
     });
   }
@@ -233,7 +242,11 @@ const weatherAge = () => (weather?.observed_at ? Date.now() - weather.observed_a
 
 // Rain worth planning around, not worth mentioning.
 const NOTE_WET = 50;
-const NOTE_SOAKING = 80;
+// WMO codes that actually mean heavy: 65 heavy rain, 67 heavy freezing rain,
+// 82 violent showers. Not a probability — "Heavy rain" used to mean an 80%
+// chance, so a near-certain drizzle was announced as a downpour and a merely
+// likely cloudburst was not.
+const NOTE_HEAVY_CODES = [65, 67, 82];
 // Fahrenheit throughout — the thresholds are facts about weather, not about the
 // unit the person happens to be reading it in.
 const NOTE_FREEZING = 32;
@@ -260,13 +273,33 @@ function spanLabel(run) {
   return run.length === 1 ? `around ${from}` : `${from}\u2013${to}`;
 }
 
+// Below this there is nothing worth printing: it rounds to nothing in either
+// unit and is mostly the model's own noise.
+const WEATHER_MM_FLOOR = 0.2;
+
+// Millimetres in, the reader's own unit out — converted on screen like the
+// temperatures, so the units toggle still costs no refetch and still works
+// with no network at all.
+function amountOf(mm) {
+  const v = Number(mm);
+  if (!Number.isFinite(v) || v < WEATHER_MM_FLOOR) return null;
+  if (settings.units === 'C') {
+    return `<span class="wpop wamt">${v < 10 ? v.toFixed(1) : Math.round(v)}mm</span>`;
+  }
+  const inches = v / 25.4;
+  // Two decimals below a tenth, one above: 0.04" and 0.3" rather than 0.04"
+  // and 0.30", which reads as more precision than a forecast has.
+  const shown = inches < 0.1 ? inches.toFixed(2) : inches.toFixed(1);
+  return `<span class="wpop wamt">${shown}\u2033</span>`;
+}
+
 function weatherNote(rows) {
   if (rows.length < 2) return '';
 
   // Rain first. It is the one that changes whether you carry something.
   const wet = longestRun(rows, (r) => Number(r.pop) >= NOTE_WET);
   if (wet.length) {
-    const heavy = Math.max(...wet.map((r) => Number(r.pop))) >= NOTE_SOAKING;
+    const heavy = wet.some((r) => NOTE_HEAVY_CODES.includes(Number(r.code)));
     return `${heavy ? 'Heavy rain' : 'Rain'} likely ${spanLabel(wet)}`;
   }
 
@@ -340,8 +373,15 @@ function renderWeather(now, info) {
     // 25%, which hid exactly the reading someone wants before a walk to shul —
     // a 10% on one hour is worth knowing. The floor is there only to keep the
     // model's 0-5% noise off twelve tiles at once.
-    const wet = r.pop >= WEATHER_POP_FLOOR
-      ? `<span class="wpop">${Math.round(r.pop)}%</span>` : '';
+    // How much, once there is enough to measure; how likely, until then.
+    //
+    // The strip only ever showed a percentage, so a near-certain drizzle and a
+    // cloudburst read identically — 90% against 90% — and the icon did not
+    // separate them either: 61, 63 and 65 are light, moderate and heavy rain
+    // and all three draw the same raindrop. The amount is the answer to the
+    // question somebody is actually asking at the tile.
+    const wet = amountOf(r.mm) ?? (r.pop >= WEATHER_POP_FLOOR
+      ? `<span class="wpop">${Math.round(r.pop)}%</span>` : '');
     return `<div class="wcol${i === 0 ? ' now' : ''}">`
       + `<span class="whour">${i === 0 ? 'Now' : esc(hourOf(r.at))}</span>`
       + skyGlyph(r.sky.kind)

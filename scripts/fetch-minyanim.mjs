@@ -301,20 +301,76 @@ async function grab(slug, date, useDateParam) {
    The gap it exists for is Yom Tov: the aggregator has Beth Aaron's weekday
    Mincha and Maariv but not its festival schedule, and the shul's own widget
    lists events rather than services on those days. */
+// Last run's hand-entered rows, taken back out before this run begins.
+//
+// applyOverrides only ever fills what no source published, and it decides that
+// by looking at what is already on file. Left in place, yesterday's override
+// IS what is already on file — so the merge saw its own work, concluded a live
+// source had spoken, and recorded nothing. The times stayed right and the
+// provenance quietly rotted: an edge typed off a PDF in September read as
+// scraped by the second run onwards.
+//
+// Every run now re-derives it from scratch. Anything still in overrides.json
+// and still inside its covers is put back a moment later; anything that has
+// been removed from that file correctly disappears rather than living on as a
+// fossil nothing can account for.
+function stripHand(entry) {
+  const out = {};
+  for (const [slug, e] of Object.entries(entry)) {
+    if (!e?.hand) { out[slug] = e; continue; }
+    const clean = { ...e };
+    for (const g of e.hand.sections ?? []) delete clean[g];
+    if (e.hand.edge?.length && clean.edge) {
+      clean.edge = { ...clean.edge };
+      for (const k of e.hand.edge) delete clean.edge[k];
+      if (!Object.keys(clean.edge).length) delete clean.edge;
+    }
+    delete clean.hand;
+    out[slug] = clean;
+  }
+  return out;
+}
+
+// "2026-09-25/2026-09-27" — inclusive, and the only dates an entry may touch.
+function coversRange(entry) {
+  const m = /^(\d{4}-\d{2}-\d{2})\/(\d{4}-\d{2}-\d{2})$/.exec(String(entry?.covers ?? ''));
+  return m ? { from: m[1], to: m[2] } : null;
+}
+
 export function applyOverrides(days, overrides) {
   let filled = 0;
+  const hands = [];
   for (const entry of overrides?.entries ?? []) {
+    // COVERS IS ENFORCED, NOT DECORATION.
+    //
+    // data/overrides.json said in its own header that every entry needs one and
+    // that the checks would act on it. Nothing read the field. An entry could
+    // name any date it liked, including one a later edit never meant to touch,
+    // and the file documented a safeguard it did not have — which is worse than
+    // not claiming one, because it is the thing somebody would rely on.
+    const range = coversRange(entry);
+    if (!range) {
+      console.warn(`overrides: ${entry.shul} has no usable "covers" — skipped entirely`);
+      continue;
+    }
     for (const [date, sections] of Object.entries(entry.days ?? {})) {
+      if (date < range.from || date > range.to) {
+        console.warn(`overrides: ${entry.shul} ${date} is outside covers `
+          + `${entry.covers} — not applied`);
+        continue;
+      }
       // Only for days the run actually covers. Writing a day outside the
       // window would resurrect a date the scraper had just aged out.
       if (!days[date]) continue;
       const existing = days[date][entry.shul];
       const merged = { ...existing };
       let touched = 0;
+      const handed = [];
       for (const group of SECTIONS.map((g) => g.toLowerCase())) {
         if (!sections[group]?.length) continue;
         if (existing?.[group]?.length) continue;   // a live source spoke; it wins
         merged[group] = sections[group];
+        handed.push(group);
         touched += 1;
       }
       // The shul's own edges, same rule, KEY BY KEY. This spread the override
@@ -322,28 +378,44 @@ export function applyOverrides(days, overrides) {
       // filling for it — the exact opposite of the rule this file is built on —
       // and it only ever looked at havdalah, so an entry carrying candles was
       // judged by whether a different key was present.
+      const handedEdge = [];
       if (sections.edge) {
         const have = existing?.edge ?? {};
         const add = Object.fromEntries(
           Object.entries(sections.edge).filter(([k]) => !have[k]));
         if (Object.keys(add).length) {
           merged.edge = { ...have, ...add };
+          handedEdge.push(...Object.keys(add));
           touched += 1;
         }
       }
       if (!touched) continue;
       filled += touched;
+      hands.push(...handed);
+      // WHICH PARTS are hand-entered, not merely that some part is.
+      //
+      // This used to stamp the whole shul-day, so a day whose Shacharis came
+      // from teaneckminyanim twenty minutes ago and whose Mincha was typed in
+      // from a PDF in September read as entirely hand-entered — and it kept the
+      // scrape's fetched_at, so the typed rows also looked twenty minutes old.
+      // Provenance is the thing somebody reads to decide whether to trust a
+      // time, so it has to say which time.
       days[date][entry.shul] = {
         ...normaliseSections(merged),
         ...(merged.edge ? { edge: merged.edge } : {}),
         fetched_at: existing?.fetched_at,
-        // So the board and check-data can tell a hand-entered day from a
-        // scraped one without diffing against this file.
-        hand: entry.source,
+        hand: {
+          source: entry.source,
+          entered_at: entry.entered_at,
+          sections: handed,
+          ...(handedEdge.length ? { edge: handedEdge } : {}),
+        },
       };
     }
   }
-  if (filled) console.log(`overrides filled ${filled} empty section(s)`);
+  if (filled) {
+    console.log(`overrides filled ${filled} empty section(s): ${[...new Set(hands)].join(', ')}`);
+  }
   return filled;
 }
 
@@ -354,7 +426,7 @@ async function main() {
   const days = {};
   const cutoff = isoDate(-KEEP_DAYS);
   for (const [date, entry] of Object.entries(previous.days ?? {})) {
-    if (date >= cutoff) days[date] = entry;
+    if (date >= cutoff) days[date] = stripHand(entry);
   }
 
   let dateParamWorks = false;
@@ -371,8 +443,17 @@ async function main() {
   //
   // Now it records the DAYS it filled, not the shuls, and the aggregator fills
   // the rest. Own site still wins wherever it spoke.
+  // Keyed per SERVICE, not per day.
+  //
+  // A shul's own widget can carry Shacharis and say nothing at all about
+  // Mincha — Beth Aaron's does exactly that on Yom Tov. Keyed by the day, one
+  // Shacharis marked the whole day handled and the aggregator was never asked
+  // about the rest, so a Mincha teaneckminyanim had all along never reached the
+  // board. This is the same mistake as "a parse is not coverage", one level
+  // down: a SECTION is not coverage of the other sections.
   const filled = new Set();
-  const key = (slug, date) => `${slug}|${date}`;
+  const key = (slug, date, group = '') => `${slug}|${date}|${group}`;
+  const groups = SECTIONS.map((g) => g.toLowerCase());
   const tomorrow = isoDate(1);
   for (const shul of SHULS.filter((x) => x.site)) {
     const parsed = await grabShulSite(shul.site).catch(() => null);
@@ -403,32 +484,65 @@ async function main() {
       // a service. Anything else and the aggregator gets its turn, keeping the
       // edge times below, which are the shul's own and better than a
       // calculation.
-      const services = SECTIONS.reduce(
-        (n, g) => n + (clean[g.toLowerCase()]?.length ?? 0), 0);
-      if (services) filled.add(key(shul.slug, date));
+      for (const g of groups) {
+        if (clean[g]?.length) filled.add(key(shul.slug, date, g));
+      }
     }
   }
 
   for (const date of wanted) {
     const useDateParam = date !== today;
     for (const shul of SHULS) {
-      if (filled.has(key(shul.slug, date))) continue;
+      // Only skip a shul-day the own site answered COMPLETELY.
+      if (groups.every((g) => filled.has(key(shul.slug, date, g)))) continue;
       const parsed = await grab(shul.slug, date, useDateParam).catch(() => null);
       await new Promise((r) => setTimeout(r, 250));
       if (!parsed) continue;
       if (useDateParam) dateParamWorks = true;
+
+      // A PAGE THAT LISTS NOTHING IS NOT A CONFIRMATION THAT THERE IS NOTHING.
+      //
+      // grab() returns the parse, and a parse with every section empty is still
+      // an object — so a page that rendered the right date but no services
+      // overwrote whatever was already on file and stamped it with the current
+      // time. A good schedule from an hour ago was replaced by an empty one
+      // that looked newer, and the board went from a full card to "Done for
+      // today". The aggregator does serve pages like that: it renders "There
+      // are no Mincha minyanim scheduled" as a normal page with a 200.
+      //
+      // So an empty parse may CREATE an entry where there was none — that is
+      // real information, and the board says "nothing further listed" honestly
+      // — but it may never replace one that has times in it.
+      const rows = SECTIONS.reduce(
+        (n, g) => n + (parsed[g.toLowerCase()]?.length ?? 0), 0);
+      const had = SECTIONS.reduce(
+        (n, g) => n + (days[date]?.[shul.slug]?.[g.toLowerCase()]?.length ?? 0), 0);
+      if (!rows && had) {
+        console.warn(`${shul.slug} ${date}: empty page, keeping the ${had} time(s) on file`);
+        continue;
+      }
       fetched += 1;
       days[date] ??= {};
       // The shul's own candle lighting and havdalah survive the aggregator
       // writing over the day. They are the times its members actually keep, and
       // the aggregator does not carry them — dropping them here would mean
       // falling back to a computed tzeis for a shul that publishes its own.
-      const ownEdge = days[date][shul.slug]?.edge;
+      const own = days[date][shul.slug];
+      const ownEdge = own?.edge;
       // Stamped per shul-day. generated_at goes fresh if ANY fetch in the run
       // succeeded, so a shul still showing an entry retained from a previous
       // run looked exactly as current as one just confirmed.
+      // Section by section: whatever the shul's own site gave stands, and the
+      // aggregator answers for the rest. Writing the aggregator's whole reply
+      // here would throw away the sections the shul had already spoken for.
+      const fresh = normaliseSections(parsed);
+      const keep = {};
+      for (const g of groups) {
+        keep[g] = filled.has(key(shul.slug, date, g)) ? (own?.[g] ?? []) : (fresh[g] ?? []);
+      }
       days[date][shul.slug] = {
-        ...normaliseSections(parsed),
+        ...fresh,
+        ...keep,
         ...(ownEdge ? { edge: ownEdge } : {}),
         fetched_at: new Date().toISOString(),
       };
