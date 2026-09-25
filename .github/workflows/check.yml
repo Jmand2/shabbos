@@ -4,9 +4,17 @@
 # thought to run them by hand — which is how four assertions sat red for a week.
 name: Checks
 
+# The scraper pushes three times a day and changes nothing but generated JSON.
+# Running WebKit on macOS plus every behavioural suite against that is minutes of
+# CI for a file the app only reads. The data still gets checked — refresh-
+# minyanim.yml validates it on the way out, which is both cheaper and closer to
+# where a bad scrape would come from.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'data/minyanim.json'
+      - 'screenshots/**'
   pull_request:
   workflow_dispatch:
 

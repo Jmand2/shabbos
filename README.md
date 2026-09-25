@@ -19,8 +19,10 @@ a day was not confirmed, the shul shows "Times unavailable" instead of a number.
 
 **Fetched live** — the weather, from open-meteo.com, every twenty minutes. Its
 age is read from the observation time inside the payload rather than from the
-clock when it arrived: the service worker replays cached responses by design,
-and a replay is indistinguishable from a live fetch at the response level. No key
+clock when it arrived. That began as a defence against the service worker
+replaying its own cached copy; the worker bypasses open-meteo entirely now, but
+the browser's ordinary HTTP cache has not gone anywhere, and an age that travels
+with the data cannot be wrong about itself whoever hands it over. No key
 and no account; it is the only request the display makes off its own origin. The
 last forecast is kept on the iPad, so a wifi drop shows an hour-old sky rather
 than an empty band, and a forecast that never arrives hides the strip instead of
@@ -538,7 +540,7 @@ so it also covers two-day Yom Tov and a Yom Tov that runs into Shabbos.
 
 ## How the code is laid out
 
-No build step and no framework. Seven ordinary scripts, loaded in this order and
+No build step and no framework. Eight ordinary scripts, loaded in this order and
 sharing one script scope:
 
 | | |
@@ -548,6 +550,7 @@ sharing one script scope:
 | `settings.js` | what the person chose, and the sheet they chose it in |
 | `minyanim.js` | real minyan times, and only ever real ones |
 | `weather.js` | the forecast, and how old it is |
+| `sports.js` | scores, and whether they can still be believed |
 | `display.js` | everything that paints |
 | `app.js` | startup, intervals, the appliance lifecycle |
 
@@ -564,7 +567,7 @@ visible to `weather.js`. Separate `eval()` calls do **not** — each gets its ow
 scope. The suites therefore concatenate the files and evaluate them as one
 program, which is the faithful equivalent.
 
-All seven are in the service worker's shell, cached and replaced as one
+All eight are in the service worker's shell, cached and replaced as one
 generation — see below.
 
 ## Updates are all-or-nothing
@@ -694,9 +697,26 @@ height now, plus a constant for the fact that several of them draw outside their
 declared viewBox and `overflow: visible` paints all of it. It sits at 98% worst,
 and `check-layout.mjs` holds it there.
 
+## What a data-only push does not do
+
+The scraper pushes three times a day and changes nothing but generated JSON, so
+both the stamp and the full suites ignore `data/minyanim.json`.
+
+That matters more than it sounds. The stamp rewrites the service worker's
+VERSION, and **one VERSION is one immutable app-shell generation** — stamping a
+commit that only refreshed minyan times would make every iPad download and
+reinstall the entire shell, three times a day, for a file that is deliberately
+not part of it. The comments said minyan data was not in the shell; this is what
+makes that true in practice.
+
+The scrape is still checked, by `scripts/check-data.mjs` running inside the
+refresh workflow itself: times and labels already normalised, no duplicates,
+each group in chronological order, and normalising again changes nothing. No
+browser, no jsdom, and it runs where a bad scrape actually comes from.
+
 ## Checking a change
 
-All three suites run in GitHub Actions on every push and pull request
+All four suites run in GitHub Actions on every push and pull request
 (`.github/workflows/check.yml`), and both exit non-zero when something is
 actually wrong. `check.mjs` used to print its problems and then call
 `process.exit(0)` regardless, which is worth nothing to a CI job — it now counts

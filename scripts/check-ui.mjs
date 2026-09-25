@@ -1391,5 +1391,74 @@ console.log('\n=== SP10b: and it really waits for the boundary ===');
   ok(band.querySelector('.sgame') !== null, 'and it appears once the clock reaches :05');
 }
 
+console.log('\n=== SP12: a delayed game is not a standing licence ===');
+{
+  // A real delay confirmed after the scheduled start is worth showing. The same
+  // snapshot still insisting at midnight that the game has not begun is the feed
+  // having gone away, not a delay.
+  const start = '2026-09-23T23:05Z';
+  const justConfirmed = await withScores('2026-09-23T19:20:00-04:00', {
+    'baseball/mlb': [game('TB', 0, 'NYY', 0, { state: 'pre', detail: '7:05 PM', at: start })],
+  });
+  ok(await justConfirmed.w.eval('sportsGames().length') === 1,
+    'a delay confirmed after the start time is shown');
+
+  justConfirmed.advance(20 * 60000);
+  ok(await justConfirmed.w.eval('sportsGames().length') === 0,
+    'and stops being shown once that snapshot is old');
+}
+
+console.log('\n=== SP13: changing the interval takes effect at once ===');
+{
+  const when = '2026-09-23T08:03:17-04:00';
+  const boots = await withScores(when,
+    { 'baseball/mlb': [game('NYM', 4, 'ATL', 3, { state: 'post', at: '2026-09-22T23:10Z' })] },
+    { settings: { sports: '20' } });
+  const { w, advance } = boots;
+  const band = $(w, 'weather');
+
+  w.eval('tick()');                        // armed for the :20 boundary
+  const sel = w.document.getElementById('sports');
+  sel.value = '2';
+  sel.dispatchEvent(new w.Event('change'));
+
+  // The change clears the schedule; the clock re-arms on its next tick, which
+  // in the app is a second later. Then the next TWO-minute boundary is 08:04 —
+  // not 08:20, which is what waiting out the old cadence would have meant.
+  w.eval('tick()');
+  advance(43 * 1000);                      // 08:04:00
+  w.eval('tick()');
+  ok(band.querySelector('.sgame') !== null,
+    'the new cadence starts from its own next boundary, not the old one');
+
+  // And it really is the new one: at the old setting nothing would show until
+  // :20, seventeen minutes later.
+  // The PAGE's clock. Date in this file is Node's and is two days and some
+  // hours away from the frozen one the app is running on.
+  const minute = await w.eval('new Date().getMinutes()');
+  ok(minute === 4, `at :04, not waiting for :20 (:${minute})`);
+}
+
+console.log('\n=== SP14: switching Off takes the band back at once ===');
+{
+  const when = '2026-09-23T08:03:17-04:00';
+  const boots = await withScores(when,
+    { 'baseball/mlb': [game('NYM', 4, 'ATL', 3, { state: 'post', at: '2026-09-22T23:10Z' })] },
+    { settings: { sports: '5' } });
+  const { w, advance } = boots;
+  const band = $(w, 'weather');
+
+  w.eval('tick()');
+  advance(120 * 1000);
+  w.eval('tick()');
+  ok(band.querySelector('.sgame') !== null, 'the scores are up');
+
+  const sel = w.document.getElementById('sports');
+  sel.value = 'off';
+  sel.dispatchEvent(new w.Event('change'));
+  ok(band.querySelector('.sgame') === null,
+    'and Off takes the band back there and then, not on the next tick');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

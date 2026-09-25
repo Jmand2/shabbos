@@ -17,6 +17,13 @@ jobs:
         with:
           node-version: '22'
       - run: node scripts/fetch-minyanim.mjs
+
+      # The scrape checks itself here rather than in the full suites, which no
+      # longer run on a data-only push. No browser and no jsdom — this is about
+      # the file, and it runs where a bad one comes from.
+      - name: Validate the scrape
+        run: node scripts/check-data.mjs
+
       - name: Commit if changed
         run: |
           git config user.name  "shabbos-clock-bot"

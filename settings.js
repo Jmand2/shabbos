@@ -199,10 +199,16 @@ function buildSettings() {
       settings[key] = $(id).value;
       lastWeather = '';
       save();
-      // Switching Scores on from Off means there is nothing cached at all: the
-      // generic handler would save, repaint, and leave the band empty until the
-      // rotation happened to come round. Start loading now.
-      if (key === 'sports' && was === 'off' && settings.sports !== 'off') warmSports();
+      if (key === 'sports') {
+        // Any change to the cadence starts again from the next boundary of the
+        // new one, and switching to Off takes the band back immediately rather
+        // than leaving it up until a tick notices.
+        sportsReset();
+        // Switching on from Off means there is nothing cached at all: the
+        // generic handler would save, repaint, and leave the band empty until
+        // the rotation happened to come round. Start loading now.
+        if (was === 'off' && settings.sports !== 'off') warmSports();
+      }
       render();
     });
   }

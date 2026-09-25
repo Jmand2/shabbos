@@ -209,12 +209,14 @@ function todayRange(now) {
 // Age is measured from the observation the payload carries, never from the clock
 // at the moment we parsed it.
 //
-// Date.now() looked right and was not: the service worker can hand back a
-// CACHED response — that is the whole point of it — and a cached response is
-// res.ok like any other. Every replay of an hours-old forecast was therefore
-// stamped as freshly fetched, which defeated exactly the staleness this was
-// added to expose. `current.time` travels with the data and cannot be
-// re-stamped by anything downstream.
+// Date.now() looked right and was not: a cached response is res.ok like any
+// other, so every replay of an hours-old forecast was stamped as freshly
+// fetched — defeating exactly the staleness this was added to expose.
+//
+// The service worker was the culprit then and bypasses open-meteo entirely now,
+// so do not read this and conclude the guard is obsolete: the browser's own
+// HTTP cache is still there, and an age that travels inside the payload cannot
+// be wrong about itself whoever handed it over.
 //
 // null when there is no observation to measure from, which is treated as
 // unknown rather than fresh.

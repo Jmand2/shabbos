@@ -52,7 +52,10 @@ let sportsLeague = 0;
 let sportsAt = 0;
 let sportsNext = 0;
 
-const sportsUp = () => sportsAt > 0 && Date.now() - sportsAt < SPORTS_SHOW_MS;
+// Checks the setting too, not just the timer. Switching to Off while the band
+// is up otherwise left it there until the next tick noticed.
+const sportsUp = () => settings.sports !== 'off'
+  && sportsAt > 0 && Date.now() - sportsAt < SPORTS_SHOW_MS;
 
 // A game is worth keeping if one of the local teams is in it, or if it is a
 // postseason game at all — October baseball is worth a glance whoever is
@@ -148,7 +151,14 @@ function sportsTrustworthy(game, snapshotAt, t) {
   if (game.state === 'in') return t - snapshotAt <= SPORTS_LIVE_TRUST_MS;
   const start = Date.parse(game.at);
   if (Number.isNaN(start)) return false;
-  return t < start || snapshotAt > start;
+  // Before its own start time, a scheduled game needs no corroboration: it has
+  // not happened yet and the schedule is the fact.
+  if (t < start) return true;
+  // After it, "not started" is a claim about right now, and one snapshot is not
+  // a standing licence to keep making it. A genuine delay confirmed at 7:05 is
+  // worth showing for a while; the same snapshot still insisting at midnight
+  // that the game has not begun is the feed having gone away, not a delay.
+  return snapshotAt > start && t - snapshotAt <= SPORTS_LIVE_TRUST_MS;
 }
 
 // FINISHED GAMES FIRST, most recent first.
@@ -197,6 +207,15 @@ function sportsGames(now = new Date()) {
 function sportsBoundary(mins, now) {
   const step = mins * 60000;
   return Math.ceil((now + 1) / step) * step;
+}
+
+// Called when the setting changes, so a new cadence starts at the next boundary
+// of the NEW interval. Without this, going from twenty minutes to two waited out
+// the old twenty-minute boundary first — which is precisely the moment somebody
+// has changed it because they want the scores sooner.
+function sportsReset() {
+  sportsAt = 0;
+  sportsNext = 0;
 }
 
 // Checked once per second by the clock's tick, but only actually evaluated when

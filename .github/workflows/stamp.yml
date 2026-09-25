@@ -6,9 +6,19 @@
 # of them can be the stale one.
 name: Stamp version
 
+# NOT on a data-only push. The stamp rewrites the service worker's VERSION, and
+# one VERSION is one immutable app-shell generation — so stamping a commit that
+# only changed data/minyanim.json would make every iPad download and reinstall
+# the entire shell. The scraper commits three times a day. Minyan times are
+# deliberately not part of the shell; this is what keeps that true in practice
+# rather than only in the comments.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'data/minyanim.json'
+      - 'README.md'
+      - 'screenshots/**'
 
 permissions:
   contents: write
