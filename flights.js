@@ -437,11 +437,11 @@
   // on the hour, against the clock on the wall directly above it. A child can
   // see 11:58 and know to keep watching, which is not something a random
   // interval can ever offer.
-  const PARADE_MIN = 3;
-  const PARADE_MAX = 7;
-  // Close enough together to read as one event, far enough apart that seven
+  const PARADE_MIN = 7;
+  const PARADE_MAX = 10;
+  // Close enough together to read as one event, far enough apart that ten
   // vehicles do not leave stacked on top of one another.
-  const PARADE_STAGGER_MS = 380;
+  const PARADE_STAGGER_MS = 340;
 
   // `force` is the deliberate launch, from the settings sheet or a test. It
   // skips the same guards send() skips: those are about whether the hour should
@@ -451,11 +451,15 @@
       if (reduced() || settings.every === 'off' || settings.hourly === 'off') return 0;
       if (!faces.length) return 0;
     }
-    const most = Math.min(PARADE_MAX, Object.keys(VEHICLES).length);
-    const n = PARADE_MIN + Math.floor(Math.random() * (most - PARADE_MIN + 1));
-    // Distinct vehicles: the bag does not repeat within a draw, which also
-    // spreads them across lanes, since the lane belongs to the vehicle.
-    const names = vehicleBag(n);
+    const n = PARADE_MIN + Math.floor(Math.random() * (PARADE_MAX - PARADE_MIN + 1));
+    // Drawn ONE AT A TIME rather than as one batch of n. The bag refuses to
+    // repeat within a single draw, so asking it for ten when there are eight
+    // vehicles returns eight and spins its guard doing it. Drawn singly it
+    // hands back its whole shuffled pool before reshuffling, so a parade of ten
+    // is eight different things and then two more — the most variety available,
+    // and any repeat is at least a full pool behind its twin rather than
+    // beside it.
+    const names = Array.from({ length: n }, () => vehicleBag()[0]).filter(Boolean);
     names.forEach((name, i) => {
       setTimeout(() => {
         try { fly(name); } catch (err) { console.error(err); }

@@ -524,20 +524,24 @@ for (const view of VIEWS) {
       const b = el.getBoundingClientRect();
       return b.width === 0 || b.right < 0 || b.left > innerWidth;
     }).length;
+    const kinds0 = window.shabbosFlights.names().length;
     const hourMs = window.shabbosFlights.untilTheHour();
     // Computed in here, against the PAGE's clock. This page is frozen at
     // 14:00:00, and comparing that to the runner's real wall clock measures
     // nothing but the gap between the two.
     const landsOn = (Date.now() + hourMs) % 3600000;
     els.forEach((el) => el.remove());
-    return { n, shown: els.length, kinds: kinds.size, offscreen, hourMs, landsOn };
+    return { n, shown: els.length, kinds: kinds.size, kinds0, offscreen, hourMs, landsOn };
   });
 
-  ok(many.n >= 3 && many.n <= 7, `the hour sends between three and seven (${many.n})`);
+  ok(many.n >= 7 && many.n <= 10, `the hour sends between seven and ten (${many.n})`);
   ok(many.shown === many.n,
     `and all of them reach the screen (${many.shown} of ${many.n})`);
-  ok(many.kinds === many.n,
-    `each one a different vehicle, so they do not stack in one lane (${many.kinds})`);
+  // More vehicles than there are kinds, so a parade of ten cannot be ten
+  // different things. What it must not do is pick the same one twice while
+  // eight are going spare.
+  ok(many.kinds === Math.min(many.n, many.kinds0),
+    `every kind is used before any repeats (${many.kinds} kinds for ${many.n})`);
   ok(many.offscreen === 0, `none of them starts off screen (${many.offscreen})`);
   // Lands on the clock on the wall, not on however long the tab has been open.
   ok(many.hourMs > 0 && many.hourMs <= 3600000,
