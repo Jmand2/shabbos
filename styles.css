@@ -130,7 +130,13 @@ body.locked .gear { visibility: hidden; }
    (see .shuls) and what is left over settles around the clock. */
 .topline {
   flex: 1 1 auto;
-  min-height: 0;
+  /* NOT 0. A flex item with min-height: 0 shrinks below its own content and
+     paints over whatever is under it — which is written down two bands away
+     about portrait, and was happening here too: switch the zmanim list on and
+     the tile grew to six rows, the band did not, and the horizon strip ran
+     straight through Shkiya and Nightfall. The clock beside it is the elastic
+     half of this row and gives up the space instead. */
+  min-height: min-content;
   display: grid;
   grid-template-columns: auto 1fr;
   /* Hug the content. Stretching made the tile as tall as the band and left it
@@ -917,6 +923,12 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 .sgame.live .sstate { color: var(--accent); font-weight: 600; }
 
 @media (max-aspect-ratio: 1 / 1) {
+  /* A shorter floor in portrait. The floor is there so the band is the same
+     height with weather on it as with scores, and 17.5vh of a tall narrow
+     screen is more than either of them can draw: the strip runs out of WIDTH
+     across 768px long before it runs out of height, so it filled 95 of 150 and
+     the rest was simply a hole. Both sides sit on this comfortably. */
+  .weather { min-height: clamp(96px, 12.8vh, 140px); }
   .snow { padding-right: clamp(8px, 1.2vw, 14px); }
   .slabel { font-size: clamp(12px, 1.7vh, 18px); }
 }
@@ -1057,7 +1069,12 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   gap: calc(var(--minyan) * 0.9);
 }
 .card .body .col {
-  flex: 1 1 0;
+  /* Basis AUTO, not 0. Equal halves meant the column with the longer labels ran
+     out of width long before the card ran out of height, so the fit stopped
+     growing the type while a third of the box sat empty — a day of one-word
+     labels was given exactly as much room as a day of "Mincha/Maariv". Sized
+     from their own content, they share what is left over instead. */
+  flex: 1 1 auto;
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(min-content, max-content) 1fr;
@@ -1067,6 +1084,10 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   align-content: start;
 }
 .card .body .col > .group { grid-column: 1 / -1; }
+/* "Mincha/Maariv" and "Shacharis/Mussaf" carry no space to break at, so they
+   ran the full width of their track and out the other side. A label may break
+   inside a word before it may leave its column. */
+.card .body .label { overflow-wrap: anywhere; }
 /* The first heading in a column never carries the top margin that separates it
    from a row above, because there is no row above it. */
 .card .body .col > .group:first-child { margin-top: 0; }

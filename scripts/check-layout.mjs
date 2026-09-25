@@ -226,7 +226,10 @@ const MEASURE = () => {
   // Bands must not land on top of each other. A flex column with min-height: 0
   // will happily shrink an item below its content and let it paint over the
   // next one, which is what portrait was doing.
-  const bands = [...document.querySelectorAll('.topline, .weather, .shuls')]
+  // .horizon included. It was left out, so the one band that sits between the
+  // tile and the weather was the one band nothing checked — and a tall zmanim
+  // list painted the tile straight through it.
+  const bands = [...document.querySelectorAll('.topline, .horizon, .weather, .shuls')]
     .filter((el) => el.offsetParent !== null)
     .map((el) => [el.className.split(' ')[0], el.getBoundingClientRect()]);
   for (let i = 1; i < bands.length; i += 1) {
@@ -234,6 +237,20 @@ const MEASURE = () => {
       out.overflow.push(`${bands[i][0]} overlaps ${bands[i - 1][0]}`);
     }
   }
+  // The tile against the strip below it, specifically. The band check above
+  // compares BANDS, and the tile overflowing its own band is exactly the case
+  // that slips past that.
+  const tile = document.querySelector('.datebox');
+  const strip = document.querySelector('.horizon');
+  if (tile && strip && strip.offsetParent !== null) {
+    const a = tile.getBoundingClientRect();
+    const b2 = strip.getBoundingClientRect();
+    if (a.right > b2.left + 1 && b2.right > a.left + 1
+      && a.bottom > b2.top + 1 && b2.bottom > a.top + 1) {
+      out.overflow.push('the date tile overlaps the horizon');
+    }
+  }
+
   if (document.documentElement.scrollWidth > window.innerWidth + 1) {
     out.overflow.push('the page itself scrolls sideways');
   }
@@ -340,8 +357,20 @@ for (const view of VIEWS) {
     // of height empty on a dry day — but it may never GROW the band, because
     // the scores borrow it and every card below would move.
     if (m.wx) {
-      ok(m.wx.scale >= 1, `the weather fills its band (scale ${m.wx.scale})`);
-      ok(m.wx.content <= m.wx.room + 1,
+      // How much of the band it SPENDS, not what scale it happened to land on.
+      // A scale of exactly 1 is not the goal and never was: content that
+      // slightly overruns the floor settles at 0.99 and fills the band
+      // perfectly well, which the first version of this assertion called a
+      // failure.
+      // 85%, not 100%. On a narrow screen the strip runs out of WIDTH across
+      // twelve columns before it runs out of height, and the last few pixels
+      // of the band are unreachable at any size — lowering the floor to chase
+      // them just shrinks the content by the same proportion. What this is
+      // guarding against is the hole that was there before any of this: 95
+      // pixels of strip in a 150 pixel band.
+      ok(m.wx.content >= m.wx.room * 0.85,
+        `the weather fills its band (${m.wx.content} of ${m.wx.room})`);
+      ok(m.wx.content <= m.wx.room,
         `and does not outgrow it (${m.wx.content} in ${m.wx.room})`);
     }
     if (view.wide) {

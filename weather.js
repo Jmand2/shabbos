@@ -463,7 +463,10 @@ function fitWeather(el, withoutWet) {
 
   const fits = (v) => {
     el.style.setProperty('--wx-scale', v);
-    if (contentHeight() > target + 1) return false;
+    // No tolerance. A pixel of slack here is a pixel of extra band, and the
+    // band's whole job is to be the same height whether it is showing weather
+    // or scores — the cards below move for one pixel as readily as for ten.
+    if (contentHeight() > target) return false;
     // Width still matters: twelve columns can run off the side long before
     // they run out of height.
     const box = el.getBoundingClientRect();

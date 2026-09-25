@@ -629,11 +629,21 @@ function fitBoard() {
     if (!boxes.every((b) => b.scrollHeight <= b.clientHeight + 1
       && b.scrollWidth <= b.clientWidth + 1)) return false;
     return rows.every(([body, els]) => {
-      const box = body.getBoundingClientRect();
+      const bodyBox = body.getBoundingClientRect();
       return els.every((el) => {
         const r = el.getBoundingClientRect();
-        return r.right <= box.right + 1 && r.bottom <= box.bottom + 1
-          && r.left >= box.left - 1;
+        if (r.bottom > bodyBox.bottom + 1) return false;
+        // SIDEWAYS, AGAINST ITS OWN COLUMN — not against the whole card.
+        //
+        // Everything was measured against the body, and two columns sitting on
+        // top of each other are both entirely inside the body, so this could
+        // not see it. Ohr Saadya's "Mincha/Maariv" has no space to break at, so
+        // it ran the width of its track and straight through the column beside
+        // it: the 6:35pm chip printed over "Shacharis", and "Candles after"
+        // over 6:31pm. The board reported that it fitted.
+        const col = el.closest('.col');
+        const box = col ? col.getBoundingClientRect() : bodyBox;
+        return r.right <= box.right + 1 && r.left >= box.left - 1;
       });
     });
   };
@@ -677,11 +687,16 @@ function stretchCards(base) {
       card.style.setProperty('--minyan-scale', v);
       if (body.scrollHeight > body.clientHeight + 1
         || body.scrollWidth > body.clientWidth + 1) return false;
-      const box = body.getBoundingClientRect();
+      const bodyBox = body.getBoundingClientRect();
       return marks.every((el) => {
         const r = el.getBoundingClientRect();
-        return r.right <= box.right + 1 && r.bottom <= box.bottom + 1
-          && r.left >= box.left - 1;
+        if (r.bottom > bodyBox.bottom + 1) return false;
+        // Its own column sideways, for the reason given in fits() above: a card
+        // allowed to grow into its spare room can grow one column through the
+        // next, and against the body that reads as fitting.
+        const col = el.closest('.col');
+        const box = col ? col.getBoundingClientRect() : bodyBox;
+        return r.right <= box.right + 1 && r.left >= box.left - 1;
       });
     };
 
