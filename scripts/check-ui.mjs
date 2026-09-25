@@ -1264,6 +1264,27 @@ console.log('\n=== K: Kelvin ===');
   ok(n(k) - n(c) === 273, `and it is Celsius plus 273 (${n(c)} -> ${n(k)})`);
 }
 
+console.log('\n=== WC: a span that covers two things says both ===');
+{
+  // The caption named the day the rest period STARTED on, and a rest period can
+  // run three days across two different occasions. "Succos · through 7:25pm"
+  // over a strip whose last hours are Shabbos is incomplete on the side that
+  // matters — the end is what somebody is reading it for.
+  const cap = async (iso) => {
+    const { w } = await boot(iso, { forecast: forecastFrom(iso) });
+    return $(w, 'weather').querySelector('.whead')?.textContent ?? '';
+  };
+  const atzeres = await cap('2026-10-02T14:00:00-04:00');
+  ok(/Shemini Atzeres \u2192 Simchas Torah/.test(atzeres),
+    `two occasions in one span name both (${atzeres.slice(0, 44)})`);
+  const pesach = await cap('2027-04-23T14:00:00-04:00');
+  ok(/Pesach \u2192 Shabbos/.test(pesach),
+    `and a Shabbos inside Chol HaMoed is called Shabbos (${pesach.slice(0, 44)})`);
+  const plain = await cap('2026-09-18T14:00:00-04:00');
+  ok(/^Shabbos/.test(plain) && !/\u2192/.test(plain),
+    `an ordinary Friday still says one word (${plain.slice(0, 30)})`);
+}
+
 console.log('\n=== AP: meridiems are am and pm, not a and p ===');
 {
   const when = '2026-09-25T14:05:00-04:00';

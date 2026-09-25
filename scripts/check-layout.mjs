@@ -222,6 +222,62 @@ const MEASURE = () => {
     }
   }
 
+  /* [24] TRUNCATION. Several things here are allowed to ellipsize and a few are
+     not, and nothing told them apart. A shul's name, a weather note, a day
+     heading or a score's state is the glanceable content — if it is cut off,
+     the board is not saying what it was built to say. The scores' own status
+     detail ("3rd 04:12") IS allowed to clip: it is the least important string
+     in the densest row and shortening it is a deliberate choice, so it is
+     listed as one rather than silently passing. */
+  out.cut = [];
+  for (const [sel, why] of [['.card h2', 'shul name'], ['.wnote', 'weather note'],
+    ['.card .body .group', 'day heading'], ['.spill', 'score state'],
+    ['.slabel', 'scores label'], ['.wfeels', 'feels line']]) {
+    for (const n of document.querySelectorAll(sel)) {
+      if (n.scrollWidth > n.clientWidth + 1) {
+        out.cut.push(`${why}: "${n.textContent.trim().slice(0, 22)}"`);
+      }
+    }
+  }
+
+  /* [25] CONTRAST. The display is read from across a room, and "it fits" is not
+     the same as "it can be read" — muted grey on a dark panel passes every
+     overflow check ever written. WCAG relative luminance, against the nearest
+     painted background. */
+  const lum = (c) => {
+    const m = c.match(/[\d.]+/g);
+    if (!m || m.length < 3) return null;
+    const [r, g, b] = m.slice(0, 3).map((v) => {
+      const x = Number(v) / 255;
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+    });
+    return (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+  };
+  const behind = (el) => {
+    for (let n = el; n; n = n.parentElement) {
+      const bg = getComputedStyle(n).backgroundColor;
+      const m = bg.match(/[\d.]+/g);
+      if (m && (m.length < 4 || Number(m[3]) > 0.5)) return bg;
+    }
+    return getComputedStyle(document.body).backgroundColor;
+  };
+  out.contrast = [];
+  for (const [sel, why, want] of [
+    ['#clockTime', 'the clock', 7], ['.card .time', 'minyan times', 4.5],
+    ['.card .label', 'minyan labels', 3], ['.nextflag', 'the NEXT flag', 3],
+    ['.wbig', 'the current temperature', 4.5], ['.wtemp', 'forecast temperatures', 3.5],
+    ['.whour', 'forecast hours', 2.6], ['.sscore', 'scores', 4],
+    ['.spill', 'score state', 2.6], ['#freshness', 'the footer', 2.4],
+  ]) {
+    const n = document.querySelector(sel);
+    if (!n || !n.getClientRects().length) continue;
+    const a = lum(getComputedStyle(n).color);
+    const b = lum(behind(n));
+    if (a === null || b === null) continue;
+    const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    if (ratio < want) out.contrast.push(`${why} ${ratio.toFixed(1)}:1 (want ${want})`);
+  }
+
   out.orphans = [];
   out.columns = [];
   out.widthUsed = [];
@@ -411,6 +467,11 @@ for (const view of VIEWS) {
     ok(m.cards > 0, 'the board rendered cards');
     ok(m.orphans.length === 0, 'every column opens on a day, none left behind',
       m.orphans.join(' | '));
+    ok((m.cut ?? []).length === 0,
+      'nothing glanceable is cut off', (m.cut ?? []).slice(0, 3).join(' | '));
+    ok((m.contrast ?? []).length === 0,
+      'everything important is readable across a room',
+      (m.contrast ?? []).join(' | '));
     // A heading, not a masthead.
     ok((m.titles ?? []).every((p2) => p2 <= 26),
       `the shul name leaves the schedule its room (${(m.titles ?? []).join('%, ')}%)`);
@@ -461,8 +522,97 @@ for (const view of VIEWS) {
     }
   }
 
-  if (keepShots) await page.screenshot({ path: join(SHOTS, `${view.name}.png`) });
+  if (keepShots) {
+    await page.screenshot({ path: join(SHOTS, `${view.name}.png`) });
+    /* [26] AND THE SAME THING FROM THE DOORWAY.
+       Every screenshot here gets looked at on a laptop, a foot away, at full
+       size — which is the one distance this display is never read from. At 28%
+       the type that is merely small becomes type that is not there, and "is
+       the next minyan obvious" answers itself.
+
+       The SAME viewport at a smaller device scale, not a smaller viewport: the
+       first version of this shrank the window and zoomed the body, so the app
+       re-fitted itself for a 330px screen and dropped half the schedule. That
+       measured what the board does on a phone, which is not the question. This
+       renders the wall exactly as it is and then photographs it from further
+       away.
+
+       Artifacts for looking at, not pixel diffs — the failure they catch is a
+       judgement, and a judgement is not a thing to assert. */
+    const far = await browser.newPage({
+      viewport: { width: view.size[0], height: view.size[1] },
+      deviceScaleFactor: 0.28,
+    });
+    await far.route('**/api.open-meteo.com/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify(forecast(view.at, view.soaking)) }));
+    await far.route('**site.api.espn.com**', (route) => route.abort());
+    await far.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
+    await settle(far);
+    await far.screenshot({ path: join(SHOTS, `far-${view.name}.png`) });
+    await far.close();
+  }
   await page.close();
+}
+
+/* [27] TRANSITIONS -----------------------------------------------------------
+
+   Everything else here photographs one moment. These are the moments the board
+   moves THROUGH, and the failures live in the difference between two frames
+   rather than in either one: a band that changes height as a day rolls over
+   moves every card under it, and on a display nobody is touching, movement is
+   the thing that gets noticed.
+
+   A minute either side, so the pair differs by exactly the transition and by
+   nothing else. */
+{
+  console.log('  transitions');
+  const pairs = [
+    ['the hour rolling over', '2026-09-25T13:59:00-04:00', '2026-09-25T14:01:00-04:00'],
+    ['candle lighting', '2026-09-25T18:29:00-04:00', '2026-09-25T18:31:00-04:00'],
+    ['nightfall into Succos II', '2026-09-26T19:25:00-04:00', '2026-09-26T19:29:00-04:00'],
+    ['havdalah', '2026-09-27T19:24:00-04:00', '2026-09-27T19:28:00-04:00'],
+    ['Yom Tov into Shabbos', '2027-04-23T18:00:00-04:00', '2027-04-23T20:00:00-04:00'],
+  ];
+
+  const frame = async (at) => {
+    current = { at, settings: { theme: 'night', shuls: ['beth-aaron', 'ohr-saadya'] } };
+    const page = await browser.newPage({ viewport: { width: 1180, height: 820 } });
+    await page.route('**/api.open-meteo.com/**', (r) =>
+      route_ok(r, forecast(at)));
+    await page.route('**site.api.espn.com**', (r) => r.abort());
+    await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
+    await settle(page);
+    const m = await page.evaluate(MEASURE);
+    const geo = await page.evaluate(() => ({
+      cardTop: Math.round(document.querySelector('.card')?.getBoundingClientRect().top ?? 0),
+      band: Math.round(document.getElementById('weather')?.getBoundingClientRect().height ?? 0),
+      clock: Math.round(document.getElementById('clockTime')?.getBoundingClientRect().height ?? 0),
+    }));
+    await page.close();
+    return { m, geo };
+  };
+
+  for (const [what, before, after] of pairs) {
+    const a = await frame(before);
+    const b = await frame(after);
+    console.log(`    ${what}: card ${a.geo.cardTop} -> ${b.geo.cardTop},`
+      + ` band ${a.geo.band} -> ${b.geo.band}`);
+    ok(a.m.overflow.length === 0 && b.m.overflow.length === 0,
+      `${what}: nothing overflows on either side`,
+      [...a.m.overflow, ...b.m.overflow].slice(0, 2).join(' | '));
+    // The weather band is the one the scores borrow, so its height is the thing
+    // that must not move. The cards below may legitimately re-fit as the
+    // schedule changes — that is the board doing its job — but the band above
+    // them has no reason to.
+    ok(Math.abs(a.geo.band - b.geo.band) <= 1,
+      `${what}: the weather band holds its height (${a.geo.band} -> ${b.geo.band})`);
+    ok(a.geo.clock === b.geo.clock,
+      `${what}: and the clock does not resize (${a.geo.clock} -> ${b.geo.clock})`);
+    ok((a.m.cut ?? []).length === 0 && (b.m.cut ?? []).length === 0,
+      `${what}: nothing glanceable is cut off across it`,
+      [...(a.m.cut ?? []), ...(b.m.cut ?? [])].slice(0, 2).join(' | '));
+  }
 }
 
 /* The scores band ---------------------------------------------------------

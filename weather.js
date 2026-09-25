@@ -177,6 +177,32 @@ function restName(day) {
   return fmtEng.formatYomTov(jc) || 'Shabbos';
 }
 
+// [7] WHAT THE SPAN ACTUALLY COVERS, when it covers more than one thing.
+//
+// A rest period can run three days across two different occasions — Shemini
+// Atzeres into Simchas Torah, or a Yom Tov straight into Shabbos — and the
+// caption named only the day it started on. "Succos · through 7:25pm" over a
+// strip whose last six hours are Shabbos is not wrong so much as incomplete,
+// and the incompleteness is on the side that matters: the end.
+function restNames(from, end) {
+  const seen = [];
+  for (let d = new Date(from); d <= end; d = addDays(d, 1)) {
+    const jc = new JewishDay(d).jc;
+    if (!jc.isAssurBemelacha()) continue;
+    // A Shabbos inside Chol HaMoed is Shabbos, and calling it "Chol Hamoed
+    // Pesach" in a caption that already began with Pesach says the festival
+    // twice and the useful word not at all. "Pesach → Shabbos" is what somebody
+    // reading the end of the span needs.
+    const name = d.getDay() === 6 && /chol\s*hamoed/i.test(restName(d))
+      ? 'Shabbos' : restName(d);
+    if (name !== seen[seen.length - 1]) seen.push(name);
+  }
+  // Two is a span worth naming at both ends. Three would be a sentence, and the
+  // heading has a forecast to sit beside.
+  if (seen.length > 2) return `${seen[0]} \u2192 ${seen[seen.length - 1]}`;
+  return seen.join(' \u2192 ');
+}
+
 // The span the strip describes. Not "today": a Friday afternoon should already
 // be showing Shabbos, and Shabbos morning should still be showing it.
 function weatherSpan(now, info) {
@@ -185,7 +211,8 @@ function weatherSpan(now, info) {
   if (!inIt && !jc.isTomorrowShabbosOrYomTov()) return { name: '', until: null };
   const end = restEnd(now);
   if (!end) return { name: '', until: null };
-  return { name: restName(inIt ? now : addDays(now, 1)), until: end.tzeis };
+  const from = inIt ? now : addDays(now, 1);
+  return { name: restNames(from, end.day) || restName(from), until: end.tzeis };
 }
 
 // A rolling window, from the hour we are in, optionally clipped to the end of

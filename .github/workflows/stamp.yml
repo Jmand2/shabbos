@@ -101,5 +101,11 @@ jobs:
           git diff --staged --quiet && exit 0
           # Skips CI on purpose: this commit is a stamp, not a change to test.
           git commit -m "Stamp build [skip ci]"
-          git pull --rebase --autostash
-          git push
+          # NO REBASE. The step above established that main is still the commit
+          # the checks passed on; pulling here would rebase this stamp onto
+          # whatever landed in between and put the seal of a tested commit on an
+          # untested one — the same race the HEAD check exists to close,
+          # reopened three lines later. A non-fast-forward push means main moved
+          # under us, and the right answer is to fail: that newer commit has its
+          # own checks coming and will stamp itself.
+          git push origin HEAD:main
