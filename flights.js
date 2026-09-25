@@ -17,19 +17,22 @@
   // bounds. Stating it as a range is also the honest label — the gap has been
   // random since it stopped being a fixed interval, so "every 10 min" was never
   // what happened.
-  const DEFAULTS = { every: '2-5' };
+  const DEFAULTS = { every: '2-5', hourly: 'on' };
   const EVERY = ['off', '2-5', '5-10', '10-20', '20-40', '45-90'];
+  const HOURLY = ['on', 'off'];
 
   let settings = { ...DEFAULTS, ...read(STORE) };
   // A value saved by an older build is not in the list any more. Without this
   // the menu shows blank and the schedule runs on a stale number that no option
   // corresponds to.
   if (!EVERY.includes(String(settings.every))) settings.every = DEFAULTS.every;
+  if (!HOURLY.includes(String(settings.hourly))) settings.hourly = DEFAULTS.hourly;
   let faces = [];
   // What the last load actually managed, for the status panel.
   let loadReport = null;
   let layer = null;
   let timer = null;
+  let hourTimer = null;
 
   function read(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
   const save = () => localStorage.setItem(STORE, JSON.stringify(settings));
@@ -426,6 +429,57 @@
     timer = setTimeout(() => { tick(); schedule(); }, nextGap());
   }
 
+  /* The top of the hour --------------------------------------------------- */
+
+  // Ordinary flights are deliberately unpredictable — a gap drawn at random
+  // inside a range, so nothing about them can be waited for. The hour is the
+  // opposite of that, and the opposite is the point: everything goes at once,
+  // on the hour, against the clock on the wall directly above it. A child can
+  // see 11:58 and know to keep watching, which is not something a random
+  // interval can ever offer.
+  const PARADE_MIN = 3;
+  const PARADE_MAX = 7;
+  // Close enough together to read as one event, far enough apart that seven
+  // vehicles do not leave stacked on top of one another.
+  const PARADE_STAGGER_MS = 380;
+
+  // `force` is the deliberate launch, from the settings sheet or a test. It
+  // skips the same guards send() skips: those are about whether the hour should
+  // fire on its own, not about whether the thing works.
+  function parade(force = false) {
+    if (!force) {
+      if (reduced() || settings.every === 'off' || settings.hourly === 'off') return 0;
+      if (!faces.length) return 0;
+    }
+    const most = Math.min(PARADE_MAX, Object.keys(VEHICLES).length);
+    const n = PARADE_MIN + Math.floor(Math.random() * (most - PARADE_MIN + 1));
+    // Distinct vehicles: the bag does not repeat within a draw, which also
+    // spreads them across lanes, since the lane belongs to the vehicle.
+    const names = vehicleBag(n);
+    names.forEach((name, i) => {
+      setTimeout(() => {
+        try { fly(name); } catch (err) { console.error(err); }
+      }, (i * PARADE_STAGGER_MS) + (Math.random() * 220));
+    });
+    return names.length;
+  }
+
+  // On the wall clock, not on however long this tab has happened to be open —
+  // the same reason the scores band lands on :00 and :05.
+  function untilTheHour() {
+    const next = new Date();
+    next.setMinutes(60, 0, 0);
+    const ms = next - Date.now();
+    // Standing exactly on the hour means the NEXT one, not this one again.
+    return ms < 1000 ? ms + 3600000 : ms;
+  }
+
+  function scheduleParade() {
+    clearTimeout(hourTimer);
+    if (settings.every === 'off' || settings.hourly === 'off') return;
+    hourTimer = setTimeout(() => { parade(); scheduleParade(); }, untilTheHour());
+  }
+
   /* Settings -------------------------------------------------------------- */
 
   function mountSettings() {
@@ -452,6 +506,12 @@
           <option value="45-90">Every 45–90 min</option>
         </select>
       </label>
+      <label class="row"><span>On the hour</span>
+        <select id="flightHourly">
+          <option value="on">A few at once</option>
+          <option value="off">Off</option>
+        </select>
+      </label>
       <label class="row"><span>Try one now</span>
         <button class="gear" id="flightNow" type="button">Send one</button>
       </label>`;
@@ -461,7 +521,14 @@
     every.value = settings.every;
     every.addEventListener('change', () => {
       settings.every = EVERY.includes(every.value) ? every.value : DEFAULTS.every;
-      save(); schedule();
+      save(); schedule(); scheduleParade();
+    });
+
+    const hourly = block.querySelector('#flightHourly');
+    hourly.value = settings.hourly;
+    hourly.addEventListener('change', () => {
+      settings.hourly = HOURLY.includes(hourly.value) ? hourly.value : DEFAULTS.hourly;
+      save(); scheduleParade();
     });
 
     // Waiting several minutes to find out whether anything is set up correctly
@@ -486,6 +553,7 @@
         if (r.ok) {
           faceBag = bag(faces);
           schedule();
+          scheduleParade();
           tick();                     // one straight away, so you can see it worked
         }
       } catch (err) {
@@ -523,6 +591,10 @@
       // minutes apart, and gone in seconds.
       send: (name) => { try { fly(name ?? vehicleBag()[0]); } catch (e) { console.error(e); } },
       names: () => Object.keys(VEHICLES),
+      // The hourly parade, on demand. Waiting up to an hour to see whether it
+      // works is no way to check it, and a test cannot wait at all.
+      parade: () => parade(true),
+      untilTheHour: () => untilTheHour(),
       // The artwork and seat slots, so a reference sheet can be rendered
       // without waiting minutes for each vehicle to happen to fly past.
       spec: (name) => (name ? VEHICLES[name] : VEHICLES),
@@ -540,6 +612,7 @@
     try { faces = await loadFaces(); } catch { faces = []; }
     faceBag = bag(faces);
     schedule();
+    scheduleParade();
     announce();
   }
 

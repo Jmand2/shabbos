@@ -507,6 +507,47 @@ for (const view of VIEWS) {
     ok(car.worst >= 0.95,
       `the car stays on screen along its lap (worst ${Math.round(car.worst * 100)}%)`);
   }
+
+  /* The top of the hour.
+     Everything else about flights is deliberately unpredictable, so this is
+     the one part that can be stated exactly: several at once, all different,
+     all on screen. It also cannot be waited for — an hour is longer than any
+     test — so it is driven through the hook. */
+  const many = await page.evaluate(async () => {
+    document.querySelectorAll('.flight').forEach((el) => el.remove());
+    const n = window.shabbosFlights.parade();
+    // Long enough for the whole stagger to have run.
+    await new Promise((r) => setTimeout(r, 3600));
+    const els = [...document.querySelectorAll('.flight')];
+    const kinds = new Set(els.map((el) => el.className.replace('flight', '').trim()));
+    const offscreen = els.filter((el) => {
+      const b = el.getBoundingClientRect();
+      return b.width === 0 || b.right < 0 || b.left > innerWidth;
+    }).length;
+    const hourMs = window.shabbosFlights.untilTheHour();
+    // Computed in here, against the PAGE's clock. This page is frozen at
+    // 14:00:00, and comparing that to the runner's real wall clock measures
+    // nothing but the gap between the two.
+    const landsOn = (Date.now() + hourMs) % 3600000;
+    els.forEach((el) => el.remove());
+    return { n, shown: els.length, kinds: kinds.size, offscreen, hourMs, landsOn };
+  });
+
+  ok(many.n >= 3 && many.n <= 7, `the hour sends between three and seven (${many.n})`);
+  ok(many.shown === many.n,
+    `and all of them reach the screen (${many.shown} of ${many.n})`);
+  ok(many.kinds === many.n,
+    `each one a different vehicle, so they do not stack in one lane (${many.kinds})`);
+  ok(many.offscreen === 0, `none of them starts off screen (${many.offscreen})`);
+  // Lands on the clock on the wall, not on however long the tab has been open.
+  ok(many.hourMs > 0 && many.hourMs <= 3600000,
+    `the next one is within the hour (${Math.round(many.hourMs / 1000)}s)`);
+  ok(many.landsOn === 0, `and it lands on the hour itself (+${many.landsOn}ms)`);
+  // Standing exactly on the hour asks for the NEXT one, not this one again —
+  // which is the case this page happens to be frozen in.
+  ok(many.hourMs === 3600000,
+    `on the hour exactly, it waits for the next (${many.hourMs}ms)`);
+
   await page.close();
 }
 
