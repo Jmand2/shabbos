@@ -317,11 +317,19 @@ export function applyOverrides(days, overrides) {
         merged[group] = sections[group];
         touched += 1;
       }
-      // The shul's own published havdalah, same rule: only when nothing else
-      // carries one. display.js prefers it over computing off maariv.
-      if (sections.edge && !existing?.edge?.havdalah) {
-        merged.edge = { ...(existing?.edge ?? {}), ...sections.edge };
-        touched += 1;
+      // The shul's own edges, same rule, KEY BY KEY. This spread the override
+      // last, so a hand-entered candle time replaced a scraped one rather than
+      // filling for it — the exact opposite of the rule this file is built on —
+      // and it only ever looked at havdalah, so an entry carrying candles was
+      // judged by whether a different key was present.
+      if (sections.edge) {
+        const have = existing?.edge ?? {};
+        const add = Object.fromEntries(
+          Object.entries(sections.edge).filter(([k]) => !have[k]));
+        if (Object.keys(add).length) {
+          merged.edge = { ...have, ...add };
+          touched += 1;
+        }
       }
       if (!touched) continue;
       filled += touched;

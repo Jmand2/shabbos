@@ -741,6 +741,43 @@ console.log('\n=== Y1: erev Yom Tov reaches every day of a three-day chag ===');
     `an ordinary day carries no festival qualifier (${groups[0]})`);
 }
 
+console.log('\n=== Y1b: a second night, candles are never calculated ===');
+{
+  // 2027-04-22 is Pesach I running into Pesach II, so nothing is lit until the
+  // first day is out. WHICH nightfall a shul holds by for that is its own
+  // practice, and there is no standard to fall back on the way there is for
+  // erev Shabbos, where eighteen minutes before sunset is what everybody
+  // prints.
+  //
+  // The board used to fall back to computed tzeis and label it "Candles after".
+  // On the real wall that read "Candles after 7:26pm" for Beth Aaron on Succos
+  // while their own calendar says 7:39pm — thirteen minutes INTO Yom Tov. An
+  // invented time is worse than a blank one everywhere, and here it is worse
+  // than most.
+  const { w } = await boot('2027-04-21T15:00:00-04:00',
+    { minyanim: schedule(PESACH), settings: { shuls: ['beth-aaron'] } });
+  const labels = [...w.document.querySelectorAll('.card .label.edgerow')]
+    .map((n) => n.textContent);
+  ok(labels.includes('Candles'),
+    `erev Yom Tov still calculates, because that one is standard (${labels.join(', ')})`);
+  ok(!labels.includes('Candles after'),
+    `but a second night with nothing published shows nothing (${labels.join(', ') || 'none'})`);
+}
+{
+  // And when the shul DOES publish one, it is shown, to the minute they said.
+  const fixture = schedule(PESACH);
+  fixture.days['2027-04-22']['beth-aaron'].edge = { candles: '8:41 PM' };
+  const { w } = await boot('2027-04-21T15:00:00-04:00',
+    { minyanim: fixture, settings: { shuls: ['beth-aaron'] } });
+  const row = [...w.document.querySelectorAll('.card .label.edgerow')]
+    .find((n) => n.textContent === 'Candles after');
+  ok(!!row, 'a published second-night time is shown');
+  const times = [...w.document.querySelectorAll('.card .time.edgetime')]
+    .map((n) => n.textContent.trim());
+  ok(times.includes('8:41pm'),
+    `and it is the shul's own minute, not a computed one (${times.join(' ')})`);
+}
+
 console.log('\n=== Y2: an ordinary week is unchanged ===');
 {
   const { w } = await boot('2027-04-13T15:00:00-04:00',

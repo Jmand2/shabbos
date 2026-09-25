@@ -5,7 +5,7 @@
     "These only ever FILL a section that came back empty. If the shul's own site",
     "or teaneckminyanim has anything at all for that service on that day, theirs",
     "wins and the entry here is ignored. So a stale line in this file cannot put",
-    "a wrong time on the wall over a live one — it can only sit unused.",
+    "a wrong time on the wall over a live one \u2014 it can only sit unused.",
     "",
     "Why this exists: teaneckminyanim carries Beth Aaron's weekday Mincha and",
     "Maariv, but not its YOM TOV schedule, and Beth Aaron's own home page shows",
@@ -24,25 +24,57 @@
       "covers": "2026-09-25/2026-09-27",
       "source": "Congregation Beth Aaron monthly calendar, September 2026 / Tishrei 5787 (printed 2026-09-02), linked from bethaaron.org",
       "entered_at": "2026-09-25",
-      "note": "Succos I and II. Read off the shul's own calendar and checked by eye. Cross-check: the calendar states Havdalah 7:39pm on 9/27, and Maariv 7:30pm plus this shul's havdalahAfterMaariv of 9 minutes gives 7:39 exactly.",
+      "note": "Succos I and II. Read off the shul's own calendar and checked by eye. Cross-checks: the calendar states Havdalah 7:39pm on 9/27, and Maariv 7:30pm plus this shul's havdalahAfterMaariv of 9 minutes gives 7:39 exactly. The 9/26 candle time is the calendar's own 'Earliest Candles 7:39pm' \u2014 a computed nightfall gives 7:26pm, which would have people lighting thirteen minutes into Yom Tov.",
       "days": {
         "2026-09-25": {
-          "mincha": [{ "label": "Mincha / Kabbalas Shabbos", "time": "6:35 PM" }]
+          "mincha": [
+            {
+              "label": "Mincha / Kabbalas Shabbos",
+              "time": "6:35 PM"
+            }
+          ]
         },
         "2026-09-26": {
           "mincha": [
-            { "label": "Early Mincha", "time": "1:45 PM" },
-            { "label": "Mincha", "time": "6:25 PM" }
+            {
+              "label": "Early Mincha",
+              "time": "1:45 PM"
+            },
+            {
+              "label": "Mincha",
+              "time": "6:25 PM"
+            }
           ],
-          "maariv": [{ "label": "Maariv", "time": "7:30 PM" }]
+          "maariv": [
+            {
+              "label": "Maariv",
+              "time": "7:30 PM"
+            }
+          ],
+          "edge": {
+            "candles": "7:39 PM"
+          }
         },
         "2026-09-27": {
           "mincha": [
-            { "label": "Early Mincha", "time": "1:45 PM" },
-            { "label": "Mincha", "time": "6:25 PM" }
+            {
+              "label": "Early Mincha",
+              "time": "1:45 PM"
+            },
+            {
+              "label": "Mincha",
+              "time": "6:25 PM"
+            }
           ],
-          "maariv": [{ "label": "Maariv", "time": "7:30 PM" }],
-          "edge": { "havdalah": "7:39 PM" }
+          "maariv": [
+            {
+              "label": "Maariv",
+              "time": "7:30 PM"
+            }
+          ],
+          "edge": {
+            "havdalah": "7:39 PM"
+          }
         }
       }
     }

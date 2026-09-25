@@ -178,12 +178,19 @@ function edgeRowsFor(slug, day) {
   const more = jc.isTomorrowShabbosOrYomTov();
 
   if (more) {
-    // Into Shabbos, lighting is at the usual time. Into a SECOND day of Yom
-    // Tov nothing is lit until nightfall, and a computed candle lighting would
-    // be three quarters of an hour early and simply wrong.
     const afterDark = resting && day.getDay() !== 5;
     const at = timeToDate(day, published.candles ?? '')
-      ?? toDate(afterDark ? zmanim(day).getTzais() : zmanim(day).getCandleLighting());
+      // Erev Shabbos or a first night: eighteen minutes before sunset is a
+      // published standard and is what every shul here prints, so calculating
+      // it puts nothing on the wall that anybody disputes.
+      //
+      // A SECOND night is different and must not be calculated. Nothing is lit
+      // until the previous day is out, and which nightfall a shul holds by for
+      // that is its own — Beth Aaron prints 7:39pm for a night this computed
+      // 7:26pm from tzeis, so the wall was telling people to light thirteen
+      // minutes into Yom Tov. There is no standard to fall back on here, so
+      // when a shul has not published one, nothing is shown.
+      ?? (afterDark ? null : toDate(zmanim(day).getCandleLighting()));
     if (at) out.push({ label: afterDark ? 'Candles after' : 'Candles', at });
   }
   // Havdalah belongs to the day the rest actually ENDS, not to each day of it.
