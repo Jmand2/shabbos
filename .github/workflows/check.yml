@@ -66,7 +66,28 @@ jobs:
       - run: npx playwright install webkit
 
       - name: check:layout
-        run: npm run check:layout
+        run: |
+          set -o pipefail
+          npm run check:layout 2>&1 | tee /tmp/layout.log
+
+      # The measurements, where they can be read without a token.
+      #
+      # This suite asserts real pixels, so it can fail here and pass on a laptop
+      # — a different macOS renders the same font at slightly different metrics,
+      # and some of these margins are a fraction of a point wide. When that
+      # happens the numbers are the whole diagnosis, and they were reachable
+      # only by downloading the run log, which needs a PAT. A step summary is
+      # published on the check run itself and is public on a public repo.
+      - name: the numbers
+        if: failure()
+        run: |
+          {
+            echo '### check:layout'
+            echo ''
+            echo '```'
+            grep -E '^  [a-z-]+ +\(|FAIL|passed, ' /tmp/layout.log || tail -80 /tmp/layout.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: screenshots
         if: failure()
