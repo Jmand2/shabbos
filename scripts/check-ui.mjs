@@ -534,8 +534,12 @@ console.log('\n=== W1: the strip covers the rest period, and says which one ==='
   ok(/through \d/.test(head), 'the heading says when it ends');
   ok(el.querySelectorAll('.wicon').length === cols + 1,
     'one sky glyph per column, plus the one for now');
-  ok(el.querySelector('.wcol.now .whour')?.textContent === 'Now',
-    'the first column is labelled Now');
+  // The present belongs to the block on the left, once. The strip is entirely
+  // about hours still to come.
+  ok(!el.querySelector('.wcol.now'),
+    'no column claims to be the present');
+  ok(/^\d{1,2}(am|pm)$/.test(el.querySelector('.wcol .whour')?.textContent ?? ''),
+    `the strip opens on a clock hour (${el.querySelector('.wcol .whour')?.textContent})`);
   // The pattern cycles 0, 40, 5, 10, 60, 8 — so half of twelve columns carry a
   // real chance and half are the model's noise.
   const pops = [...el.querySelectorAll('.wpop')].map((n) => n.textContent);
@@ -697,8 +701,27 @@ console.log('\n=== R3: past six hours the "now" block stops being an observation
   });
   const shown = $(dead.w, 'weather').querySelector('.wbig').textContent;
   ok(shown !== '99°', `an eight-hour-old observation is dropped (shows ${shown})`);
-  ok(shown === `${dead.w.document.querySelector('.wcol.now .wtemp').textContent}`,
-    'and the current hour of the forecast is read instead');
+  // The current hour is no longer a COLUMN — the block owns the present and the
+  // strip starts at the next hour — so this reads the forecast series directly
+  // rather than a tile that used to duplicate it.
+  const firstCol = dead.w.document.querySelector('.wcol .wtemp').textContent;
+  ok(shown !== firstCol,
+    `and the block is not simply the first forecast column (${shown} vs ${firstCol})`);
+  ok(/^\d+°$/.test(shown), `it is read off the current hour instead (${shown})`);
+}
+
+console.log('\n=== R3b: the current hour is shown once, not twice ===');
+{
+  // The strip used to open with a column labelled "Now" beside a block saying
+  // exactly the same thing: same icon, same temperature, a centimetre apart.
+  const when = '2026-09-22T14:05:00-04:00';
+  const { w } = await boot(when, { forecast: forecastFrom(when) });
+  const hours = [...w.document.querySelectorAll('.whour')].map((n) => n.textContent);
+  ok(!hours.includes('Now'), `no column claims the present (${hours.slice(0, 3).join(' ')})`);
+  ok(w.document.querySelectorAll('.wbig').length === 1,
+    'exactly one current-condition reading on the strip');
+  // 2:05pm, so the forecast opens at 3pm.
+  ok(hours[0] === '3pm', `the forecast opens at the next hour (${hours[0]})`);
 }
 
 /* Y — multi-day Yom Tov ---------------------------------------------------
@@ -1115,8 +1138,11 @@ console.log('\n=== WN: the weather says something only when there is something =
       f.hourly.weather_code[i] = 61;                 // light rain, near certain
     }
   });
-  ok(/^Rain likely/.test(certain) && !/Heavy/.test(certain),
-    `a near-certain drizzle is not a downpour (${certain})`);
+  // Not "Heavy" — that word is reserved for the codes that mean it. A near
+  // certainty earns "very likely", which is a statement about the odds and
+  // makes no claim at all about how hard it will come down.
+  ok(/^Rain very likely/.test(certain) && !/Heavy/.test(certain),
+    `a near-certain drizzle is very likely, not heavy (${certain})`);
 
   const heavy = await noteOn((f) => {
     for (const i of [2, 3]) {

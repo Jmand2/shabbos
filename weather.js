@@ -14,9 +14,10 @@ const WEATHER_CACHE = 'shabbos-clock-weather';
 const WEATHER_URL = `https://api.open-meteo.com/v1/forecast?latitude=${PLACE.lat}`
   + `&longitude=${PLACE.lon}`
   + '&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,'
-  + 'weather_code,is_day'
-  + '&current=temperature_2m,apparent_temperature,weather_code,is_day'
+  + 'weather_code,is_day,wind_speed_10m,wind_gusts_10m'
+  + '&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m'
   + '&daily=temperature_2m_max,temperature_2m_min'
+  + '&wind_speed_unit=mph'
   + `&temperature_unit=fahrenheit&timezone=${encodeURIComponent(PLACE.tz)}&forecast_days=4`;
 // A wall read from across a room fits about this many columns before they stop
 // being legible. Past it the window simply rolls forward with the hour.
@@ -64,9 +65,26 @@ const degrees = (f) => {
   return Math.round(f);
 };
 
-// Kelvin is not a degree — it is written 291 K, with a space and no ring. The
-// ring is hard-coded in four places, so the mark lives here instead.
+// Kelvin is not a degree — it is written 291 K, with a space and no ring.
 const degreeMark = () => (settings.units === 'K' ? '\u202fK' : '\u00b0');
+
+// THE ONE PLACE A TEMPERATURE BECOMES TEXT.
+//
+// degreeMark() existed but the note built its own strings with a hard-coded
+// ring, so "Warming to 291°" went on the wall in Kelvin. Anything that prints a
+// temperature goes through here.
+const formatTemp = (f) => {
+  const v = degrees(f);
+  return v == null ? '' : `${v}${degreeMark()}`;
+};
+
+// How far apart "feels like" has to be before it is worth a line.
+//
+// Measured on the RAW Fahrenheit, never on the converted number. Comparing
+// after conversion meant the rule was three degrees F on one setting and three
+// degrees C — nearly six F — on another, so the same weather earned the line or
+// did not depending on a display preference.
+const FEELS_GAP_F = 3;
 
 // WMO code -> the glyph to draw and what to call it. Grouped the way someone
 // glancing at a wall groups them: the difference between 61 and 63 is "rain",
@@ -178,7 +196,9 @@ function hoursWithin(now, span) {
   if (!Array.isArray(h?.time)) return [];
   const from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
   const rows = [];
-  for (let i = 0; i < h.time.length && rows.length < WEATHER_HOURS; i += 1) {
+  // One extra: the current hour is kept so the "now" block can fall back to it
+  // when the observation is stale, and then dropped from the strip.
+  for (let i = 0; i < h.time.length && rows.length < WEATHER_HOURS + 1; i += 1) {
     const at = localHour(h.time[i]);
     if (!at || at < from) continue;
     if (span.until && at > span.until) break;
@@ -195,6 +215,8 @@ function hoursWithin(now, span) {
       // How MUCH, in millimetres. The probability says how likely it is to rain
       // at all and says nothing about whether to bother with a coat.
       mm: h.precipitation?.[i],
+      wind: h.wind_speed_10m?.[i],
+      gust: h.wind_gusts_10m?.[i],
       sky: skyOf(h.weather_code?.[i], h.is_day?.[i] !== 0),
     });
   }
@@ -253,11 +275,17 @@ const weatherAge = () => (weather?.observed_at ? Date.now() - weather.observed_a
 
 // Rain worth planning around, not worth mentioning.
 const NOTE_WET = 50;
+const NOTE_VERY_WET = 80;
 // WMO codes that actually mean heavy: 65 heavy rain, 67 heavy freezing rain,
 // 82 violent showers. Not a probability — "Heavy rain" used to mean an 80%
 // chance, so a near-certain drizzle was announced as a downpour and a merely
 // likely cloudburst was not.
 const NOTE_HEAVY_CODES = [65, 67, 82];
+// Wind worth a word. Below this it is a breeze and nobody changes what they
+// wear for it; gusts are judged separately because a calm average with hard
+// gusts is exactly the walk that surprises you.
+const NOTE_WIND_MPH = 18;
+const NOTE_GUST_MPH = 28;
 // Fahrenheit throughout — the thresholds are facts about weather, not about the
 // unit the person happens to be reading it in.
 const NOTE_FREEZING = 32;
@@ -304,14 +332,44 @@ function amountOf(mm) {
   return `<span class="wpop wamt">${shown}\u2033</span>`;
 }
 
+// Above this a stated amount is a forecast rather than a hypothetical.
+const WEATHER_AMOUNT_POP = 55;
+
+function wetCell(r) {
+  const pop = Number(r.pop);
+  if (!Number.isFinite(pop) || pop < WEATHER_POP_FLOOR) return '';
+  const amount = pop >= WEATHER_AMOUNT_POP ? amountOf(r.mm) : null;
+  return amount ?? `<span class="wpop">${Math.round(pop)}%</span>`;
+}
+
 function weatherNote(rows) {
   if (rows.length < 2) return '';
+
+  const gust = Math.max(0, ...rows.map((r) => Number(r.gust) || 0));
+  const windy = gust >= NOTE_GUST_MPH;
 
   // Rain first. It is the one that changes whether you carry something.
   const wet = longestRun(rows, (r) => Number(r.pop) >= NOTE_WET);
   if (wet.length) {
+    // "Heavy" comes from the CODE — 65, 67, 82 — never from the probability,
+    // which measures likelihood and says nothing about intensity. Where the
+    // code does not claim heavy, the wording stays plain rather than dressing a
+    // high chance up as a downpour.
     const heavy = wet.some((r) => NOTE_HEAVY_CODES.includes(Number(r.code)));
-    return `${heavy ? 'Heavy rain' : 'Rain'} likely ${spanLabel(wet)}`;
+    const sure = wet.every((r) => Number(r.pop) >= NOTE_VERY_WET);
+    const what = heavy ? 'Heavy rain' : 'Rain';
+    const how = heavy ? 'likely' : (sure ? 'very likely' : 'likely');
+    return windy
+      ? `${what} ${how} ${spanLabel(wet)} \u00b7 gusts ${Math.round(gust)} mph`
+      : `${what} ${how} ${spanLabel(wet)}`;
+  }
+
+  // Wind on its own, when there is no rain to lead with.
+  if (windy) {
+    const run = longestRun(rows, (r) => Number(r.gust) >= NOTE_GUST_MPH);
+    return run.length && run[0] !== rows[0]
+      ? `Windy from ${noteHour(run[0].at)} \u00b7 gusts ${Math.round(gust)} mph`
+      : `Windy \u00b7 gusts ${Math.round(gust)} mph`;
   }
 
   // Then cold, which is the other thing you dress for. Measured on the
@@ -330,8 +388,8 @@ function weatherNote(rows) {
       // Whichever comes later is the one worth naming: it is the change still
       // ahead of you rather than the one you already felt.
       return peak.at > trough.at
-        ? `Warming to ${degrees(hi)}\u00b0 by ${noteHour(peak.at)}`
-        : `Dropping to ${degrees(lo)}\u00b0 by ${noteHour(trough.at)}`;
+        ? `Warming to ${formatTemp(hi)} by ${noteHour(peak.at)}`
+        : `Dropping to ${formatTemp(lo)} by ${noteHour(trough.at)}`;
     }
   }
 
@@ -343,7 +401,15 @@ let lastWeather = '';
 
 function renderWeather(now, info, withWet = true) {
   const el = $('weather');
-  const { span, rows } = weatherWindow(now, info);
+  const { span, rows: all } = weatherWindow(now, info);
+  // THE CURRENT HOUR IS NOT PART OF THE FORECAST.
+  //
+  // The strip opened with a column labelled "Now" sitting beside a block that
+  // already said exactly the same thing — the same icon, the same temperature,
+  // twice, a centimetre apart. The block owns the present; the strip starts at
+  // the next hour and is entirely about what is still to come.
+  const currentRow = all[0] ?? null;
+  const rows = all.slice(1);
   el.hidden = !settings.showWeather || !rows.length;
   // Emptied, not just hidden. The scores borrow this element, so a hidden band
   // that still holds the last scoreboard is a stale one waiting to be shown
@@ -357,14 +423,27 @@ function renderWeather(now, info, withWet = true) {
   // hour's row instead of off a stale observation.
   const dead = age === null || age > WEATHER_DEAD_MS;
   const cur = dead ? {} : (weather?.current ?? {});
-  const sky = dead ? rows[0].sky : skyOf(cur.weather_code, cur.is_day !== 0);
-  const temp = degrees(cur.temperature_2m) ?? degrees(rows[0].temp);
+  const sky = dead ? (currentRow?.sky ?? rows[0].sky)
+    : skyOf(cur.weather_code, cur.is_day !== 0);
+  const rawTemp = dead ? currentRow?.temp : cur.temperature_2m;
+  const temp = degrees(rawTemp) ?? degrees(currentRow?.temp);
   const range = todayRange(now);
   // Only worth the line when it disagrees with the thermometer by enough to
   // change what you put on. Otherwise it is noise beside the real number.
-  const feels = degrees(cur.apparent_temperature);
-  const feelsLine = feels != null && temp != null && Math.abs(feels - temp) >= 3
-    ? `<span class="wfeels">Feels ${feels}${degreeMark()}</span>` : '';
+  const rawFeels = dead ? currentRow?.feels : cur.apparent_temperature;
+  // Compared RAW, printed converted — see FEELS_GAP_F.
+  const feelsWorth = rawFeels != null && rawTemp != null
+    && Math.abs(Number(rawFeels) - Number(rawTemp)) >= FEELS_GAP_F;
+  // Wind joins that line only when it is the thing you would notice on the
+  // walk. An ordinary breeze is not information.
+  const curWind = Number(dead ? currentRow?.wind : cur.wind_speed_10m);
+  const windWorth = Number.isFinite(curWind) && curWind >= NOTE_WIND_MPH;
+  const feelsBits = [
+    feelsWorth ? `Feels ${formatTemp(rawFeels)}` : '',
+    windWorth ? `Wind ${Math.round(curWind)} mph` : '',
+  ].filter(Boolean);
+  const feelsLine = feelsBits.length
+    ? `<span class="wfeels">${esc(feelsBits.join(' \u00b7 '))}</span>` : '';
 
   // The separator is a character, not a margin. Letter-spaced small caps swallow
   // a 0.7em gap between two inline spans and the heading read as SUCCOSTHROUGH.
@@ -384,17 +463,17 @@ function renderWeather(now, info, withWet = true) {
     // 25%, which hid exactly the reading someone wants before a walk to shul —
     // a 10% on one hour is worth knowing. The floor is there only to keep the
     // model's 0-5% noise off twelve tiles at once.
-    // How much, once there is enough to measure; how likely, until then.
+    // ONE FACT PER HOUR, whichever is the useful one.
     //
-    // The strip only ever showed a percentage, so a near-certain drizzle and a
-    // cloudburst read identically — 90% against 90% — and the icon did not
-    // separate them either: 61, 63 and 65 are light, moderate and heavy rain
-    // and all three draw the same raindrop. The amount is the answer to the
-    // question somebody is actually asking at the tile.
-    const wet = !withWet ? '' : (amountOf(r.mm) ?? (r.pop >= WEATHER_POP_FLOOR
-      ? `<span class="wpop">${Math.round(r.pop)}%</span>` : ''));
-    return `<div class="wcol${i === 0 ? ' now' : ''}">`
-      + `<span class="whour">${i === 0 ? 'Now' : esc(hourOf(r.at))}</span>`
+    // An amount is what you want when it is going to rain; a chance is what you
+    // want when it might. Printing an amount against a low chance states a
+    // quantity for something that will probably not happen at all — 0.2" over a
+    // 30% hour reads as a promise. So the amount is only shown when the chance
+    // is high enough to mean it, and below the probability floor neither is
+    // shown, because 5% is the model's noise and not a forecast.
+    const wet = !withWet ? '' : wetCell(r);
+    return '<div class="wcol">'
+      + `<span class="whour">${esc(hourOf(r.at))}</span>`
       + skyGlyph(r.sky.kind)
       + `<span class="wtemp">${t == null ? '' : `${t}${degreeMark()}`}</span>`
       + `${wet}</div>`;
@@ -467,12 +546,25 @@ function fitWeather(el, withoutWet) {
     // band's whole job is to be the same height whether it is showing weather
     // or scores — the cards below move for one pixel as readily as for ten.
     if (contentHeight() > target) return false;
-    // Width still matters: twelve columns can run off the side long before
-    // they run out of height.
+    // Width still matters: twelve columns run off the side long before they run
+    // out of height. Checked at BOTH levels, because a column staying inside
+    // the strip says nothing about what is inside the column — an hour label, a
+    // Kelvin reading or a precipitation amount can be wider than its own tile
+    // and print over the hour beside it while .wcol itself never moves. That is
+    // the mistake the shul cards made with their columns, one box further in.
     const box = el.getBoundingClientRect();
-    return [...el.querySelectorAll('.wcol, .wnow-read, .whead')].every((n) => {
+    const top = [...el.querySelectorAll('.wcol, .wnow-read, .whead')];
+    if (!top.every((n) => {
       const r = n.getBoundingClientRect();
       return r.right <= box.right + 1 && r.left >= box.left - 1;
+    })) return false;
+
+    return [...el.querySelectorAll('.wcol')].every((col) => {
+      const cb = col.getBoundingClientRect();
+      return [...col.querySelectorAll('.whour, .wicon, .wtemp, .wpop')].every((n) => {
+        const r = n.getBoundingClientRect();
+        return r.right <= cb.right + 1 && r.left >= cb.left - 1;
+      });
     });
   };
 

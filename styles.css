@@ -671,6 +671,9 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   align-items: end;
 }
 .wcol {
+  /* Children are measured against THIS box by fitWeather, so it has to be a
+     real boundary rather than a shrink-to-fit one. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -686,8 +689,6 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   color: var(--mute);
   white-space: nowrap;
 }
-/* The hour you are standing in, told apart from the eleven that follow it. */
-.wcol.now .whour { color: var(--accent); }
 .wtemp {
   font-size: calc(clamp(13px, 2.1vh, 24px) * var(--wx-scale));
   font-weight: 600;
@@ -709,7 +710,10 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   display: block;
   /* The glyph grows with the numerals under it, or a filled band is a band of
      big temperatures under unchanged little clouds. */
-  width: calc(clamp(26px, 4.2vh, 44px) * var(--wx-scale));
+  /* A little larger now the duplicate "Now" column has gone and there is room
+     for it. Not more than this: the temperature is what the strip is for, and
+     an icon that outweighs it starts reading as decoration. */
+  width: calc(clamp(29px, 4.7vh, 49px) * var(--wx-scale));
   height: auto;
   aspect-ratio: 1;
   fill: none;

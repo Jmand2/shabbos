@@ -89,7 +89,7 @@ const server = createServer(async (req, res) => {
   }
 });
 
-function forecast(at) {
+function forecast(at, soaking = false) {
   const base = new Date(at);
   base.setMinutes(0, 0, 0);
   const pad = (n) => String(n).padStart(2, '0');
@@ -104,10 +104,10 @@ function forecast(at) {
     const d = new Date(base.getTime() + i * 3600000);
     hourly.time.push(stamp(d));
     hourly.temperature_2m.push(60 + (i % 12));
-    hourly.precipitation_probability.push([0, 40, 5, 10, 60, 8][i % 6]);
+    hourly.precipitation_probability.push(soaking ? 90 : [0, 40, 5, 10, 60, 8][i % 6]);
     // Two of the six hours carry a measurable amount, so the strip is rendered
     // with both kinds of cell side by side — which is how it looks in life.
-    hourly.precipitation.push([0, 0, 0, 0, 1.4, 0][i % 6]);
+    hourly.precipitation.push(soaking ? 12.7 : [0, 0, 0, 0, 1.4, 0][i % 6]);
     hourly.weather_code.push([0, 2, 3, 61, 71, 95][i % 6]);
     hourly.is_day.push(d.getHours() >= 7 && d.getHours() < 19 ? 1 : 0);
     const day = stamp(d).slice(0, 10);
@@ -162,6 +162,20 @@ const MEASURE = () => {
       out.overflow.push(`${what} "${el.textContent.trim().slice(0, 20)}" past ${why.join('+')}`);
     }
   };
+
+  // Every child of every hour tile, against ITS OWN tile. The band-level check
+  // cannot see a reading printing over the hour beside it.
+  out.cells = [];
+  for (const col of document.querySelectorAll('.wcol')) {
+    const cb = col.getBoundingClientRect();
+    for (const n of col.querySelectorAll('.whour, .wicon, .wtemp, .wpop')) {
+      const r = n.getBoundingClientRect();
+      if (r.right > cb.right + 1 || r.left < cb.left - 1) {
+        out.cells.push(`${n.className.split(' ')[0]} "${n.textContent.trim().slice(0, 8)}" `
+          + 'out of its hour');
+      }
+    }
+  }
 
   // The weather strip's fit: how much of the band it is spending, and whether
   // what it drew still sits inside it.
@@ -317,6 +331,17 @@ const VIEWS = [
   // A desktop browser, which is where the waste showed: cards 660px wide with
   // the times using a third of that, because height was rationing the rows.
   { name: 'wide-desktop', at: '2026-09-25T20:00:00-04:00', size: [1470, 870], wide: true },
+  // THE WORST THE WEATHER STRIP CAN BE ASKED TO DO.
+  //
+  // Kelvin is the widest reading (three digits and a unit where Fahrenheit has
+  // two and a ring), every hour is wet so every tile carries a second line, and
+  // the narrowest supported iPad gives twelve of them the least room there is.
+  // If a cell's children are ever going to print over the hour beside them, it
+  // is here.
+  { name: 'kelvin-wet-portrait', at: '2026-09-25T14:00:00-04:00', size: [768, 1024],
+    settings: { units: 'K' }, soaking: true },
+  { name: 'kelvin-wet-landscape', at: '2026-09-25T14:00:00-04:00', size: [1180, 820],
+    settings: { units: 'K' }, soaking: true },
 ];
 
 await new Promise((r) => server.listen(0, r));
@@ -334,7 +359,8 @@ for (const view of VIEWS) {
   const page = await browser.newPage({ viewport: { width: view.size[0], height: view.size[1] } });
   // Keep the forecast local and deterministic, and the scoreboard out entirely.
   await page.route('**/api.open-meteo.com/**', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(forecast(view.at)) }));
+    route.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify(forecast(view.at, view.soaking)) }));
   await page.route('**site.api.espn.com**', (route) => route.abort());
 
   const errors = [];
@@ -356,6 +382,8 @@ for (const view of VIEWS) {
     // The strip fills its band rather than leaving a precipitation row's worth
     // of height empty on a dry day — but it may never GROW the band, because
     // the scores borrow it and every card below would move.
+    ok((m.cells ?? []).length === 0,
+      'every reading stays inside its own hour', (m.cells ?? []).slice(0, 3).join(' | '));
     if (m.wx) {
       // How much of the band it SPENDS, not what scale it happened to land on.
       // A scale of exactly 1 is not the goal and never was: content that
