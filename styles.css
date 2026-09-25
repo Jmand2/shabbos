@@ -866,8 +866,13 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
      band is why a shul with two minyanim left got the same slab as one with
      twelve. Past this the fit loop shrinks the type instead, which is the right
      thing to give up on a busy Friday. */
-  flex: 1 1 auto;
-  max-height: 46vh;
+  /* Grows four times faster than the band above it. Both were `flex: 1 1 auto`
+     and split the spare height in proportion to what they already had — so on a
+     large screen the clock band, which is tall because the tile is, took as much
+     of it as the cards did. The clock is capped by WIDTH and cannot spend extra
+     height on anything; the cards can spend all of it on being readable. */
+  flex: 4 1 auto;
+  max-height: 52vh;
   /* A floor as well as a ceiling. The cap alone let the other bands take the
      board's height rather than give it: in portrait the weather strip stacks
      and is tall, the top band absorbs whatever is left over, and between them
@@ -980,6 +985,30 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   min-height: 0;
 }
 .card .body .group { grid-column: 1 / -1; }
+
+/* Two columns, when the card is wide enough to have been wasting one.
+   .body stops being the grid and becomes a row of them, so labels and times
+   still line up WITHIN a column — which is the alignment worth keeping — and
+   each column is half the height. */
+.card .body:has(.col) {
+  display: flex;
+  flex-direction: row;
+  gap: calc(var(--minyan) * 0.9);
+}
+.card .body .col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(min-content, max-content) 1fr;
+  column-gap: calc(var(--minyan) * 0.5);
+  row-gap: calc(var(--minyan) * 0.3);
+  align-items: baseline;
+  align-content: start;
+}
+.card .body .col > .group { grid-column: 1 / -1; }
+/* The first heading in a column never carries the top margin that separates it
+   from a row above, because there is no row above it. */
+.card .body .col > .group:first-child { margin-top: 0; }
 .card .body .times {
   display: flex;
   flex-wrap: wrap;

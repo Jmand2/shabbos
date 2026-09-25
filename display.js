@@ -238,12 +238,86 @@ function resetCardScales() {
   }
 }
 
+// A card wide enough for this much gets its content in two columns.
+//
+// On a wide screen a card was using under a third of its own width: one narrow
+// list of "SHACHARIS 6:30pm" down the left and two thirds of the panel empty,
+// while the HEIGHT was the thing rationing how many times could be shown at a
+// readable size. Height was scarce and width was idle. Two columns spend the
+// idle one: the same rows in half the height, so the type stays large and twice
+// as many times fit.
+const COLUMN_AT = 460;
+
+// Columns break between DAYS, never inside one.
+//
+// Dealt by line count alone, a column ended with "Tomorrow · Succos I" at its
+// foot and that day's times at the head of the next — and a row could land in
+// the second column with its heading left behind in the first, which is worse
+// than the empty space this was meant to reclaim: a time under no day at all.
+// A day is the unit, so a heading always leads its own column.
+//
+// With fewer days than columns there is nothing to break on, so the card stays
+// single-column rather than splitting a day across two.
+function dealIntoColumns(blocks, columns) {
+  if (!blocks.length) return '';
+  const one = () => blocks.map((b) => b.html).join('');
+  if (columns < 2) return one();
+
+  // Gather each heading with the rows that belong to it.
+  const days = [];
+  for (const b of blocks) {
+    if (b.head || !days.length) days.push({ blocks: [], lines: 0 });
+    const day = days[days.length - 1];
+    day.blocks.push(b);
+    day.lines += b.lines;
+  }
+  if (days.length < columns) return one();
+
+  // A card holds a handful of days at most, so the split is simply solved: try
+  // every way of cutting the run into that many contiguous groups and keep the
+  // one whose tallest column is shortest. Greedy got this wrong — running left
+  // to right against a target, its "can I still fill the columns left" guard
+  // vetoed the only legal cut on a three-day card and the whole thing collapsed
+  // back into a single column.
+  const cuts = [];
+  const search = (start, left, acc) => {
+    if (left === 1) { cuts.push([...acc, days.length]); return; }
+    for (let end = start + 1; end <= days.length - (left - 1); end += 1) {
+      search(end, left - 1, [...acc, end]);
+    }
+  };
+  search(0, columns, []);
+
+  const lines = (from, to) => days.slice(from, to).reduce((n, d) => n + d.lines, 0);
+  let best = null;
+  let bestTall = Infinity;
+  for (const cut of cuts) {
+    let from = 0;
+    let tall = 0;
+    for (const to of cut) { tall = Math.max(tall, lines(from, to)); from = to; }
+    if (tall < bestTall) { bestTall = tall; best = cut; }
+  }
+
+  const cols = [];
+  let from = 0;
+  for (const to of best) { cols.push(days.slice(from, to).flatMap((d) => d.blocks)); from = to; }
+  return cols.map((c) => `<div class="col">${c.map((b) => b.html).join('')}</div>`).join('');
+}
+
 function renderShuls(now, days) {
   const list = shownShuls();
   if (!list.length) {
     paintBoard('<p class="none">No shuls chosen. Open Settings to pick some.</p>');
     return;
   }
+
+  // How wide each card will be, worked out before anything is painted: the band
+  // is already laid out, and the cards divide it evenly.
+  const band = $('shuls').clientWidth;
+  const gap = 22 * (list.length - 1);
+  const padding = 52;
+  const cardInner = band ? (band - gap) / list.length - padding : 0;
+  const columns = cardInner >= COLUMN_AT ? 2 : 1;
 
   // Counted per card, not pooled. Averaging across the board let one heavy shul
   // hide behind two light ones and clip its own times.
@@ -284,14 +358,18 @@ function renderShuls(now, days) {
       byDay.get(k).push(r);
     }
 
-    let body = '';
+    // Collected as blocks rather than one string, so they can be dealt into
+    // columns below. Each carries the number of lines it will occupy, which is
+    // what the balancing works on.
+    const blocks = [];
     for (const [iso, rows] of byDay) {
       const when = dayName(now, rows[0].at);
       // Anything that is not today is always announced. Without this, a board
       // late at night shows tomorrow's 5:10 AM with nothing saying it is not
       // tonight — and on a long Yom Tov, three identical mornings in a row.
       if (when.cls !== 'today' || byDay.size > 1) {
-        body += `<p class="group ${when.cls}">${esc(when.label)}</p>`;
+        blocks.push({ head: true, lines: 1,
+          html: `<p class="group ${when.cls}">${esc(when.label)}</p>` });
         lines += 1;
       }
       const day = when.cls;
@@ -330,16 +408,20 @@ function renderShuls(now, days) {
         // its own markup, so a changing string in here would rebuild every card
         // twice a minute, which is the thing E1 exists to prevent. The text is
         // written in place by paintCountdowns from the clock's own tick.
-        body += `<span class="label ${day}${here}">${esc(label)}`
-          + (here ? `<span class="nextflag" data-at="${next.at.getTime()}">Next</span>` : '')
-          + `</span>`
-          + `<span class="times ${day}${here}">`
-          + times.map((r) => `<span class="time${r === next ? ' next' : ''}">${clockFace(r.time)}</span>`).join('')
-          + `</span>`;
+        const rowLines = Math.ceil(times.length / perLine);
+        blocks.push({ head: false, lines: rowLines,
+          html: `<span class="label ${day}${here}">${esc(label)}`
+            + (here ? `<span class="nextflag" data-at="${next.at.getTime()}">Next</span>` : '')
+            + `</span>`
+            + `<span class="times ${day}${here}">`
+            + times.map((r) => `<span class="time${r === next ? ' next' : ''}">${clockFace(r.time)}</span>`).join('')
+            + `</span>` });
       }
     }
-    perCardLines.push(lines);
-    return card(shul.name, body || '<p class="none">Nothing further listed.</p>');
+    // Lines per column, not per card, once the content is split.
+    perCardLines.push(Math.ceil(lines / columns));
+    return card(shul.name, dealIntoColumns(blocks, columns)
+      || '<p class="none">Nothing further listed.</p>');
   });
 
   // Scale on LINES, which is what actually consumes height, and on the fullest

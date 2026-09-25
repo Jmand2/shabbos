@@ -159,13 +159,35 @@ const MEASURE = () => {
     }
   };
 
+  out.orphans = [];
+  out.columns = [];
+  out.widthUsed = [];
   for (const card of document.querySelectorAll('.card')) {
     const body = card.querySelector('.body');
     if (!body) continue;
     const box = body.getBoundingClientRect();
-    for (const el of card.querySelectorAll('.time, .label, .group')) note('card row', el, box);
+    const rows = [...card.querySelectorAll('.time, .label, .group')];
+    for (const el of rows) note('card row', el, box);
     if (body.scrollHeight > body.clientHeight + 1) out.overflow.push('card body scrolls vertically');
     if (body.scrollWidth > body.clientWidth + 1) out.overflow.push('card body scrolls horizontally');
+
+    // A column must lead with its own day heading. Split by line count alone,
+    // a column once began with times whose "Tomorrow · Succos I" had been left
+    // behind at the foot of the column before it — a time on the wall under no
+    // day at all, which is worse than the empty space columns were for.
+    const cols = [...body.querySelectorAll('.col')];
+    out.columns.push(cols.length);
+    for (const col of cols) {
+      if (!col.firstElementChild?.classList.contains('group')) {
+        out.orphans.push(`${card.querySelector('h2')?.textContent ?? '?'}: a column opens on `
+          + `"${col.firstElementChild?.textContent.trim().slice(0, 18) ?? 'nothing'}", not a day`);
+      }
+    }
+
+    // How far across its own card the content actually reaches. Height is the
+    // scarce dimension; width going unused is the waste columns exist to take.
+    const right = Math.max(box.left, ...rows.map((el) => el.getBoundingClientRect().right));
+    out.widthUsed.push(box.width ? Math.round(((right - box.left) / box.width) * 100) : 0);
   }
 
   // The strip and the tile have to stay inside the screen too.
@@ -222,6 +244,9 @@ const VIEWS = [
   { name: 'twelve-per-shul', at: '2026-09-25T14:00:00-04:00', size: [1180, 820],
     settings: { perShul: '12' } },
   { name: 'small-window', at: '2026-09-25T14:00:00-04:00', size: [900, 620] },
+  // A desktop browser, which is where the waste showed: cards 660px wide with
+  // the times using a third of that, because height was rationing the rows.
+  { name: 'wide-desktop', at: '2026-09-25T20:00:00-04:00', size: [1470, 870], wide: true },
 ];
 
 await new Promise((r) => server.listen(0, r));
@@ -253,12 +278,21 @@ for (const view of VIEWS) {
 
   const m = await page.evaluate(MEASURE);
   console.log(`  ${view.name}  (${view.size.join('x')})  scale ${m.scale}`
-    + ` · time ${m.timePx}\u2013${m.timePxMax}px · clock ${m.clockPx}px · face ${m.face}`);
+    + ` · time ${m.timePx}\u2013${m.timePxMax}px · clock ${m.clockPx}px · face ${m.face}`
+    + ` · cols ${m.columns.join('/')} · width ${m.widthUsed.join('/')}%`);
   ok(errors.length === 0, 'no page errors', errors.join('; '));
   ok(m.overflow.length === 0, 'nothing overflows its box', m.overflow.slice(0, 4).join(' | '));
   ok(m.clockPx >= MIN_CLOCK_PX, `the clock is at least ${MIN_CLOCK_PX}px (${m.clockPx})`);
   if (view.settings?.layout !== 'clock') {
     ok(m.cards > 0, 'the board rendered cards');
+    ok(m.orphans.length === 0, 'every column opens on a day, none left behind',
+      m.orphans.join(' | '));
+    if (view.wide) {
+      ok(m.columns.every((n) => n >= 2),
+        `a wide board splits its cards into columns (${m.columns.join(', ')})`);
+      ok(Math.min(...m.widthUsed) >= 70,
+        `and the cards use their width (${m.widthUsed.join('%, ')}%)`);
+    }
     // Legibility is a promise Auto makes. Choosing 12 explicitly is the person
     // overriding that promise, and they are allowed to — but nothing is ever
     // allowed to overflow, which is asserted for every view above.
