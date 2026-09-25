@@ -61,6 +61,37 @@ for (const day of days) {
   }
 }
 
+/* A shul on the wall with a morning and no afternoon -----------------------
+
+   Beth Aaron sat on the wall through Succos showing four Shacharis and nothing
+   else, which does not read as "we could not find their Mincha" — it reads as
+   "Beth Aaron has no Mincha on Succos", which is false. A wrong statement on a
+   wall is worse than a blank one, and this one was silent: every other check
+   passed, because the data was well-formed. It was simply incomplete.
+
+   So: a shul the display actually shows, on a day it has an entry for, must
+   have somewhere to daven after the morning. A missing DAY is left alone —
+   that is the scraper's own "unavailable" path and the board says so honestly.
+   This is only about a day that is present and quietly half-empty.
+
+   The wall's shuls are the ones with a site of their own in shuls.json, which
+   is also what settings.js defaults to. */
+const WALL = JSON.parse(await readFile(new URL('../data/shuls.json', import.meta.url), 'utf8'))
+  .filter((s) => s.site).map((s) => s.slug);
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+
+for (const day of days.filter((d) => d >= today)) {
+  for (const slug of WALL) {
+    const entry = data.days[day][slug];
+    if (!entry) continue;                       // no entry at all: not this check's business
+    const later = (entry.mincha?.length ?? 0) + (entry.maariv?.length ?? 0);
+    if (later) continue;
+    const morning = entry.shacharis?.length ?? 0;
+    fail(`${day} ${slug}: ${morning} shacharis and nothing after — no mincha, no maariv. `
+      + 'Either the source dropped it or data/overrides.json needs extending.');
+  }
+}
+
 console.log(`  ${days.length} day(s), ${rows} row(s), ${stamped} entry stamp(s)`);
 console.log(`  ${days[0]} to ${days.at(-1)}`);
 console.log(bad ? `\n${bad} problem(s)` : '\nthe scrape is clean');

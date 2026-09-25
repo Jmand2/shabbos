@@ -21,6 +21,8 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
 
 const SHULS = JSON.parse(await readFile(new URL('../data/shuls.json', import.meta.url), 'utf8'));
+// Hand-entered times for days no source publishes. See data/overrides.json.
+const OVERRIDES = JSON.parse(await readFile(new URL('../data/overrides.json', import.meta.url), 'utf8'));
 
 /* Normalisation -----------------------------------------------------------
    The parsers are deliberately permissive: faced with an odd line they would
@@ -286,6 +288,57 @@ async function grab(slug, date, useDateParam) {
   return parseSections(lines);
 }
 
+/* Hand-entered fallbacks --------------------------------------------------
+
+   Fills a section that no source published. Never replaces one.
+
+   That asymmetry is the whole safety property. A line in overrides.json can go
+   stale — the shul moves Mincha and nobody edits the file — and the worst it
+   can do is sit unused, because the moment teaneckminyanim or the shul's own
+   site carries that service the live copy wins. It cannot put an old time on
+   the wall in front of a current one.
+
+   The gap it exists for is Yom Tov: the aggregator has Beth Aaron's weekday
+   Mincha and Maariv but not its festival schedule, and the shul's own widget
+   lists events rather than services on those days. */
+export function applyOverrides(days, overrides) {
+  let filled = 0;
+  for (const entry of overrides?.entries ?? []) {
+    for (const [date, sections] of Object.entries(entry.days ?? {})) {
+      // Only for days the run actually covers. Writing a day outside the
+      // window would resurrect a date the scraper had just aged out.
+      if (!days[date]) continue;
+      const existing = days[date][entry.shul];
+      const merged = { ...existing };
+      let touched = 0;
+      for (const group of SECTIONS.map((g) => g.toLowerCase())) {
+        if (!sections[group]?.length) continue;
+        if (existing?.[group]?.length) continue;   // a live source spoke; it wins
+        merged[group] = sections[group];
+        touched += 1;
+      }
+      // The shul's own published havdalah, same rule: only when nothing else
+      // carries one. display.js prefers it over computing off maariv.
+      if (sections.edge && !existing?.edge?.havdalah) {
+        merged.edge = { ...(existing?.edge ?? {}), ...sections.edge };
+        touched += 1;
+      }
+      if (!touched) continue;
+      filled += touched;
+      days[date][entry.shul] = {
+        ...normaliseSections(merged),
+        ...(merged.edge ? { edge: merged.edge } : {}),
+        fetched_at: existing?.fetched_at,
+        // So the board and check-data can tell a hand-entered day from a
+        // scraped one without diffing against this file.
+        hand: entry.source,
+      };
+    }
+  }
+  if (filled) console.log(`overrides filled ${filled} empty section(s)`);
+  return filled;
+}
+
 async function main() {
   const today = isoDate(0);
   const wanted = Array.from({ length: DAYS_AHEAD }, (_, i) => isoDate(i));
@@ -373,6 +426,8 @@ async function main() {
       };
     }
   }
+
+  applyOverrides(days, OVERRIDES);
 
   await mkdir(new URL('../data/', import.meta.url), { recursive: true });
   await writeFile(OUT, `${JSON.stringify({
