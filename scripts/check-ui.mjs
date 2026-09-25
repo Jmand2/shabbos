@@ -106,6 +106,15 @@ async function boot(startIso, { settings = null, killMatchMedia = false, forecas
 
 const $ = (w, id) => w.document.getElementById(id);
 
+// A label's own text, not its cell's. The next-minyan marker is a child of the
+// label — it sits under the service name so that row's time still lines up with
+// the column — so textContent reads "Night SelichosNext".
+const labelText = (n) => [...n.childNodes]
+  .filter((c) => c.nodeType === 3)
+  .map((c) => c.textContent)
+  .join('')
+  .trim();
+
 /* E1 — the board must not be rebuilt on every render -------------------- */
 console.log('\n=== E1: board is not rebuilt when nothing changed ===');
 {
@@ -270,7 +279,7 @@ const zmOf = (w) => [...w.document.querySelectorAll('#horizonMarks .zman')]
 console.log('\n=== G1: every time row carries a label ===');
 {
   const { w } = await boot('2026-09-22T14:05:00-04:00');
-  const labels = [...w.document.querySelectorAll('.card .label')].map((n) => n.textContent.trim());
+  const labels = [...w.document.querySelectorAll('.card .label')].map(labelText);
   ok(labels.length > 0, `labels present (${labels.length})`);
   ok(labels.every((l) => l.length > 0), 'no label is blank', JSON.stringify(labels));
   // Structure: label and times must be siblings inside .body, not nested in .minyan-row
@@ -306,7 +315,7 @@ console.log('\n=== G1b: the board stays chronological across repeated labels ===
 
   // The repeated label must appear twice, once at each end of the day, rather
   // than being folded into a single row spanning both.
-  const labels = [...w.document.querySelectorAll('.card .label')].map((n) => n.textContent.trim());
+  const labels = [...w.document.querySelectorAll('.card .label')].map(labelText);
   ok(labels.filter((l) => l === 'Night Selichos').length === 2,
     'a label used twice in a day gets a row at each end', JSON.stringify(labels));
   const wide = [...w.document.querySelectorAll('.card .times')]

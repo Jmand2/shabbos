@@ -304,6 +304,33 @@ the clock's own tick, never rendered into the board: the board is memoised on
 its markup, and a changing string in there would rebuild every card twice a
 minute. The markup carries the moment; the text is painted over it.
 
+## How a card is set
+
+A service and its time are one thing, so they sit together. The times used to be
+flush **right**, on the reasoning that a common edge reads as a table rather
+than leaving a ragged void down the side of the card. It does — but the void
+does not disappear by being moved, and between a service and its time is the
+worst place to put it: on a wide card that was four hundred pixels of nothing
+between `SHACHARIS` and `9:00am`, and the eye had to cross all of it to pair
+them, which is the only thing a card is for. They are flush **left** now, hard
+against the label column, and they still share a common edge — it is just their
+left one.
+
+The next-minyan marker moved with them. It used to sit between the label and the
+first time, which pushed that row's times a flag's width to the right — so the
+one row anybody is looking for was the one row that did not line up. It is a
+second line under the service name instead, where it costs the times no
+alignment at all.
+
+Type sizes are set against `--minyan`, the same figure the fit loop scales, so
+the proportions hold at any size the board settles on. The label was at four
+tenths of its own time and the day heading at a third — on a full card that came
+out as a 9px label and a 7px heading against a 22px time, which is a caption and
+a whisper, not a schedule read from across a room. They are higher now, but only
+so far: the label column is part of what the fit loop has to fit on a line, so
+every point there is paid for in the size of the numerals, and past about half
+it takes them under the readable floor on the narrowest screen.
+
 ## Three surfaces
 
 The tile, the weather strip and the cards had become the same panel: same

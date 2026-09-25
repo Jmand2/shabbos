@@ -312,14 +312,20 @@ function renderShuls(now, days) {
         // The next minyan is decided per card, so neither shul becomes the more
         // important one just by being first.
         const here = times.includes(next) ? ' next-row' : '';
-        body += `<span class="label ${day}${here}">${esc(label)}</span>`
-          + `<span class="times ${day}${here}">`
-          // The marker carries the MOMENT, not the countdown. The board is
-          // memoised on its own markup, so a changing string in here would
-          // rebuild every card twice a minute — the thing E1 exists to prevent.
-          // The text is written in place by paintCountdowns, from the clock's
-          // own tick, and the generated markup never varies.
+        // The marker lives in the LABEL cell, under the service name, not in
+        // the times. In the times it sat between the label and the first time
+        // and pushed that row's times a flag's width to the right — so the one
+        // row anybody is looking for was the one row whose time did not line up
+        // with the rest of the column.
+        //
+        // It carries the MOMENT, not the countdown: the board is memoised on
+        // its own markup, so a changing string in here would rebuild every card
+        // twice a minute, which is the thing E1 exists to prevent. The text is
+        // written in place by paintCountdowns from the clock's own tick.
+        body += `<span class="label ${day}${here}">${esc(label)}`
           + (here ? `<span class="nextflag" data-at="${next.at.getTime()}">Next</span>` : '')
+          + `</span>`
+          + `<span class="times ${day}${here}">`
           + times.map((r) => `<span class="time${r === next ? ' next' : ''}">${clockFace(r.time)}</span>`).join('')
           + `</span>`;
       }

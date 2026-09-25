@@ -935,12 +935,18 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
    which point the headings alone overflow the body and took the times down to
    nothing with them. Margins are in em so they come along. */
 .group {
-  font-size: calc(var(--minyan) * 0.34);
+  /* It was 0.34, which came out SMALLER than the labels it introduces — seven
+     pixels on a settled board. A heading that loses to its own contents is not
+     a heading. */
+  font-size: calc(var(--minyan) * 0.41);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--mute);
   font-weight: 600;
-  margin: 0.95em 0 0.5em;
+  /* Measured against --minyan rather than the heading's own em, so the spacing
+     between a day and its times stays the same shape whatever size the fit loop
+     settles the board at. In em of a 7px heading it collapsed to nothing. */
+  margin: calc(var(--minyan) * 0.42) 0 calc(var(--minyan) * 0.16);
   padding-bottom: 0;
   border-bottom: 0;
 }
@@ -956,8 +962,8 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
      label and times together no longer fit, scrollWidth grows and the loop
      shrinks the type, which is the right thing to give up. */
   grid-template-columns: minmax(min-content, max-content) 1fr;
-  column-gap: 1.1em;
-  row-gap: 0.45em;
+  column-gap: calc(var(--minyan) * 0.5);
+  row-gap: calc(var(--minyan) * 0.3);
   align-items: baseline;
   /* align-content: start, deliberately. space-evenly distributed the rows into
      the cell, but alignment overflow is not scroll overflow — rows pushed past
@@ -973,9 +979,15 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  /* Flush right. Left-aligned short rows left a ragged void down the right of
-     every card; ending them on a common edge reads as a table instead. */
-  justify-content: flex-end;
+  /* Flush LEFT, hard against the label column.
+     They were flush right, on the reasoning that ending on a common edge reads
+     as a table rather than leaving a ragged void down the right of the card. It
+     does — but the void does not go away by being moved, and putting it between
+     a service and its time is the worst place for it: on a wide card that was
+     four hundred pixels of nothing between "SHACHARIS" and "9:00am", and the eye
+     had to travel the whole way to pair them, which is the only thing a card is
+     for. The times still share a common edge, it is just their left one. */
+  justify-content: flex-start;
   gap: 0.1em 0.48em;
   /* No min-width: 0 here. That let this track collapse to nothing while the
      label column took its full max-content width, so a long label starved the
@@ -1011,7 +1023,14 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 .card .body .label {
   color: var(--dim);
   font-weight: 500;
-  font-size: calc(var(--minyan) * 0.42);
+  /* Up from 0.42. A service name at four tenths of its own time is a caption,
+     and at the scales a full card settles on that was nine pixels against
+     twenty-two — unreadable from the other side of the room, which is where
+     this is read from.
+     Not higher than this: the label column is part of what the fit loop has to
+     get on a line, so every point here is paid for in the size of the numerals,
+     and on the narrowest window 0.52 took them under the readable floor. */
+  font-size: calc(var(--minyan) * 0.47);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   line-height: 1.3;
@@ -1064,9 +1083,16 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
   box-shadow: 0 0 0 0.22em color-mix(in srgb, var(--accent) 14%, transparent);
   border-radius: 3px;
 }
+/* A second line under the service name, so it takes no width from the times and
+   the column stays straight. */
+.card .body .label.next-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
 .card .body .nextflag {
-  align-self: center;
-  margin-right: auto;
+  display: block;
+  margin-top: 0.15em;
   font-size: calc(var(--minyan) * 0.3);
   font-weight: 700;
   letter-spacing: 0.14em;
