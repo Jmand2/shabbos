@@ -103,9 +103,24 @@ function sportsNextLeague() {
 // the moment Scores is switched on, it means the picture is a quarter complete
 // for ten minutes and three quarters complete for thirty. Four responses one
 // time is nothing against making the first thing somebody sees true.
-async function warmSports() {
-  if (settings.sports === 'off') return;
-  await Promise.allSettled(LEAGUES.map((l) => fetchLeague(l)));
+// How old a league's board may be before a catch-up bothers with it.
+const SPORTS_STALE_MS = 12 * 60000;
+
+// Everything at once on a cold start or when Scores is switched on, because
+// there is nothing on file and the rotation would take forty minutes to fill.
+//
+// `staleOnly` is for coming back: reconnecting, or the screen waking. Those fire
+// on every brief app switch, and warming unconditionally meant eight ESPN
+// requests each time — for four boards that were very often fetched a minute
+// ago. It asks only for what has actually gone off.
+async function warmSports({ staleOnly = false } = {}) {
+  if (settings.sports === 'off') return 0;
+  const now = Date.now();
+  const want = LEAGUES.filter((l) => !staleOnly
+    || now - (sports.leagues?.[l.tag]?.at ?? 0) > SPORTS_STALE_MS);
+  if (!want.length) return 0;
+  await Promise.allSettled(want.map((l) => fetchLeague(l)));
+  return want.length;
 }
 
 async function refreshSports() {
@@ -340,6 +355,35 @@ const SPORT_ART = {
 // Path data only: three peaks and a band, sitting above the ball's box.
 const SPORT_CROWN = 'M4.3 -1.4 5.5 -8.8 9.2 -5.2 12 -10 14.8 -5.2 18.5 -8.8 19.7 -1.4Z';
 
+// A short pill rather than a sentence. "Final/OT" and "3rd 04:12" are the two
+// shapes ESPN gives, and the useful half of either is the first word.
+function statePill(g) {
+  const detail = String(g.detail ?? '');
+  if (g.state === 'in') {
+    // A dot and the word. No blinking: a wall display that flashes is a wall
+    // display nobody can sit opposite.
+    return '<span class="spill live"><i class="sdot"></i>LIVE</span>'
+      + (detail ? `<span class="swhen">${esc(detail)}</span>` : '');
+  }
+  if (g.state === 'pre') return `<span class="swhen">${esc(detail)}</span>`;
+  // Final, and whatever qualified it — OT, SO, or the innings it ran to.
+  const extra = /\/(.+)$/.exec(detail)?.[1] ?? '';
+  return `<span class="spill">FINAL</span>`
+    + (extra ? `<span class="spill soft">${esc(extra.toUpperCase())}</span>` : '');
+}
+
+// Team colours, for a thread of accent beside the abbreviation. Only the local
+// clubs and their common opponents are named; anything else falls back to the
+// muted rule colour, which is what most rows already looked like.
+const TEAM_COLOURS = {
+  NYY: '#1c2841', NYM: '#ff5910', BOS: '#bd3039', TB: '#8fbce6', BAL: '#df4601',
+  NYG: '#0b2265', NYJ: '#115740', PHI: '#004c54', DAL: '#041e42', BUF: '#00338d',
+  NYR: '#0038a8', NYI: '#f47d30', NJ: '#ce1126', BKN: '#767676', NY: '#f58426',
+  WSH: '#c8102e', PIT: '#ffb81c', CHC: '#0e3386', LAD: '#005a9c', SD: '#2f241d',
+  ATL: '#ce1141', HOU: '#002d62', TOR: '#ce1141', MIA: '#98002e',
+};
+const teamColour = (abbr) => TEAM_COLOURS[String(abbr).toUpperCase()] ?? 'var(--rule)';
+
 function sportsIcon(tag, post) {
   const art = SPORT_ART[tag];
   if (!art) return '';
@@ -361,8 +405,12 @@ function renderSports(now = new Date()) {
   const cols = games.map((g) => {
     // A scheduled game has no score yet, so it shows the time instead of 0-0.
     const pending = g.state === 'pre';
+    // A thread of the team's own colour, not a card painted in it. Enough to
+    // tell two rows apart at a glance and to say "that is the Yankees line"
+    // without the strip becoming a rosette.
     const score = (t, s, lead) => `<div class="steam${lead ? ' lead' : ''}">`
-      + `<span class="sabbr">${esc(t)}</span>`
+      + `<span class="sabbr"><i class="sbar" style="--team:${teamColour(t)}"></i>`
+      + `${esc(t)}</span>`
       + `<span class="sscore">${pending ? '' : esc(String(s))}</span></div>`;
     const an = Number(g.as);
     const hn = Number(g.hs);
@@ -372,9 +420,12 @@ function renderSports(now = new Date()) {
       + sportsIcon(g.league, g.post)
       + score(g.a, g.as, decided && an > hn)
       + score(g.h, g.hs, decided && hn > an)
-      + `<div class="sstate">${esc(g.detail)}</div></div>`;
+      + `<div class="sstate">${statePill(g)}</div></div>`;
   }).join('');
 
+  // A narrower header. "SCORES" over "LAST NIGHT" in two stacked lines took a
+  // column's worth of width to say something the games themselves already make
+  // obvious; the width is better spent on them.
   const html = `<div class="snow"><span class="slabel">Scores</span>`
     + `<span class="ssub">${sportsLabel(games, now)}</span></div>`
     + `<div class="sgames">${cols}</div>`;

@@ -935,6 +935,9 @@ console.log('\n=== S4: the worker keeps one entry per path, and it is the newest
     self: {
       addEventListener: (t, f) => { handlers[t] = f; },
       skipWaiting: async () => {}, clients: { claim: async () => {} },
+      // The worker answers for its own origin and nothing else, so it needs to
+      // know what that is.
+      location: { origin: 'https://x.test' },
     },
     caches: cacheApi,
     URL, Promise, setTimeout, console,
@@ -978,6 +981,36 @@ console.log('\n=== S4: the worker keeps one entry per path, and it is the newest
   const res = await run(`${base}?t=3`);
   ok(res ? (await res)?.body === 'NEW' : false,
     'an unseen query still finds the cached copy when the network is gone');
+
+  /* Cross-origin is not this worker's business ---------------------------
+
+     THE CASE THIS EXISTS FOR. sports.js stamps every answer `at: Date.now()`
+     and decides from that stamp what a game may still claim — a live score is
+     shown for fifteen minutes after the snapshot it came from. A worker replay
+     of a cached scoreboard is a 200 like any other, so a stale board arrived
+     looking newly fetched and bought a licence it had not earned. The forecast
+     has the same shape of problem.
+
+     "Not answering" is the whole assertion: respondWith must never be called,
+     which leaves the request to the browser and the freshness to the app,
+     which is the only layer that understands what any of it means. */
+  const before = entries.size;
+  scope.fetch = async () => ({ ok: true, body: 'SCORES', clone: () => ({ ok: true, body: 'SCORES' }) });
+  const espn = 'https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates=20260924';
+  const meteo = 'https://api.open-meteo.com/v1/forecast?latitude=40.9';
+  ok(await run(espn) === undefined, 'the worker does not answer for the scoreboard');
+  ok(await run(meteo) === undefined, 'nor for the forecast');
+  await new Promise((r) => setTimeout(r, 10));
+  ok(entries.size === before,
+    `and neither one is put in a cache (${entries.size - before} added)`);
+
+  // Two days are two requests. cacheKey() strips the query for app URLs, and
+  // collapsing ?dates=20260924 into ?dates=20260925 would hand yesterday's
+  // board back for today — the exact bug the dates parameter was added to fix.
+  const day2 = espn.replace('20260924', '20260925');
+  ok(await run(day2) === undefined, 'a second day is left alone too');
+  const stored = [...entries.keys()].filter((k) => k.includes('espn.com'));
+  ok(stored.length === 0, `and no scoreboard key exists to collapse (${stored.length})`);
 }
 
 console.log('\n=== O: the board follows the order the person chose ===');

@@ -115,18 +115,23 @@ function watchWake() {
 let caughtUpAt = 0;
 const CATCH_UP_GAP_MS = 60000;
 
-function catchUp(why) {
+function catchUp(why, { full = false } = {}) {
   if (Date.now() - caughtUpAt < CATCH_UP_GAP_MS) return;
   caughtUpAt = Date.now();
   console.info(`catching up after ${why}`);
   refreshMinyanim();
   refreshWeather();
-  warmSports();
+  // Stale boards only on an ordinary return. Coming back from a real outage is
+  // different — anything on file then is suspect, so that asks for the lot.
+  warmSports({ staleOnly: !full });
+  // Which build the server is on now. Settings can be opened straight after a
+  // reconnect and should not be reporting what was deployed an hour ago.
+  loadBuildStamp();
   render();
 }
 
 function watchNetwork() {
-  window.addEventListener('online', () => catchUp('reconnect'));
+  window.addEventListener('online', () => catchUp('reconnect', { full: true }));
   document.addEventListener('visibilitychange', () => {
     // navigator.onLine is only trustworthy when it says false.
     if (document.visibilityState === 'visible' && navigator.onLine !== false) {

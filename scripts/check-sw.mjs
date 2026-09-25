@@ -25,9 +25,12 @@ const TYPES = {
 
 // Every file of the shell carries a generation tag, so the page can be asked
 // which generation each of its parts came from.
+// EXACTLY the coupled shell from sw.js. sports.js was missing from this list,
+// so the one file most likely to be edited on its own was the one file this
+// test never checked was part of the generation.
 const SHELL = ['index.html', 'styles.css', 'flights.css', 'flights.js',
   'util.js', 'calendar.js', 'settings.js', 'minyanim.js', 'weather.js',
-  'display.js', 'app.js'];
+  'sports.js', 'display.js', 'app.js'];
 
 let generation = 'A';
 // Requests the server should refuse, to stand in for a network that is up but
@@ -91,8 +94,9 @@ const url = `http://127.0.0.1:${port}/index.html`;
 const browser = await webkit.launch();
 const context = await browser.newContext({ serviceWorkers: 'allow' });
 const page = await context.newPage();
-// The forecast is not part of this and must not make the test flaky.
+// Third-party APIs are not part of this and must not make the test flaky.
 await page.route('**/api.open-meteo.com/**', (r) => r.abort());
+await page.route('**site.api.espn.com**', (r) => r.abort());
 
 console.log('=== Generation A installs ===');
 await page.goto(url, { waitUntil: 'load' });

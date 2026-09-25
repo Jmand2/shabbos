@@ -82,27 +82,28 @@ self.addEventListener('fetch', (e) => {
 
   const url = new URL(e.request.url);
 
-  // The forecast is not cached here at all — not even fresh-first. app.js keeps
-  // the last one in localStorage, where it is parsed data it can reason about
-  // and date from the observation inside it. A worker-cached copy replayed as a
-  // 200 is indistinguishable from a live fetch at the response level, which is
-  // a trap worth simply not having. Two caches for one thing, and only one of
-  // them can tell you how old it is.
-  if (url.hostname.endsWith('open-meteo.com')) return;
-
   // Nor version.json. A cached copy of the file whose entire job is to say
   // which build this is would be the most misleading thing on the screen.
   if (url.pathname.endsWith('version.json')) return;
 
-  // Nor the scoreboard, and for exactly the reason given above for the
-  // forecast. sports.js stamps every answer with `at: Date.now()` and then
-  // decides what a game may still claim from that stamp — a live score is only
-  // shown for fifteen minutes after the snapshot it came from. A worker replay
-  // of a cached scoreboard is a 200 like any other, so a slow network past the
-  // timeout handed back an old board and it was dated NOW, buying a licence it
-  // had not earned. The app keeps its own copy in localStorage where it is
-  // parsed data it can date honestly.
-  if (url.hostname.endsWith('espn.com')) return;
+  // NOTHING CROSS-ORIGIN, AT ALL.
+  //
+  // This worker exists to keep one immutable copy of THIS app on the iPad. It
+  // has no way to reason about what a third-party API's answer means, and the
+  // two it was seeing are both things the app already caches for itself, in
+  // localStorage, as parsed data it can date honestly.
+  //
+  // The scoreboard is the sharp case. sports.js stamps every answer with
+  // `at: Date.now()` and decides from that stamp what a game may still claim —
+  // a live score is shown for fifteen minutes after the snapshot it came from.
+  // A worker replay of a cached scoreboard is a 200 like any other, so a slow
+  // network past the timeout handed back an old board dated NOW, buying a
+  // licence it had not earned. The forecast has the same shape of problem.
+  //
+  // Listing the two hosts fixed those two. Same-origin-only fixes the next one
+  // as well, and there is no third-party request this worker should ever want
+  // to answer from a cache.
+  if (url.origin !== self.location.origin) return;
 
   // The shell: served from this generation's cache, full stop. No timeout, no
   // background refresh, no per-file staleness — the whole point is that these

@@ -781,6 +781,9 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
    half a minute, and it is the one thing here nobody needs, so it is the
    quietest surface of the three. */
 .weather.sports {
+  /* A touch more presence than the weather band, so a glance can tell which of
+     the two is currently up without reading either. */
+  background: color-mix(in srgb, var(--panel) 82%, var(--accent) 6%);
   background:
     linear-gradient(to bottom,
       color-mix(in srgb, var(--accent) 6%, transparent),
@@ -896,26 +899,49 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 }
 /* The winner keeps full weight; the other steps back. Nothing is coloured —
    this is a scoreboard, not a result anybody here is invested in. */
-.steam.lead { color: var(--text); font-weight: 700; }
+.steam.lead { color: var(--text); }
+/* The winner carries the weight; the loser keeps its own colour and steps back.
+   Nothing is tinted by result — this is a scoreboard, not a verdict. */
+.steam.lead .sscore { font-weight: 800; }
+.steam:not(.lead) .sscore { font-weight: 600; opacity: 0.75; }
+
+/* A thread of the club's colour, not a card painted in it. */
+.sbar {
+  flex: none;
+  width: 0.24em;
+  min-width: 3px;
+  align-self: stretch;
+  border-radius: 999px;
+  background: var(--team, var(--rule));
+}
 /* Placed explicitly. .steam is display: contents, so these are grid items of
    .sgame itself — and once the icon took column 1, letting them auto-flow put
    the home team's abbreviation into the icon's column and pushed its score off
    the end of the row. */
 .sabbr {
   grid-column: 2;
-  font-size: clamp(12px, 1.8vh, 21px);
+  /* The score is the thing being read; the abbreviation only says whose. They
+     were nearly the same size, which is why the strip read flat. */
+  font-size: clamp(11px, 1.55vh, 18px);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4em;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 .sscore {
   grid-column: 3;
-  font-size: clamp(15px, 2.2vh, 26px);
+  /* About 1.35x the abbreviation beside it. */
+  font-size: clamp(15px, 2.1vh, 25px);
   font-weight: 600;
   font-variant-numeric: tabular-nums lining-nums;
   /* Right-aligned so 128 over 98 still lines up on the units. */
   text-align: right;
 }
 .sstate {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
   font-size: clamp(8px, 1.05vh, 11px);
   color: var(--mute);
   white-space: nowrap;
@@ -925,6 +951,41 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 }
 /* A game actually being played is the only thing here worth an accent. */
 .sgame.live .sstate { color: var(--accent); font-weight: 600; }
+.spill {
+  padding: 0.12em 0.42em;
+  border-radius: 0.4em;
+  background: var(--rule);
+  color: var(--text-2);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.spill.soft { background: none; padding-inline: 0; color: var(--mute); }
+.spill.live { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+/* Steady, not blinking. A wall display that flashes is one nobody can sit
+   opposite for three days of Yom Tov. */
+.sdot {
+  width: 0.42em;
+  height: 0.42em;
+  margin-right: 0.35em;
+  border-radius: 999px;
+  background: var(--accent);
+  display: inline-block;
+}
+.swhen { color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* [13] A NARROWER HEADER. It was set at the weather block's scale, where it
+   labels a whole panel; here it labels five games that already say what they
+   are, and it was spending a game's worth of width to do it. Stacked rather
+   than "Scores · Last night" on one line, because two short lines are narrower
+   than one long one — the width is set by "LAST NIGHT" either way. */
+.weather.sports .snow {
+  flex: 0 0 auto;
+  gap: 0.15em;
+  padding-right: clamp(9px, 1.1vw, 18px);
+}
+.weather.sports .slabel { font-size: clamp(11px, 1.6vh, 17px); }
+.weather.sports .ssub { font-size: clamp(8px, 1.05vh, 11px); letter-spacing: 0.1em; }
 
 @media (max-aspect-ratio: 1 / 1) {
   /* A shorter floor in portrait. The floor is there so the band is the same
