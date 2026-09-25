@@ -223,6 +223,42 @@ const MEASURE = () => {
   return out;
 };
 
+// Waits for the board to stop moving, rather than for a number of milliseconds.
+//
+// This suite asserts real pixels, and it measured after a flat 1500ms. The fit
+// loop runs after first paint, the forecast lands a tick later and takes a band
+// off the cards, which refits them, and each card then stretches into its own
+// spare room. On a laptop that is all done well inside the wait; on a contended
+// shared runner it sometimes was not, and the suite measured a board mid-fit
+// and went red on a margin of a fraction of a point. Twice in a row, then green
+// on a commit that touched only the workflow.
+//
+// So: poll the thing being asserted on — the card scales and the numeral sizes
+// — and go when they have held still. Falls through after `limit` so a board
+// that genuinely never settles still gets measured and fails loudly.
+const settle = async (page, limit = 8000) => {
+  // The clock is in here too: the clock-only view has no cards at all, and
+  // watching an empty list would call that board settled the moment it loaded.
+  const shape = () => page.evaluate(() => [
+    getComputedStyle(document.getElementById('clockTime') ?? document.body).fontSize,
+    ...[...document.querySelectorAll('.card')].map((c) =>
+      `${getComputedStyle(c).getPropertyValue('--minyan-scale')}/`
+      + `${[...c.querySelectorAll('.time')].map((t) => getComputedStyle(t).fontSize).join(',')}`),
+  ].join('|'));
+  const started = Date.now();
+  let last = await shape();
+  let stable = 0;
+  while (Date.now() - started < limit) {
+    await page.waitForTimeout(150);
+    const now = await shape();
+    stable = now === last ? stable + 1 : 0;
+    last = now;
+    // Three matching reads, so one slow frame in the middle of the fit loop
+    // cannot pass for a settled board.
+    if (stable >= 3) return;
+  }
+};
+
 const VIEWS = [
   // iPad landscape, the way it is actually mounted.
   { name: 'friday-afternoon', at: '2026-09-25T14:00:00-04:00', size: [1180, 820] },
@@ -270,11 +306,7 @@ for (const view of VIEWS) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
-  // Let the board settle: the fit loop runs after the first paint, and the
-  // weather arrives a tick later and takes a band off the cards.
-  // Generous: the fit loop runs after first paint and the forecast lands a tick
-  // later, and a shared CI runner is a great deal slower than a laptop.
-  await page.waitForTimeout(1500);
+  await settle(page);
 
   const m = await page.evaluate(MEASURE);
   console.log(`  ${view.name}  (${view.size.join('x')})  scale ${m.scale}`
@@ -349,7 +381,7 @@ for (const view of VIEWS) {
     // tonight — the test then measures a board nobody chose.
     await page.route('**site.api.espn.com**', (r) => r.abort());
     await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
-    await page.waitForTimeout(1200);
+    await settle(page);
 
     const before = await page.evaluate(() =>
       Math.round(document.querySelector('.card').getBoundingClientRect().top));
@@ -425,7 +457,7 @@ for (const view of VIEWS) {
   await page.route('**/api.open-meteo.com/**', (r) => r.abort());
   await page.route('**site.api.espn.com**', (r) => r.abort());
   await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
-  await page.waitForTimeout(1200);
+  await settle(page);
 
   const hook = await page.evaluate(() => typeof window.shabbosFlights?.send === 'function');
   ok(hook, 'the flight layer exposes a way to launch one deliberately');
