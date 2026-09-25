@@ -517,7 +517,12 @@ function renderShuls(now, days) {
   // cannot fit that many at any size it shows fewer rather than clipping them,
   // because a clipped time is worse than an absent one.
   const auto = settings.perShul === 'auto';
-  const ceiling = auto ? AUTO_MAX : Number(settings.perShul);
+  // How many days the board actually reaches — one on a Tuesday, three on the
+  // eve of a long chag. The ceiling follows it.
+  const spanDays = Math.max(1, days.length);
+  const ceiling = auto
+    ? Math.max(AUTO_MAX, AUTO_MAX_PER_DAY * spanDays)
+    : Number(settings.perShul);
   const floor = auto ? AUTO_MIN_PX : 0;
   // Each probe REBUILDS every card and then measures it, which is the most
   // expensive thing the board does and the reason the search is a binary one.
@@ -601,7 +606,21 @@ const MAX_SCALE = 1.7;
 // row count is what gives way. AUTO_MAX is a sanity ceiling: past a dozen or so
 // nobody is reading a wall, they are reading a timetable.
 const AUTO_MIN_PX = 22;
-const AUTO_MAX = 14;
+// PER DAY ON THE BOARD, not per card.
+//
+// This was a flat 14 for the whole card, with the reasoning that past a dozen
+// or so nobody is reading a wall. That is true of ONE day. On the third day of
+// a chag the board is showing three of them, each with a full seven services,
+// and nineteen times went in at one end while fourteen came out the other —
+// so Beth Aaron's card said Succos II had a Mincha at 6:25 and then nothing,
+// with its 7:30 Maariv cut and a third of the card empty underneath.
+//
+// Dropped times are supposed to be a legibility decision. The px floor and the
+// fit loop make that decision honestly and will still refuse anything that
+// cannot be read; an arbitrary count sitting above them was making it for a
+// different reason and getting it wrong.
+const AUTO_MAX_PER_DAY = 8;
+const AUTO_MAX = 14;          // the one-day ceiling, kept for a single-day board
 const AUTO_MIN_ROWS = 2;
 
 function fitBoard() {

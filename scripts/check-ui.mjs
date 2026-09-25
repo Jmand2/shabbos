@@ -403,7 +403,10 @@ console.log('\n=== G4: "Times shown per shul" actually caps ===');
   const { w } = await boot('2026-09-22T05:00:00-04:00',
     { settings: { shuls: ['bnai-yeshurun'], perShul: '3' } });
   const times = w.document.querySelectorAll('.card .time:not(.edgetime)').length;
-  ok(times > 0 && times <= 14,
+  // Auto's ceiling follows how many DAYS the board reaches — eight a day — so
+  // this bound is no longer a single number. The assertion is that a stale
+  // value falls back to a working Auto rather than to NaN or nothing.
+  ok(times > 0 && times <= 8 * 4,
     `a stale perShul="3" falls back to Auto, not NaN (${times} times)`);
   ok(w.document.getElementById('perShul').value === 'auto',
     'and the settings sheet shows Auto rather than a blank select');
@@ -799,6 +802,32 @@ console.log('\n=== Y1b: a second night, candles are never calculated ===');
     .map((n) => n.textContent.trim());
   ok(times.includes('8:41pm'),
     `and it is the shul's own minute, not a computed one (${times.join(' ')})`);
+}
+
+console.log('\n=== Y1c: a long chag keeps every day complete ===');
+{
+  // THE BUG THIS EXISTS FOR. The Auto ceiling was a flat 14 times per card, on
+  // the reasoning that past a dozen nobody is reading a wall. That is true of
+  // ONE day. On erev Succos the board shows three, each with a full seven
+  // services — nineteen went in and fourteen came out, and what fell off the
+  // end was the LAST time on the LAST day. Beth Aaron's card said Succos II had
+  // a Mincha at 6:25 and then nothing, with its 7:30 Maariv cut and a third of
+  // the card empty underneath it.
+  //
+  // Dropping times is supposed to be a legibility decision; the px floor and
+  // the fit loop make that decision honestly. A fixed count sitting above them
+  // was making it for a different reason and getting it wrong.
+  const { w } = await boot('2027-04-21T15:00:00-04:00',
+    { minyanim: schedule(PESACH), settings: { shuls: ['beth-aaron'] } });
+  const groups = groupsOn(w);
+  const times = [...w.document.querySelectorAll('.card .time:not(.edgetime)')]
+    .map((n) => n.textContent.trim());
+  ok(groups.length >= 3, `the board spans the chag (${groups.length} days)`);
+  // The fixture gives every day 8:45am, 1:30pm, 7:00pm and 8:45pm. The last of
+  // those is the one that used to fall off.
+  const late = times.filter((t) => t === '8:45pm').length;
+  ok(late >= groups.length - 1,
+    `each day keeps its last minyan (${late} evening times over ${groups.length} days: ${times.join(' ')})`);
 }
 
 console.log('\n=== Y2: an ordinary week is unchanged ===');
