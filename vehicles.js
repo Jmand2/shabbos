@@ -245,20 +245,107 @@
       update: trainUpdate,
     },
 
+    /* THE BOAT ---------------------------------------------------------------
+       It rides a real sea. hullTarget() reads the water under each end of the
+       hull and gives back where it wants to sit and how far over; both go
+       through a spring, so the boat lags the swell instead of being welded to
+       it.
+
+       This replaces two wake paths that slid sideways on CSS timers. The slower
+       of them had a 52-unit wavelength and slid 44, so every loop it snapped
+       back 8 units — a visible stutter, on a thing whose entire job was to look
+       like water. */
     boat: {
-      vb: [134, 74], seats: 2, colour: '#4FA3A5', speed: 47, lane: 'horizon', dir: -1,
+      vb: [150, 96], seats: 2, colour: '#4FA3A5', speed: 47, lane: 'horizon', dir: -1,
       band: -0.055,
-      slots: [[38, 52, 10], [92, 52, 10]],
-      art: `<path class="hull" d="M14 42 H120 L104 64 H30 z"/>
-        <path class="glass" d="M66 38 V6 L104 34 z"/>
-        <path d="M66 4 V44"/>
-        <g class="wake">
-          <path class="thin" d="M-40 68 q12-7 22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0"/>
-        </g>
-        <g class="wake slow">
-          <path class="thin" d="M-40 62 q14-5 26 0 t26 0 t26 0 t26 0 t26 0 t26 0 t26 0"/>
+      slots: [[52, 46, 11], [96, 46, 11]],
+      sea: true,
+      art: `
+        <g class="rock">
+          <path class="mast" d="M104 62 V10"/>
+          <path class="sail" d="M100 58 V14 q-34 8-44 44 z"/>
+          <path class="flag" d="M104 12 q10 3 18 0 q-8 6 0 12 q-10-3-18 0 z"/>
+          <path class="hull" d="M12 62 H138 L120 88 H30 z"/>
+          <path class="deck" d="M12 62 H138"/>
+          <circle class="port" cx="46" cy="72" r="5"/>
+          <circle class="port" cx="104" cy="72" r="5"/>
+          <path class="bowwave" d="M6 84 q10-8 22-3"/>
         </g>`,
+      update(rig, state, dt) {
+        const m = rig.mem;
+        if (!m.init) {
+          m.init = true;
+          m.rock = rig.q('.rock');
+          m.heave = { x: 0, v: 0 };
+          m.tilt = { x: 0, v: 0 };
+          m.lastTilt = 0;
+          m.cool = 0;
+          m.spray = K.particles(24);
+          // The sea belongs to the world, not to the boat: it is there for the
+          // crossing and the boat moves over it.
+          if (rig.world) {
+            m.sea = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            m.sea.setAttribute('class', 'sea');
+            m.sea.innerHTML = '<path class="far"/><path class="fill"/><path class="surface"/>';
+            rig.world.rails.appendChild(m.sea);
+            rig.own = m.sea;
+          }
+        }
+        const h = K.clampDt(dt);
+        const sc = state.scale || 1;
+        const t = rig.t;
+
+        // WHERE THE WATER IS. The band sits on the lane, and only a little way
+        // down it: a full-height fill would put sea over the shul cards, which
+        // are the one thing on this screen that is not decoration.
+        const y0 = state.y + (78 - 96 / 2) * sc;
+        if (m.sea) {
+          const far = m.sea.querySelector('.far');
+          const fill = m.sea.querySelector('.fill');
+          const surf = m.sea.querySelector('.surface');
+          const W = rig.world.svg.clientWidth || 1024;
+          const d = K.seaPath(-40, W + 40, y0, t, sc, 14);
+          surf.setAttribute('d', d);
+          fill.setAttribute('d', `${d} L${W + 40} ${(y0 + 26 * sc).toFixed(1)} L-40 ${(y0 + 26 * sc).toFixed(1)} Z`);
+          // A second, slower surface behind it, for depth.
+          far.setAttribute('d', K.seaPath(-40, W + 40, y0 - 9 * sc, t * 0.72, sc * 0.8, 18, 140));
+        }
+
+        // HOW THE HULL SITS ON IT. Measured left end to right end in screen
+        // space whichever way the boat is heading — kinetics carries a note
+        // about why: measured stern to bow, a boat going left came out about
+        // 180 degrees over and rendered upside down.
+        const want = K.hullTarget(state.x, t, 126 * sc, y0, sc);
+        m.heave = K.spring(m.heave, want.y - y0, h, 42, 10);
+        m.tilt = K.spring(m.tilt, want.rot, h, 38, 9);
+        if (m.rock) {
+          m.rock.setAttribute('transform',
+            `translate(0 ${(m.heave.x / sc).toFixed(2)}) rotate(${m.tilt.x.toFixed(2)} 75 70)`);
+        }
+
+        // SPRAY ONLY WHEN THE BOW SLAMS. Not every wave — a boat that throws
+        // water continuously is a fountain. The trigger is the RATE the tilt is
+        // changing, with a cooldown, so one slam is one burst.
+        const rate = Math.abs(m.tilt.x - m.lastTilt) / Math.max(h, 1e-3);
+        m.lastTilt = m.tilt.x;
+        m.cool = Math.max(0, m.cool - h);
+        if (rate > 26 && m.cool === 0) {
+          m.cool = 0.8;
+          const bow = rig.point(state.rot === 0 && (rig.dir ?? -1) < 0 ? 12 : 138, 84);
+          for (let i = 0; i < 7; i += 1) {
+            rig.spray.emit({
+              x: bow.x, y: bow.y,
+              vx: (Math.random() - 0.3) * 90 * (state.x > 0 ? -1 : 1),
+              vy: -60 - Math.random() * 70,
+              life: 0.9,
+              size: 2.2 * sc,
+              grow: 1.5 * sc,
+            });
+          }
+        }
+      },
     },
+
 
     plane: {
       vb: [252, 62], seats: 3, colour: '#6E8BD6', speed: 98, lane: 'upper', dir: 1,
@@ -294,17 +381,96 @@
       },
     },
 
+    /* THE CAR ---------------------------------------------------------------
+       A CONVERTIBLE, because a roof is a lid over the one thing worth looking
+       at. The driver sits up out of it and the face keeps its size.
+
+       The body leans, pitches and squats; the WHEELS DO NOT. A car's wheels
+       stay on the road while its body rolls about above them, and leaning the
+       whole vehicle is the tell that it is a picture being tilted rather than a
+       car taking a bend. */
     car: {
-      vb: [116, 62], seats: 1, colour: '#E0A030', speed: 80, lane: 'lap', dir: 1,
-      slots: [[52, 32, 10]],
-      art: `<path class="hull" d="M6 48 L10 34 q3-9 14-9 h60 q11 0 15 9 l8 14 z"/>
-        <path class="glass" d="M24 32 q3-5 10-5 h38 q7 0 10 5 l3 8 H21 z"/>
-        <path class="hull" d="M2 46 H114 q4 0 4 5 v3 q0 4-4 4 H2 q-4 0-4-4 v-3 q0-5 4-5 z"/>
-        <g class="wheel"><circle class="solid" cx="28" cy="56" r="8"/>
-          <path class="spoke" d="M28 50 V62 M22 56 H34"/></g>
-        <g class="wheel"><circle class="solid" cx="88" cy="56" r="8"/>
-          <path class="spoke" d="M88 50 V62 M82 56 H94"/></g>`,
+      vb: [150, 92], seats: 1, colour: '#E0A030', speed: 80, lane: 'lap', dir: 1,
+      // 11 * FACE(2.1) = 23 units, which is 104 px across at 1024 wide. The
+      // floor is 70 and this was set at 15, giving 142 — a head wider than the
+      // bonnet. Rule 1 is a floor, not a target: past a point a bigger face
+      // stops helping and starts being a balloon on a trolley.
+      slots: [[74, 33, 11]],
+      art: `
+        <g class="susp">
+          <g class="shell">
+            <path class="lamp back" d="M8 60 h9 q4 0 4 4 v7 q0 4-4 4 H8 z"/>
+            <path class="lamp front" d="M142 60 h-9 q-4 0-4 4 v7 q0 4 4 4 h9 z"/>
+            <path class="flank" d="M14 74 L20 54 q4-12 18-12 h74 q14 0 19 12 l9 20 z"/>
+            <path class="tub" d="M46 52 q4-7 13-7 h30 q9 0 13 7 l4 10 H42 z"/>
+            <path class="screen" d="M96 44 q9 1 13 9 h-17 z"/>
+            <path class="sill" d="M10 70 H140 q6 0 6 6 v4 q0 6-6 6 H10 q-6 0-6-6 v-4 q0-6 6-6 z"/>
+            <path class="blink left" d="M16 54 h10 v7 h-10 z"/>
+            <path class="blink right" d="M124 54 h10 v7 h-10 z"/>
+          </g>
+        </g>
+        <g class="wheel" data-base="translate(38 78)">
+          <circle class="tyre" r="13"/><circle class="hub" r="4.5"/>
+          <path class="spokes" d="M0 -10 V10 M-10 0 H10"/>
+        </g>
+        <g class="wheel" data-base="translate(114 78)">
+          <circle class="tyre" r="13"/><circle class="hub" r="4.5"/>
+          <path class="spokes" d="M0 -10 V10 M-10 0 H10"/>
+        </g>`,
+      update(rig, state, dt) {
+        const m = rig.mem;
+        if (!m.init) {
+          m.init = true;
+          m.shell = rig.q('.shell');
+          m.susp = rig.q('.susp');
+          m.wheels = rig.qa('.wheel');
+          m.back = rig.q('.lamp.back');
+          m.blinks = rig.qa('.blink');
+          m.lean = { x: 0, v: 0 };
+          m.pitch = { x: 0, v: 0 };
+          m.head = { x: 0, v: 0 };
+          m.prevRot = state.rot;
+        }
+        const h = K.clampDt(dt);
+
+        // WHEELS ROLL, they do not spin on a timer. They used to turn once every
+        // 0.42s whatever the car was doing — about 4.3x faster than it actually
+        // travelled — so they skidded the entire lap.
+        const deg = (K.wheelAngle(state.dist / (state.scale || 1), 13) * 180) / Math.PI;
+        for (const wd of m.wheels) wd.setAttribute('transform', `${wd.dataset.base} rotate(${deg.toFixed(1)})`);
+
+        // Lean out of the bend, from lateral acceleration. The turn rate gives
+        // the radius: r = v / omega.
+        const turn = Math.abs(state.rot - m.prevRot) / Math.max(h, 1e-3);   // deg/s
+        m.prevRot = state.rot;
+        const omega = (turn * Math.PI) / 180;
+        const radius = omega > 0.02 ? state.speed / omega : 0;
+        const side = state.rot - m.prevRot <= 0 ? 1 : -1;
+        const want = radius > 0 ? Math.min(14, K.lateral(state.speed, radius) * 0.02) : 0;
+        m.lean = K.spring(m.lean, want * side, h, 45, 11);
+
+        // Nose dips under braking, squats under power.
+        m.pitch = K.spring(m.pitch, Math.max(-5, Math.min(5, -state.accel * 0.012)), h, 50, 12);
+        if (m.shell) {
+          m.shell.setAttribute('transform',
+            `rotate(${m.lean.x.toFixed(2)} 75 74) rotate(${m.pitch.x.toFixed(2)} 75 74)`);
+        }
+
+        // THE RIDER STAYS UPRIGHT. At the top of the lap the car is upside down
+        // and the person in it is not. Through a spring, so the head lags the
+        // body by a beat instead of snapping level.
+        m.head = K.spring(m.head, -state.rot, h, 38, 11);
+        const seat = rig.seat(0);
+        if (seat) seat.style.transform = `rotate(${m.head.x.toFixed(2)}deg)`;
+
+        // Brake lights while slowing; indicator before a bend.
+        if (m.back) m.back.style.opacity = state.accel < -12 ? '1' : '0.25';
+        const soon = Math.abs(state.rot % 90) > 0.5 || turn > 1;
+        const on = soon && Math.floor(state.dist / 26) % 2 === 0;
+        for (const b of m.blinks) b.style.opacity = on ? '1' : '0';
+      },
     },
+
 
     balloon: {
       vb: [128, 118], seats: 2, colour: '#A96FA0', speed: 24, lane: 'rise',

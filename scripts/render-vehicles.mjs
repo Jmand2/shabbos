@@ -94,8 +94,8 @@ for (const name of names) {
     // Wide, because several lanes deliberately keep OUT of the middle: the
     // rocket, balloon and parachute go up one side or the other at 18% or 82%
     // of the width, which a centre-band predicate never matches at all.
-    return cx > innerWidth * 0.06 && cx < innerWidth * 0.94
-      && cy > innerHeight * 0.08 && cy < innerHeight * 0.92;
+    return cx > innerWidth * 0.14 && cx < innerWidth * 0.86
+      && cy > innerHeight * 0.1 && cy < innerHeight * 0.9;
   }, name, { timeout: 20000 }).catch(() => {});
   await page.screenshot({ path: join(OUT, `${name}.png`) });
   await page.evaluate(() => { document.documentElement.style.filter = 'blur(3px)'; });

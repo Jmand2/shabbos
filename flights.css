@@ -115,16 +115,52 @@
 .dancer svg { animation: hop 305ms ease-in-out infinite alternate; }
 @keyframes hop { from { transform: translateY(0) scaleY(1); } to { transform: translateY(-7px) scaleY(1.04); } }
 
-/* Wheels that read as turning. A filled disc rotating looks like a filled disc,
-   so they carry a cross that does not. */
-.flight .spoke { stroke: rgba(10, 11, 16, 0.75); stroke-width: 2.4; }
-.car .wheel { transform-box: fill-box; transform-origin: 50% 50%; animation: spin 420ms linear infinite; }
+/* THE CAR -----------------------------------------------------------------
+   A convertible: no roof over the one thing worth looking at. The body leans
+   and pitches, the wheels do not — a car's wheels stay on the road while the
+   body rolls above them, and tilting the whole vehicle is the tell that it is a
+   picture being rotated rather than a car taking a bend.
 
-/* The water moves, not just the boat on it. Two wakes at different speeds, so
-   the sea has a near edge and a far one. */
-.boat .wake { transform-box: view-box; animation: drift 1.9s linear infinite; }
-.boat .wake.slow { animation-duration: 3.4s; opacity: 0.55; }
-@keyframes drift { from { transform: translateX(0); } to { transform: translateX(44px); } }
+   The wheels are no longer spun by a timer. They turned once every 0.42s
+   whatever the car was doing, about 4.3x faster than it travelled, so they
+   skidded the entire lap. update() rolls them by distance now. */
+.car .flank { fill: #E0A030; stroke: #6B4A12; stroke-width: 3; }
+.car .tub { fill: #7A5514; stroke: #6B4A12; stroke-width: 2.6; }
+.car .sill { fill: #C98E22; stroke: #6B4A12; stroke-width: 2.6; }
+.car .screen { fill: rgba(200, 226, 240, 0.4); stroke: #CFE4F2; stroke-width: 2.6; }
+.car .tyre { fill: #141824; stroke: #B9B9C4; stroke-width: 3; }
+.car .hub { fill: #C98E22; stroke: none; }
+.car .spokes { stroke: #8A6A22; stroke-width: 2.6; }
+.car .lamp { stroke: none; }
+.car .lamp.front { fill: #FFE9A8; opacity: 0; }
+.car .lamp.back { fill: #E3554C; opacity: 0.25; }
+body:not(.day) .car .lamp.front { opacity: 0.95; }
+/* Amber, and only before a bend. It is a state, not decoration, so it steps
+   between two values rather than fading — and it is off far more than it is on.
+   Nothing on this wall blinks except this, for about a second, at a corner. */
+.car .blink { fill: #F5A25D; stroke: none; opacity: 0; }
+
+/* THE BOAT -----------------------------------------------------------------
+   It rides a real sea now. What was here before was two wave paths sliding
+   sideways on CSS timers — and the slower one had a 52-unit wavelength while it
+   slid 44, so every loop it snapped back 8 units. A visible stutter, on the one
+   thing whose whole job was to look like water. */
+.boat .hull { fill: #3E8A8C; stroke: #24565A; stroke-width: 3; }
+.boat .deck { stroke: #7FD0D2; stroke-width: 3; }
+.boat .sail { fill: rgba(232, 240, 245, 0.85); stroke: #CFE4F2; stroke-width: 2.6; }
+.boat .mast { stroke: #CFE4F2; stroke-width: 3; }
+.boat .flag { fill: #E3554C; stroke: none; }
+.boat .bowwave { stroke: #CFE4F2; stroke-width: 3; opacity: 0.8; }
+.boat .port { fill: #1B3236; stroke: #7FD0D2; stroke-width: 2.6; }
+body:not(.day) .boat .port { fill: #FFE9A8; }
+
+/* The sea, in the world layer. A surface line, a short fill that stops well
+   above the cards — sea over a minyan time would be a poor trade — and a
+   fainter, slower wave behind it for depth. */
+.flyway .sea .surface { fill: none; stroke: #7FD0D2; stroke-width: 3; opacity: 0.9; }
+.flyway .sea .fill { fill: rgba(63, 138, 140, 0.30); stroke: none; }
+.flyway .sea .far { fill: none; stroke: #4E8E95; stroke-width: 2.6; opacity: 0.45; }
+.flyway .spray { fill: #DCEEF2; stroke: none; }
 
 /* THE TRAIN ---------------------------------------------------------------
    Rebuilt as a rigged object. Everything here is fill, colour and light: no

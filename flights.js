@@ -137,7 +137,9 @@
     // carriages measured in the same units as a 72 px face — so it needs far
     // less multiplying than a four-face sketch did.
     plane: 1, train: 0.56, helicopter: 1.2, boat: 1.35,
-    balloon: 1.4, rocket: 1.35, parachute: 1.5, car: 1.6,
+    // The car grew a proper body around a sitting-up driver, so it needs less
+    // multiplying to reach the same size on the wall.
+    balloon: 1.4, rocket: 1.35, parachute: 1.5, car: 1.25,
   };
 
   // One formula for how big a vehicle flies, used by fly() AND by the checks,
@@ -166,6 +168,72 @@
 
   /* Paths ----------------------------------------------------------------- */
   // p is 0..1 of the journey. Returns position in px plus rotation.
+
+  // THE CIRCUIT, worked out once and shared. The lane and LENGTH both need the
+  // same numbers, and they disagreed: LENGTH measured a rectangle with square
+  // corners while the lane drove one with rounded ones, so the car was given a
+  // duration for a path 5.5% longer than the path it actually took — and ran
+  // 5.5% under its speed for the whole lap.
+  const lapShape = (v, W, H) => {
+    const m = lapMargin(v);
+    const w = W - m * 2;
+    const h = H - m * 2;
+    const r = Math.max(24, Math.min(w, h) * 0.16);
+    const sw = w - 2 * r;
+    const sh = h - 2 * r;
+    const arc = (Math.PI * r) / 2;
+    return { m, w, h, r, sw, sh, arc, per: 2 * (sw + sh) + 4 * arc };
+  };
+
+  // HOW FAR ROUND IT IS AT EACH POINT OF THE FLIGHT.
+  //
+  // LANES stays pure — same signature, same meaning — so the speed profile
+  // cannot be integrated inside it. It is integrated ONCE per circuit shape and
+  // cached, and the lane reads the answer off the table.
+  //
+  // The old easing was a sine that happened to be slowest at 12, 37, 62 and 87%
+  // of the lap, while the corners are at 27, 47, 77 and 97: it braked on the
+  // straights and accelerated into the bends. This brakes BEFORE a bend, holds
+  // through it and powers out, because that is what speedTarget() is for.
+  const lapTables = new Map();
+  function lapTable(v, W, H) {
+    const g = lapShape(v, W, H);
+    const key = `${Math.round(g.per)}|${Math.round(g.r)}|${Math.round(g.sw)}|${Math.round(g.sh)}`;
+    const hit = lapTables.get(key);
+    if (hit) return hit;
+
+    // The four arcs, in distance along the circuit.
+    const bends = [];
+    let at = g.sw;
+    for (const straight of [g.sh, g.sw, g.sh]) {
+      bends.push([at, at + g.arc]);
+      at += g.arc + straight;
+    }
+    bends.push([at, at + g.arc]);
+
+    // Integrated in REAL units — pixels and seconds — because that is what
+    // speedTarget and stepSpeed are written in: the lookahead is 0.9 seconds of
+    // travel and the braking limit is 260 px/s². Normalised afterwards, since
+    // the flight's duration is already settled by LENGTH and the vehicle's own
+    // speed; what is wanted here is the SHAPE of the journey, not its clock.
+    //
+    // A first version integrated with vmax = 1 and covered 166 px of a 3100 px
+    // circuit before the iteration cap stopped it, so the car crept along the
+    // opening straight and never reached a corner at all.
+    const step = 1 / 120;
+    const VMAX = 260;
+    const samples = [0];
+    let sp = VMAX;
+    let dist = 0;
+    for (let i = 0; i < 40000 && dist < g.per; i += 1) {
+      sp = K.stepSpeed(sp, K.speedTarget(dist, sp, bends, VMAX, VMAX * 0.42), step).v;
+      dist += sp * step;
+      samples.push(Math.min(dist, g.per));
+    }
+    const table = { g, samples };
+    lapTables.set(key, table);
+    return table;
+  }
 
   const LANES = {
     horizon: (p, v, W, H) => ({
@@ -213,26 +281,22 @@
     // the shortest path from 179 to -179 is two degrees and CSS does not know
     // that, it would turn the long way.
     lap: (p, v, W, H) => {
-      const m = lapMargin(v);
-      const w = W - m * 2;
-      const h = H - m * 2;
-      // Generous, but never more than a short side can give.
-      const r = Math.max(24, Math.min(w, h) * 0.16);
-      const sw = w - 2 * r;
-      const sh = h - 2 * r;
-      const arc = (Math.PI * r) / 2;
-      const per = 2 * (sw + sh) + 4 * arc;
+      const { m, r, sw, sh, arc, per } = lapShape(v, W, H);
 
       // Still eases through the turns — a little slower into them, a little
       // quicker out — but gently, now that the corner has a shape.
-      const d = (p + 0.03 * Math.sin(p * Math.PI * 2 * 4)) * per;
-      // CLAMPED, not wrapped. A vehicle drives this circuit exactly once and is
-      // then removed, so there is no second lap for a modulo to serve — and at
-      // p = 1 it wrapped s back to zero, which snapped the heading from -360 to
-      // 0 and spun the car through a whole turn on its last frame. The easing
-      // above can also push d past the end before p does.
-      const s0 = Math.max(0, Math.min(d, per * 0.99999));
-      let s = s0;
+      // Read off the profile rather than eased by a sine. CLAMPED, not wrapped:
+      // a vehicle drives this circuit exactly once and is then removed, so
+      // there is no second lap for a modulo to serve — and at p = 1 it wrapped
+      // back to zero, which snapped the heading from -360 to 0 and spun the car
+      // through a whole turn on its final frame.
+      const tab = lapTable(v, W, H);
+      const q = Math.max(0, Math.min(p, 0.99999)) * (tab.samples.length - 1);
+      const lo = Math.floor(q);
+      const frac = q - lo;
+      const a0 = tab.samples[lo];
+      const a1 = tab.samples[Math.min(lo + 1, tab.samples.length - 1)];
+      let s = Math.min(a0 + (a1 - a0) * frac, per * 0.99999);
 
       // rot = theta - 90 on every corner, which is what makes the four of them
       // one expression instead of four.
@@ -305,7 +369,8 @@
   const LENGTH = {
     horizon: (W, H) => W * 1.3, upper: (W, H) => W * 1.3, hover: (W, H) => W * 1.3,
     promenade: (W, H) => W * 1.3,
-    lap: (W, H, v) => 2 * ((W - lapMargin(v) * 2) + (H - lapMargin(v) * 2)),
+    // The ROUNDED perimeter, which is what the lane actually drives.
+    lap: (W, H, v) => lapShape(v, W, H).per,
     leaf: (W, H) => H * 1.3, rise: (W, H) => H * 1.3, launch: (W, H) => H * 1.3,
   };
 
@@ -341,17 +406,21 @@
   // away from it. Drawn as plain circles: no filters, which are slow on iPad
   // Safari and are what a glow would otherwise cost.
   function stepSmoke(rig, dt) {
-    const list = rig.smoke.step(dt, { drag: 0.97 });
+    paint(rig, 'smoke', 'puffNodes', 'puff', rig.smoke.step(dt, { drag: 0.97 }));
+    paint(rig, 'spray', 'sprayNodes', 'spray', rig.spray.step(dt, { drag: 0.99, gravity: 420 }));
+  }
+
+  function paint(rig, _which, key, cls, list) {
     const w2 = ensureWorld();
     if (!w2) return;
-    if (!rig.puffNodes) rig.puffNodes = [];
-    while (rig.puffNodes.length < list.length) {
+    if (!rig[key]) rig[key] = [];
+    while (rig[key].length < list.length) {
       const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      c.setAttribute('class', 'puff');
+      c.setAttribute('class', cls);
       w2.puffs.appendChild(c);
-      rig.puffNodes.push(c);
+      rig[key].push(c);
     }
-    rig.puffNodes.forEach((node, i) => {
+    rig[key].forEach((node, i) => {
       const p = list[i];
       if (!p) { node.style.display = 'none'; return; }
       const age = p.age / p.life;
@@ -455,6 +524,9 @@
       qa: (sel) => [...svg.querySelectorAll(sel)],
       seat: (i) => imgs[i] ?? null,
       smoke: K.particles(),
+      // Spray is not smoke: it is thrown up and falls back. Its own system, so
+      // it can be integrated with gravity while the smoke drifts.
+      spray: K.particles(24),
       // Artwork coordinates to screen coordinates. The element is translated to
       // the path point, centred, then scaled, so a point in the viewBox lands
       // this far from that centre.
@@ -463,6 +535,11 @@
         y: rig.at.y + (ay - vh / 2) * scale,
       }),
       at: { x: 0, y: 0 },
+      // The layer a vehicle may put things into that outlive it: smoke, spray,
+      // a sea, a track. Anything here is in screen coordinates and is the
+      // vehicle's to remove when it goes.
+      world: ensureWorld(),
+      t: 0,
     };
 
     // Track, laid along the lane once and left alone: the train crosses it, it
@@ -485,7 +562,7 @@
     let last = null;
     (function step(now) {
       const p = (now - t0) / ms;
-      if (p >= 1) { el.remove(); rails?.remove(); return; }
+      if (p >= 1) { el.remove(); rails?.remove(); rig.own?.remove(); return; }
       const pose = LANES[lane](p, v, W, H);
       el.style.transform = `translate(${pose.x}px, ${pose.y}px) translate(-50%, -50%) `
         + `rotate(${pose.rot}deg) scale(${scale})`;
@@ -496,6 +573,7 @@
       // On the first frame there is no previous sample: seed from the pose and
       // skip the derivatives rather than dividing by a dt of zero.
       const dt = K.clampDt(last ? (now - last.t) / 1000 : 0);
+      rig.t = (now - t0) / 1000;
       if (!last) {
         last = { t: now, x: pose.x, y: pose.y, speed: 0, dist: 0 };
       } else if (dt > 0) {
@@ -515,7 +593,7 @@
     })(t0);
 
     // Belt and braces: if rAF is throttled away, the node still goes.
-    setTimeout(() => el.remove(), ms + 4000);
+    setTimeout(() => { el.remove(); rails?.remove(); rig.own?.remove(); }, ms + 4000);
   }
 
   function tick() {

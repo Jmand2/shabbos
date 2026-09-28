@@ -825,16 +825,24 @@ for (const view of VIEWS) {
     // than the ordinary stagger — so a sampling window of a few seconds counts
     // the head of the parade and calls the tail missing.
     let peak = 0;
+    const seen = new Map();
     for (let i = 0; i < 80; i += 1) {
       await new Promise((r) => setTimeout(r, 150));
-      peak = Math.max(peak, document.querySelectorAll('.flight').length);
+      const now2 = [...document.querySelectorAll('.flight')];
+      peak = Math.max(peak, now2.length);
+      for (const el of now2) {
+        const b = el.getBoundingClientRect();
+        const on = b.width > 0 && b.right > 0 && b.left < innerWidth;
+        seen.set(el, (seen.get(el) ?? false) || on);
+      }
     }
     const els = [...document.querySelectorAll('.flight')];
     const kinds = new Set(els.map((el) => el.className.replace('flight', '').trim()));
-    const offscreen = els.filter((el) => {
-      const b = el.getBoundingClientRect();
-      return b.width === 0 || b.right < 0 || b.left > innerWidth;
-    }).length;
+    // Counted over the WHOLE sampling window, not at one instant. Every vehicle
+    // starts outside the frame and drives in — that is what a lane is — so a
+    // single late reading catches whichever one launched most recently and
+    // calls it lost. What matters is that each one arrives.
+    const offscreen = [...seen.values()].filter((v2) => !v2).length;
     const kinds0 = window.shabbosFlights.names().length;
     const hourMs = window.shabbosFlights.untilTheHour();
     // Computed in here, against the PAGE's clock. This page is frozen at
@@ -936,6 +944,89 @@ for (const view of VIEWS) {
     ok(worst < movedTrain * 0.2,
       `and each puff stays where it was released (worst ${worst.toFixed(0)} px `
       + `while the train went ${movedTrain.toFixed(0)})`);
+  }
+
+  /* PHASE 2: the car drives and the boat floats ---------------------------- */
+  {
+    // The lap is driven by a speed profile now, not by a sine that happened to
+    // brake on the straights: it was slowest at 12, 37, 62 and 87% of the lap
+    // while the corners are at 27, 47, 77 and 97, so it accelerated INTO every
+    // bend. Sampled off the pure path, which is the thing the profile shapes.
+    const lap = await page.evaluate(() => {
+      const out = [];
+      let prev = window.shabbosFlights.path('car', 0, innerWidth, innerHeight);
+      for (let i = 1; i <= 600; i += 1) {
+        const q = window.shabbosFlights.path('car', i / 600, innerWidth, innerHeight);
+        out.push({ step: Math.hypot(q.x - prev.x, q.y - prev.y), rot: q.rot });
+        prev = q;
+      }
+      return out;
+    });
+    const bend = (r) => Math.abs(r % 90) > 0.5;
+    const slowest = [...lap].sort((a, b) => a.step - b.step).slice(0, 60);
+    const inBend = slowest.filter((s2) => bend(s2.rot)).length;
+    const range = Math.max(...lap.map((l) => l.step)) / Math.min(...lap.map((l) => l.step));
+    ok(range > 1.6, `the car's speed actually varies round the lap (${range.toFixed(1)}:1)`);
+    ok(inBend >= 57, `and its slowest points are in the corners (${inBend}/60)`);
+  }
+
+  {
+    // THE RIDER STAYS UPRIGHT. At the top of the lap the car is upside down and
+    // the person in it is not — counter-rotated through a spring, so the head
+    // lags a beat rather than snapping level.
+    // Driven through update() at attitudes the car really reaches, rather than
+    // watched. A lap takes about forty seconds; watching ninety frames of one
+    // sees a second and a half of the opening straight, where the car is level,
+    // the head is level, and the test passes on 0.0° without having looked at a
+    // single corner. That is the same way the first cornering test fooled me.
+    const upright = await page.evaluate(async () => {
+      const spec = window.shabbosFlights.spec('car');
+      const made = new Map();
+      const stub = () => ({
+        style: {}, dataset: {},
+        setAttribute() {}, getAttribute: () => '',
+      });
+      const rig = {
+        mem: {}, q: (sel) => made.get(sel) ?? (made.set(sel, stub()), made.get(sel)),
+        qa: () => [], seat: () => made.get('seat') ?? (made.set('seat', stub()), made.get('seat')),
+        point: () => ({ x: 0, y: 0 }), smoke: { emit() {} }, spray: { emit() {} }, t: 0,
+      };
+      let worst = 0;
+      // Upside down at the top of the lap, which is the case this exists for.
+      for (const rot of [0, -90, -180, -270, -360]) {
+        for (let i = 0; i < 90; i += 1) {
+          spec.update(rig, { x: 500, y: 400, rot, speed: 120, accel: 0, dist: i * 2, p: 0.5, scale: 2 }, 1 / 60);
+        }
+        const head = Number(/rotate\(([-\d.]+)deg\)/.exec(rig.seat().style.transform ?? '')?.[1] ?? 0);
+        worst = Math.max(worst, Math.abs(rot + head));
+      }
+      return worst;
+    });
+    ok(upright <= 15, `the rider stays within 15° of level (worst ${upright.toFixed(1)}°)`);
+  }
+
+  {
+    // THE BOAT RIDES THE SEA, and a boat that rolls past about thirty degrees
+    // has capsized. kinetics carries a note about the bug this guards: measured
+    // stern to bow, a boat heading left came out 180° over and rendered upside
+    // down.
+    const tilt = await page.evaluate(async () => {
+      document.querySelectorAll('.flight').forEach((n) => n.remove());
+      window.shabbosFlights.send('boat');
+      const el = document.querySelector('.flight.boat');
+      let worst = 0;
+      for (let i = 0; i < 150; i += 1) {
+        await new Promise((r) => requestAnimationFrame(r));
+        const rock = el.querySelector('.rock');
+        const m = /rotate\(([-\d.]+)/.exec(rock?.getAttribute('transform') ?? '');
+        if (m) worst = Math.max(worst, Math.abs(Number(m[1])));
+      }
+      el.remove();
+      document.querySelectorAll('.flyway .sea').forEach((n) => n.remove());
+      return worst;
+    });
+    ok(tilt > 0.2, `the boat is actually rocking (worst ${tilt.toFixed(1)}°)`);
+    ok(tilt <= 30, `and never past 30° (worst ${tilt.toFixed(1)}°)`);
   }
 
   await page.close();
