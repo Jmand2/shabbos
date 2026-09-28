@@ -53,6 +53,27 @@ function renderPager() {
 }
 
 const GROUPS = { shacharis: 'Shacharis', mincha: 'Mincha', maariv: 'Maariv' };
+
+// A RUN is one service and every consecutive time it is davened at: the four
+// Shacharis of a Yom Tov morning are one thing on the wall, not four.
+//
+// Defined here and used by BOTH the cap and the card, because they disagreeing
+// about where a run starts is the whole bug below.
+const runLabel = (r) => (r.label.toLowerCase() === r.group ? GROUPS[r.group] : r.label);
+
+function runsOf(rows) {
+  const runs = [];
+  for (const r of rows) {
+    const label = runLabel(r);
+    const open = runs[runs.length - 1];
+    // Only while the times stay consecutive: Beth Aaron lists Night Selichos at
+    // 5:00 AM and 9:45 PM, and merging those would put the last minyan of the
+    // day above times sixteen hours earlier.
+    if (open && open.label === label) open.times.push(r);
+    else runs.push({ label, times: [r] });
+  }
+  return runs;
+}
 let lastBoard = '';
 let lastMarks = '';
 
@@ -406,7 +427,7 @@ function renderShuls(now, days) {
       if (!grouped.has(k)) grouped.set(k, []);
       grouped.get(k).push(r);
     }
-    const ahead = capRows(grouped, cap);
+    const ahead = capRows(grouped, cap, { whole: settings.perShul === 'auto' });
     const next = ahead[0];
 
     const byDay = new Map();
@@ -440,13 +461,7 @@ function renderShuls(now, days) {
       // board in the order things actually happen. The label is always the
       // tefillah — never blanked, or Mincha and Maariv collapse into one
       // unlabelled row.
-      const runs = [];
-      for (const r of rows) {
-        const label = r.label.toLowerCase() === r.group ? GROUPS[r.group] : r.label;
-        const open = runs[runs.length - 1];
-        if (open && open.label === label) open.times.push(r);
-        else runs.push({ label, times: [r] });
-      }
+      const runs = runsOf(rows);
 
       // A run of times wraps, so count the lines it will actually occupy.
       // Narrower cards (more shuls across) fit fewer per line.

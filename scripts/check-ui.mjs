@@ -830,6 +830,34 @@ console.log('\n=== Y1c: a long chag keeps every day complete ===');
     `each day keeps its last minyan (${late} evening times over ${groups.length} days: ${times.join(' ')})`);
 }
 
+console.log('\n=== Y1d: a service is shown whole or not at all ===');
+{
+  // "If we are showing Shacharis we need to show all Shacharis." The cap used
+  // to count individual TIMES, so the budget could run out half way through a
+  // service: the card showed 7:00 and 8:00 and stopped, with the 8:45 and the
+  // 9:15 cut off and nothing on screen saying so. Somebody reads four times,
+  // sees two, and leaves believing there is no 8:45.
+  const four = { generated_at: new Date().toISOString(), days: {
+    '2026-09-26': { 'beth-aaron': {
+      shacharis: [
+        { label: 'Shacharis', time: '7:00 AM' }, { label: 'Shacharis', time: '8:00 AM' },
+        { label: 'Shacharis', time: '8:45 AM' }, { label: 'Shacharis', time: '9:15 AM' },
+      ],
+      mincha: [{ label: 'Mincha', time: '6:25 PM' }],
+      maariv: [{ label: 'Maariv', time: '7:30 PM' }],
+      fetched_at: '2026-09-26T06:00:00Z' } },
+  } };
+  const { w } = await boot('2026-09-26T05:00:00-04:00',
+    { minyanim: four, settings: { shuls: ['beth-aaron'] } });
+  const shown = [...w.document.querySelectorAll('.card .time:not(.edgetime)')]
+    .map((n) => n.textContent.trim());
+  const morning = shown.filter((t) => /am$/.test(t));
+  ok(morning.length === 0 || morning.length === 4,
+    `Shacharis is all four or none (${morning.join(' ') || 'none'})`);
+  ok(morning.includes('8:45am') && morning.includes('9:15am'),
+    `including the ones that used to fall off the end (${shown.join(' ')})`);
+}
+
 console.log('\n=== Y2: an ordinary week is unchanged ===');
 {
   const { w } = await boot('2027-04-13T15:00:00-04:00',
@@ -1214,11 +1242,16 @@ console.log('\n=== WN: the weather says something only when there is something =
     f.hourly.precipitation[4] = 5.1;              // a fifth of an inch
     const { w } = await boot(when, { forecast: f });
     const cells = [...w.document.querySelectorAll('.wcol')]
-      .map((c) => c.querySelector('.wpop')?.textContent ?? '');
-    ok(cells.some((t) => /^0\.2\u2033$/.test(t)),
-      `a measurable hour shows how much (${cells.filter(Boolean).join(' ')})`);
-    ok(cells.some((t) => /^70%$/.test(t)),
-      'and an hour with nothing to measure still shows the chance');
+      .map((c) => c.querySelector('.wpop')?.textContent ?? '').filter(Boolean);
+    // ONE KIND OF NUMBER down the row. Printing whichever was more useful per
+    // hour gave "40% · 0.06\u2033 · 10% · 0.2\u2033" — two units in one line of
+    // figures, and the eye has to sort out which is which before it can compare
+    // any of them.
+    ok(cells.length > 0 && cells.every((t) => /^\d+%$/.test(t)),
+      `every hour shows a chance and nothing else (${cells.join(' ')})`);
+    const note = $(w, 'weather').querySelector('.wnote')?.textContent ?? '';
+    ok(/\u2033|mm/.test(note),
+      `and how much is said once, in the note (${note})`);
   }
 
   // HEAVY IS AN INTENSITY, NOT A CERTAINTY.
@@ -1550,6 +1583,35 @@ console.log('\n=== SP6: the fetch is a plain rotation ===');
   ok(new Set(picks).size === 4, `every league gets its turn (${picks.join(' ')})`);
   ok(picks.slice(0, 4).join() === picks.slice(4).join(),
     'in a steady rotation, whatever is being played');
+}
+
+console.log('\n=== SP6b: a game in progress keeps its league fresh ===');
+{
+  // THE ARITHMETIC THAT DID NOT ADD UP. The rotation takes one league every ten
+  // minutes, so with four leagues each board is re-fetched every FORTY — and a
+  // live game is trusted for only fifteen minutes after its snapshot. An
+  // in-progress game was therefore on screen for fifteen minutes out of every
+  // forty and gone for the other twenty-five, which looked like live games
+  // turning up at random.
+  const when = '2026-09-22T20:00:00-04:00';
+  const { w } = await withScores(when, {
+    'hockey/nhl': [game('NJ', 2, 'NYR', 1,
+      { state: 'in', detail: '2nd 11:04', at: '2026-09-22T23:00Z' })],
+    'baseball/mlb': [game('NYY', 3, 'BOS', 1)],
+  });
+
+  w.__espn = [];
+  await w.eval('refreshSports()');
+  await new Promise((r) => setTimeout(r, 60));
+  const asked = (w.__espn ?? []).join(' ');
+  ok(/hockey\/nhl/.test(asked),
+    `the league with a game on is refreshed whatever the rotation says (${asked.replace(/https?:[^ ]*sports\//g, '').slice(0, 80)})`);
+  ok((w.__espn ?? []).length >= 2,
+    `alongside the league whose turn it is, not instead of it (${(w.__espn ?? []).length} requests)`);
+  // And it is still a rotation, not a poll: one extra league, not all four
+  // every time.
+  ok((w.__espn ?? []).length <= 6,
+    `and it is not a poll (${(w.__espn ?? []).length} requests for 2 leagues x 2 days)`);
 }
 
 console.log('\n=== SP7: everything is fetched once, then rotated ===');

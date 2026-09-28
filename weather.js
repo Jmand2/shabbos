@@ -362,11 +362,31 @@ function amountOf(mm) {
 // Above this a stated amount is a forecast rather than a hypothetical.
 const WEATHER_AMOUNT_POP = 55;
 
+// ALWAYS THE CHANCE, NEVER THE AMOUNT.
+//
+// The tiles used to print whichever of the two was more useful for that hour,
+// which meant a row of twelve read "40% · 0.06" · 10% · 0.2" · 35%" — two
+// different kinds of number in one line of figures, and the eye has to work out
+// which is which before it can compare any of them. A column of percentages is
+// scannable; a column of mixed units is a table.
+//
+// The amount has not gone: it is in the note, in words, where "a fifth of an
+// inch" can be said once about the spell rather than twelve times about its
+// hours.
+// The same number amountOf() renders, as plain text for the note. Below the
+// floor it is not worth a word.
+function amountText(mm) {
+  const v = Number(mm);
+  if (!Number.isFinite(v) || v < WEATHER_MM_FLOOR) return '';
+  if (settings.units !== 'F') return `${v < 10 ? v.toFixed(1) : Math.round(v)}mm`;
+  const inches = v / 25.4;
+  return `${inches < 0.1 ? inches.toFixed(2) : inches.toFixed(1)}\u2033`;
+}
+
 function wetCell(r) {
   const pop = Number(r.pop);
   if (!Number.isFinite(pop) || pop < WEATHER_POP_FLOOR) return '';
-  const amount = pop >= WEATHER_AMOUNT_POP ? amountOf(r.mm) : null;
-  return amount ?? `<span class="wpop">${Math.round(pop)}%</span>`;
+  return `<span class="wpop">${Math.round(pop)}%</span>`;
 }
 
 function weatherNote(rows) {
@@ -386,9 +406,14 @@ function weatherNote(rows) {
     const sure = wet.every((r) => Number(r.pop) >= NOTE_VERY_WET);
     const what = heavy ? 'Heavy rain' : 'Rain';
     const how = heavy ? 'likely' : (sure ? 'very likely' : 'likely');
-    return windy
-      ? `${what} ${how} ${spanLabel(wet)} \u00b7 gusts ${Math.round(gust)} mph`
-      : `${what} ${how} ${spanLabel(wet)}`;
+    // How much, over the whole spell, said once and in words. Only when there
+    // is enough of it to be worth saying.
+    const total = wet.reduce((n, r) => n + (Number(r.mm) || 0), 0);
+    const bits = [`${what} ${how} ${spanLabel(wet)}`];
+    const much = amountText(total);
+    if (much) bits.push(much);
+    if (windy) bits.push(`gusts ${Math.round(gust)} mph`);
+    return bits.join(' \u00b7 ');
   }
 
   // Wind on its own, when there is no rain to lead with.

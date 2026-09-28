@@ -34,6 +34,9 @@ const SPORTS_AHEAD_MS = 14 * 3600 * 1000;
 // for a game in play — past this, "2nd 8:24" is a guess wearing a fact's
 // clothes.
 const SPORTS_LIVE_TRUST_MS = 15 * 60000;
+// Longer than any game plus its overtime. Past this, "in progress" means the
+// board stopped being updated rather than that the game is still going.
+const SPORTS_STILL_ON_MS = 6 * 3600 * 1000;
 
 // Abbreviations are scoped per league deliberately. "Rangers" is NYR in hockey
 // and TEX in baseball, "Giants" is NYG in football and SF in baseball, and
@@ -123,9 +126,34 @@ async function warmSports({ staleOnly = false } = {}) {
   return want.length;
 }
 
+// A LEAGUE WITH A GAME ON IS ALWAYS REFRESHED.
+//
+// The rotation takes one league per ten minutes, so with four leagues each
+// board is re-fetched every FORTY. A live game is only trusted for fifteen
+// minutes after its snapshot — deliberately, because a score that is half an
+// hour old is not a live score — so an in-progress game was visible for fifteen
+// minutes out of every forty and gone for the other twenty-five. It looked like
+// live games showed up at random.
+//
+// The two numbers have to agree. This is the cheap end of fixing that: the
+// plain rotation still turns, and any league that had a game in progress at the
+// last look is refreshed alongside it, so its board is never older than one
+// cycle. That costs an extra request or two per ten minutes and only while
+// something is actually being played — it is not the two-minute live-score
+// chasing this was explicitly built not to do.
+function sportsLiveLeagues(now = Date.now()) {
+  return LEAGUES.filter((l) => (sports.leagues?.[l.tag]?.games ?? [])
+    .some((g) => g.state === 'in'
+      && Number.isFinite(Date.parse(g.at))
+      // Still plausibly on: a game that started six hours ago and is still
+      // marked "in" is a board nobody updated, not a game in its fourth hour.
+      && now - Date.parse(g.at) < SPORTS_STILL_ON_MS));
+}
+
 async function refreshSports() {
   if (settings.sports === 'off') return;
-  await fetchLeague(sportsNextLeague());
+  const due = new Set([sportsNextLeague(), ...sportsLiveLeagues()]);
+  await Promise.allSettled([...due].map((l) => fetchLeague(l)));
 }
 
 // YESTERDAY IS THE WHOLE POINT, AND IT WAS NEVER BEING FETCHED.

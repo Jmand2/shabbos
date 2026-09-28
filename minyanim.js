@@ -84,28 +84,63 @@ function scheduleFor(slug, now, days) {
 // invisible, which is the whole thing this was meant to fix. So every day on
 // the board is guaranteed a share first, and whatever is left of the cap is
 // then spent in time order.
-function capRows(byDay, cap) {
-  if (byDay.size <= 1) return [...byDay.values()].flat().slice(0, cap);
-  // An even division, never a fixed floor. A floor of three under "Next 4"
-  // returned six times across two days and quietly broke the setting — the cap
-  // is what the person asked for and it wins.
-  const share = Math.max(1, Math.floor(cap / byDay.size));
+// A SERVICE IS ALL OF IT OR NONE OF IT.
+//
+// This capped individual TIMES, so the budget could run out half way through a
+// service and the card showed Shacharis at 7:00 and 8:00 and stopped — with the
+// 8:45 and the 9:15 cut off and nothing saying so. A partial list is worse than
+// a short one: somebody reads four times, sees two, and walks out believing
+// there is no 8:45.
+//
+// The unit is a RUN: one service and every consecutive time it is davened at.
+// Whole runs are taken, never part of one. Every day keeps its first run
+// whatever the budget, because a day heading with nothing under it says less
+// than no heading at all — and if that overruns the cap, the fit loop shrinks
+// the type, which is the honest lever.
+// `whole` is Auto. The two modes are answering different questions and it is
+// worth being explicit about which:
+//
+//   Auto      — "show what reads across a room, completely". Splitting a
+//               service is the thing it must never do: four Shacharis with the
+//               last two cut off tells somebody there is no 8:45.
+//   4 / 8 / 12 — "show me this many times". That is an explicit count, chosen
+//               by the person, and it wins. Bnai Yeshurun daven Shacharis nine
+//               times in a row; under "never split" a cap of four would return
+//               all nine, which is not a cap at all.
+function capRows(byDay, cap, { whole = true } = {}) {
+  const days = [...byDay.values()].map((rows) => runsOf(rows));
+
   const kept = [];
-  const spare = [];
-  for (const rows of byDay.values()) {
-    kept.push(...rows.slice(0, share));
-    spare.push(...rows.slice(share));
+  let spent = 0;
+  const take = (run) => { kept.push(run); spent += run.times.length; };
+
+  // Each day's FIRST service before any day's second, so a long Yom Tov morning
+  // does not crowd the days behind it off the card — the thing this function
+  // was written for. Conditional, except for the very first: a card has to say
+  // something, and one service over budget beats a heading with nothing under
+  // it. Everything after that respects the cap.
+  const rest = [];
+  let opening = true;
+  for (const runs of days) {
+    if (!runs.length) continue;
+    if (opening || spent + runs[0].times.length <= cap) {
+      take(runs[0]);
+      opening = false;
+      rest.push(...runs.slice(1));
+    } else {
+      rest.push(...runs);
+    }
   }
-  // Late at night today has nothing left, so its share goes unspent — hand it
-  // to the days that can use it rather than showing a half-empty card.
-  const room = Math.max(0, cap - kept.length);
-  spare.sort((a, b) => a.at - b.at);
-  // The final slice is the hard ceiling: more days than the cap can seat (a cap
-  // of four over five days) drops the furthest, which is the honest thing to
-  // give up.
-  return [...kept, ...spare.slice(0, room)]
-    .sort((a, b) => a.at - b.at)
-    .slice(0, cap);
+
+  // Then the rest in time order — whole runs only. A run that will not fit is
+  // SKIPPED, not truncated, and a later shorter one may still get in.
+  rest.sort((a, b) => a.times[0].at - b.times[0].at);
+  for (const run of rest) {
+    if (spent + run.times.length <= cap) take(run);
+  }
+
+  const out = kept.flatMap((r) => r.times).sort((a, b) => a.at - b.at);
+  return whole ? out : out.slice(0, cap);
 }
 
 function flatten(sections, base) {
