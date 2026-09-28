@@ -162,7 +162,12 @@
         <circle class="solid" cx="60" cy="54" r="5"/><circle class="solid" cx="76" cy="54" r="5"/>
         <circle class="solid" cx="102" cy="54" r="5"/><circle class="solid" cx="118" cy="54" r="5"/>
         <circle class="solid" cx="144" cy="54" r="5"/><circle class="solid" cx="160" cy="54" r="5"/>
-        <circle class="solid" cx="186" cy="54" r="6"/>`,
+        <circle class="solid" cx="186" cy="54" r="6"/>
+        <g class="smoke">
+          <circle class="puff" cx="185" cy="8" r="5"/>
+          <circle class="puff" cx="185" cy="8" r="5"/>
+          <circle class="puff" cx="185" cy="8" r="5"/>
+        </g>`,
     },
     boat: {
       vb: [134, 74], seats: 2, colour: '#4FA3A5', speed: 47, lane: 'horizon', dir: -1,
@@ -170,7 +175,12 @@
       art: `<path class="hull" d="M14 42 H120 L104 64 H30 z"/>
         <path class="glass" d="M66 38 V6 L104 34 z"/>
         <path d="M66 4 V44"/>
-        <path class="thin" d="M4 68 q12-7 22 0 t22 0 t22 0 t22 0 t22 0 t20 0"/>`,
+        <g class="wake">
+          <path class="thin" d="M-40 68 q12-7 22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0"/>
+        </g>
+        <g class="wake slow">
+          <path class="thin" d="M-40 62 q14-5 26 0 t26 0 t26 0 t26 0 t26 0 t26 0 t26 0"/>
+        </g>`,
     },
     plane: {
       vb: [252, 62], seats: 3, colour: '#6E8BD6', speed: 98, lane: 'upper', dir: 1,
@@ -200,8 +210,10 @@
       art: `<path class="hull" d="M6 48 L10 34 q3-9 14-9 h60 q11 0 15 9 l8 14 z"/>
         <path class="glass" d="M24 32 q3-5 10-5 h38 q7 0 10 5 l3 8 H21 z"/>
         <path class="hull" d="M2 46 H114 q4 0 4 5 v3 q0 4-4 4 H2 q-4 0-4-4 v-3 q0-5 4-5 z"/>
-        <circle class="solid" cx="28" cy="56" r="8"/>
-        <circle class="solid" cx="88" cy="56" r="8"/>`,
+        <g class="wheel"><circle class="solid" cx="28" cy="56" r="8"/>
+          <path class="spoke" d="M28 50 V62 M22 56 H34"/></g>
+        <g class="wheel"><circle class="solid" cx="88" cy="56" r="8"/>
+          <path class="spoke" d="M88 50 V62 M82 56 H94"/></g>`,
     },
     balloon: {
       vb: [128, 118], seats: 2, colour: '#A96FA0', speed: 24, lane: 'rise',
@@ -221,6 +233,24 @@
         <path class="thin" d="M8 52 L48 90 M54 42 L54 90 M100 52 L60 90"/>
         <path class="hull" d="M40 86 h28 q5 0 5 6 v14 q0 6-5 6 H40 q-5 0-5-6 V92 q0-6 5-6 z"/>`,
       pivot: [54, 26],
+    },
+    // NOT A VEHICLE. Somebody dancing across the bottom of the screen with
+    // their own face on, which is the whole joke — every other thing here is
+    // something you ride, and this one is a person having a very good time.
+    //
+    // The limbs are separate groups so each can swing about its own joint at
+    // its own tempo: arms off the shoulder, legs off the hip, and none of the
+    // durations a multiple of another, so the loop never lands in the same
+    // pose twice running and it does not read as a two-frame GIF.
+    dancer: {
+      vb: [96, 136], seats: 1, colour: '#D98CB3', speed: 42, lane: 'lap', dir: 1,
+      slots: [[48, 26, 15]],
+      art: `<circle class="head" cx="48" cy="26" r="16"/>
+        <path class="torso" d="M48 44 V84"/>
+        <g class="limb armL"><path d="M48 56 L22 74"/><circle class="solid" cx="22" cy="74" r="3.5"/></g>
+        <g class="limb armR"><path d="M48 56 L74 74"/><circle class="solid" cx="74" cy="74" r="3.5"/></g>
+        <g class="limb legL"><path d="M48 84 L30 120"/><path class="thin" d="M30 120 H18"/></g>
+        <g class="limb legR"><path d="M48 84 L66 120"/><path class="thin" d="M66 120 H78"/></g>`,
     },
     rocket: {
       vb: [120, 132], seats: 1, colour: '#C2703D', speed: 200, lane: 'launch',
@@ -250,15 +280,61 @@
       const d = ease((p - 0.12) / 0.28) * 0.42 + ease((p - 0.7) / 0.3) * 0.58;
       return { x: (-0.15 + d * 1.3) * W, y: H * 0.30, rot: 0 };
     },
+    // A ROUNDED CIRCUIT, because a car does not pivot on the spot.
+    //
+    // This was four straight edges and the heading snapped 0 → -90 → 180 → 90
+    // at each corner, in one frame. A car crossing the bottom of the screen
+    // arrived at the right-hand edge and was instantly pointing upwards, which
+    // is the one moment the eye is actually following it.
+    //
+    // The corners are quarter-arcs now and the heading sweeps through them with
+    // the position, so it drives round. The rotation is kept DECREASING all the
+    // way to -360 rather than wrapping through 180, because a wrap is a spin:
+    // the shortest path from 179 to -179 is two degrees and CSS does not know
+    // that, it would turn the long way.
     lap: (p, v, W, H) => {
-      const m = lapMargin(v), w = W - m * 2, h = H - m * 2, per = 2 * (w + h);
-      // brake into each corner
-      const d = (p + 0.055 * Math.sin(p * Math.PI * 2 * 4)) * per;
-      const s = ((d % per) + per) % per;
-      if (s < w) return { x: m + s, y: H - m, rot: 0 };
-      if (s < w + h) return { x: W - m, y: H - m - (s - w), rot: -90 };
-      if (s < 2 * w + h) return { x: W - m - (s - w - h), y: m, rot: 180 };
-      return { x: m, y: m + (s - 2 * w - h), rot: 90 };
+      const m = lapMargin(v);
+      const w = W - m * 2;
+      const h = H - m * 2;
+      // Generous, but never more than a short side can give.
+      const r = Math.max(24, Math.min(w, h) * 0.16);
+      const sw = w - 2 * r;
+      const sh = h - 2 * r;
+      const arc = (Math.PI * r) / 2;
+      const per = 2 * (sw + sh) + 4 * arc;
+
+      // Still eases through the turns — a little slower into them, a little
+      // quicker out — but gently, now that the corner has a shape.
+      const d = (p + 0.03 * Math.sin(p * Math.PI * 2 * 4)) * per;
+      // CLAMPED, not wrapped. A vehicle drives this circuit exactly once and is
+      // then removed, so there is no second lap for a modulo to serve — and at
+      // p = 1 it wrapped s back to zero, which snapped the heading from -360 to
+      // 0 and spun the car through a whole turn on its last frame. The easing
+      // above can also push d past the end before p does.
+      const s0 = Math.max(0, Math.min(d, per * 0.99999));
+      let s = s0;
+
+      // rot = theta - 90 on every corner, which is what makes the four of them
+      // one expression instead of four.
+      const corner = (cx, cy, from, t) => {
+        const th = (from - 90 * t) * (Math.PI / 180);
+        return { x: cx + r * Math.cos(th), y: cy + r * Math.sin(th), rot: (from - 90 * t) - 90 };
+      };
+
+      if (s < sw) return { x: m + r + s, y: H - m, rot: 0 };
+      s -= sw;
+      if (s < arc) return corner(W - m - r, H - m - r, 90, s / arc);
+      s -= arc;
+      if (s < sh) return { x: W - m, y: H - m - r - s, rot: -90 };
+      s -= sh;
+      if (s < arc) return corner(W - m - r, m + r, 0, s / arc);
+      s -= arc;
+      if (s < sw) return { x: W - m - r - s, y: m, rot: -180 };
+      s -= sw;
+      if (s < arc) return corner(m + r, m + r, -90, s / arc);
+      s -= arc;
+      if (s < sh) return { x: m, y: m + r + s, rot: -270 };
+      return corner(m + r, H - m - r, -180, (s - sh) / arc);
     },
     // Glide, stall, tip, glide back. Two incommensurate sines, so no two falls
     // trace the same shape.
@@ -626,6 +702,16 @@
       // minutes apart, and gone in seconds.
       send: (name) => { try { fly(name ?? vehicleBag()[0]); } catch (e) { console.error(e); } },
       names: () => Object.keys(VEHICLES),
+      // Where a vehicle would BE at a given point of its journey, without
+      // waiting for the journey. A lap takes the better part of a minute and a
+      // test cannot watch one — sampling the rendered element only ever sees
+      // the first second or two of it, which on the lap circuit is the opening
+      // straight where nothing turns at all.
+      path: (name, p, W, H) => {
+        const v = VEHICLES[name];
+        if (!v) return null;
+        return LANES[name === 'helicopter' ? 'hover' : v.lane](p, v, W, H);
+      },
       // The hourly parade, on demand. Waiting up to an hour to see whether it
       // works is no way to check it, and a test cannot wait at all.
       parade: () => parade(true),

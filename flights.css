@@ -88,6 +88,63 @@
 .boat svg { animation: bob 2.4s ease-in-out infinite; }
 @keyframes bob { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-4px) rotate(3deg); } }
 
+/* The dancer ---------------------------------------------------------------
+   Every limb on its own joint at its own tempo, and no duration a multiple of
+   another — so the pose never repeats on a beat and it does not read as a
+   two-frame animation. Nothing here changes the element's box: the limbs move
+   inside the SVG, so the lap circuit still knows where the figure is. */
+/* A head that exists whether or not a face loaded. The slot puts the photo
+   inside this ring; with the photos locked it is still a person rather than a
+   headless figure jigging across the wall. */
+.dancer .head { fill: color-mix(in srgb, var(--vc) 18%, transparent); stroke-width: 3.2; }
+.dancer .limb { transform-box: view-box; }
+.dancer .armL { transform-origin: 48px 56px; animation: armL 430ms ease-in-out infinite alternate; }
+.dancer .armR { transform-origin: 48px 56px; animation: armR 370ms ease-in-out infinite alternate; }
+.dancer .legL { transform-origin: 48px 84px; animation: legL 510ms ease-in-out infinite alternate; }
+.dancer .legR { transform-origin: 48px 84px; animation: legR 590ms ease-in-out infinite alternate; }
+.dancer .torso { transform-box: view-box; transform-origin: 48px 84px;
+  animation: sway 610ms ease-in-out infinite alternate; }
+/* The arms hang DOWN and swing up and out, rather than starting raised and
+   swinging further — at the top of that range the hands ended up inside the
+   head, which reads as awkward rather than energetic. 78 degrees puts a hand
+   well clear of the face at full stretch. */
+@keyframes armL { from { transform: rotate(6deg); }   to { transform: rotate(78deg); } }
+@keyframes armR { from { transform: rotate(-6deg); }  to { transform: rotate(-72deg); } }
+@keyframes legL { from { transform: rotate(-20deg); } to { transform: rotate(16deg); } }
+@keyframes legR { from { transform: rotate(18deg); }  to { transform: rotate(-14deg); } }
+@keyframes sway { from { transform: rotate(-5deg); }  to { transform: rotate(5deg); } }
+/* And the whole figure hops, which is what sells it as dancing rather than
+   flailing. Faster than any limb, so the bounce reads as the beat they are all
+   moving to. */
+.dancer svg { animation: hop 305ms ease-in-out infinite alternate; }
+@keyframes hop { from { transform: translateY(0) scaleY(1); } to { transform: translateY(-7px) scaleY(1.04); } }
+
+/* Wheels that read as turning. A filled disc rotating looks like a filled disc,
+   so they carry a cross that does not. */
+.flight .spoke { stroke: rgba(10, 11, 16, 0.75); stroke-width: 2.4; }
+.car .wheel { transform-box: fill-box; transform-origin: 50% 50%; animation: spin 420ms linear infinite; }
+
+/* The water moves, not just the boat on it. Two wakes at different speeds, so
+   the sea has a near edge and a far one. */
+.boat .wake { transform-box: view-box; animation: drift 1.9s linear infinite; }
+.boat .wake.slow { animation-duration: 3.4s; opacity: 0.55; }
+@keyframes drift { from { transform: translateX(0); } to { transform: translateX(44px); } }
+
+/* Smoke, three puffs on one loop a third apart. */
+.train .puff {
+  fill: color-mix(in srgb, var(--vc) 45%, transparent);
+  stroke: none;
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: puff 2.1s ease-out infinite;
+}
+.train .puff:nth-child(2) { animation-delay: 0.7s; }
+.train .puff:nth-child(3) { animation-delay: 1.4s; }
+@keyframes puff {
+  from { opacity: 0.75; transform: translate(0, 0) scale(0.4); }
+  to   { opacity: 0; transform: translate(-26px, -34px) scale(2.1); }
+}
+
 /* The settings block this module injects. */
 .unlock { display: flex; gap: 0.6em; align-items: center; }
 .unlock input {

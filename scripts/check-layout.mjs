@@ -776,6 +776,33 @@ for (const view of VIEWS) {
   });
 
   ok(car !== null, 'a car can be launched and measured');
+
+  // The corner is a TURN, not a snap. The lap used to be four straight edges
+  // with the heading flipping 0 -> -90 -> 180 -> 90 in a single frame, right at
+  // the moment the eye is following the car.
+  //
+  // Sampled through the path hook rather than off the rendered element: a lap
+  // takes the better part of a minute, so watching the real thing sees only the
+  // opening straight, where nothing turns and the test passes on 0.0 degrees
+  // without having looked at a single corner.
+  const turning = await page.evaluate(() => {
+    const out = [];
+    for (let i = 0; i <= 600; i += 1) {
+      out.push(window.shabbosFlights.path('car', i / 600, 1180, 820).rot);
+    }
+    return out;
+  });
+  const steps = turning.slice(1).map((v, i) => Math.abs(v - turning[i]));
+  const worst = Math.max(...steps);
+  const swept = Math.abs(turning[turning.length - 1] - turning[0]);
+  ok(worst < 20,
+    `the car turns the corner rather than snapping round it (worst ${worst.toFixed(1)}° between samples)`);
+  // All four corners actually happen, and in one direction: a heading that
+  // wrapped through 180 would make CSS take the long way and spin the car.
+  ok(swept > 300,
+    `and it comes all the way round (${swept.toFixed(0)}° swept)`);
+  ok(steps.every((d, i) => turning[i + 1] <= turning[i] + 0.001),
+    'without the heading ever winding back on itself');
   if (car) {
     ok(car.worst >= 0.95,
       `the car stays on screen along its lap (worst ${Math.round(car.worst * 100)}%)`);
