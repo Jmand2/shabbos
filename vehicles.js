@@ -30,6 +30,18 @@
 
   const K = globalThis.shabbosKinetics;
 
+  // A turning blade seen from the side sweeps the ELLIPSE of its own disc, not
+  // a circle. Spun flat in the plane of the screen it swings out well past the
+  // disc it is meant to be inside — a windmill seen face on, bolted to an
+  // aircraft seen from beside. `a` is degrees; rx, ry are the disc's radii.
+  function sweep(el, a, rx, ry, cx = 0, cy = 0) {
+    const r = (a * Math.PI) / 180;
+    const x = rx * Math.sin(r);
+    const y = ry * Math.cos(r);
+    el.setAttribute('d', `M${(cx - x).toFixed(1)} ${(cy - y).toFixed(1)} `
+      + `L${(cx + x).toFixed(1)} ${(cy + y).toFixed(1)}`);
+  }
+
   /* Shared paint ------------------------------------------------------------
      One <defs>, created once in the flyway layer.
 
@@ -347,39 +359,123 @@
     },
 
 
+    /* THE PLANE ---------------------------------------------------------------
+       The banner is CLOTH, not a board. A travelling wave runs along its length
+       and each face tilts as the ripple reaches it — which is the one thing
+       that stops a row of circles on a line reading as a row of circles on a
+       line. The tow rope sags, because rope does. */
     plane: {
-      vb: [252, 62], seats: 3, colour: '#6E8BD6', speed: 98, lane: 'upper', dir: 1,
+      vb: [300, 96], seats: 3, colour: '#6E8BD6', speed: 98, lane: 'upper', dir: 1,
       band: -0.045,
-      slots: [[32, 32, 15], [80, 32, 15], [128, 32, 15]],
-      art: `<path class="hull" d="M8 24 h150 q24 0 34 12 l14 16 H8 q-8 0-8-8 V32 q0-8 8-8 z"/>
-        <path class="glass" d="M166 28 q14 2 22 10 h-30 z"/>
-        <path class="hull" d="M96 24 L120 2 h16 l-10 22 z"/>
-        <path class="thin" d="M40 52 h150"/>`,
-    },
+      // 56 apart, not 50: at 50 the faces are 50.4 across and touch, which
+      // reads as one wobbling caterpillar rather than three people.
+      //
+      // BEHIND the aircraft, which flies to the right. The banner used to run
+      // from the nose forwards, so a plane drawn pointing right was pushing its
+      // banner along in front of it — every lane travels one way only and
+      // nothing is mirrored, so there is no reading of that picture in which it
+      // is being towed.
+      slots: [[60, 58, 12], [116, 58, 12], [172, 58, 12]],
+      art: `
+        <g class="banner">
+          <path class="cloth" d="M36 58 H196"/>
+        </g>
+        <path class="rope" d="M227 52 q-16 10-31 6"/>
+        <g class="craft" transform="translate(223 0)">
+          <path class="fuse" d="M6 44 q0-16 20-16 h28 q16 0 20 16 l4 12 q0 10-12 10 H16 q-12 0-12-10 z"/>
+          <path class="wing" d="M18 42 L44 16 h14 l-12 26 z"/>
+          <path class="tail" d="M4 42 L-8 22 h10 l10 20 z"/>
+          <path class="bubble" d="M22 40 q3-11 16-11 q13 0 16 11 z"/>
+          <g class="prop" data-base="translate(70 46)">
+            <ellipse class="disc" rx="7" ry="22"/>
+            <path class="blade" d="M0 -22 V22"/>
+          </g>
+        </g>`,
 
-    helicopter: {
-      vb: [190, 92], seats: 1, colour: '#5D7CA6', speed: 60, lane: 'upper', dir: 1,
-      band: 0.06,
-      slots: [[70, 62, 15]],
-      art: `<path class="hull" d="M40 44 q0-22 30-22 q30 0 34 22 l4 16 q0 12-14 12 H52 q-14 0-14-12 z"/>
-        <path class="glass" d="M48 44 q2-16 22-16 q20 0 22 16 z"/>
-        <path class="hull" d="M100 48 h62 q8 0 8 8 v6 h-70 z"/>
-        <path class="thin" d="M52 82 h50 M62 70 v12 M94 70 v12"/>
-        <path class="mast" d="M70 22 V10"/>
-        <ellipse class="disc" cx="70" cy="9" rx="66" ry="7"/>
-        <path class="rotor" d="M4 9 H136"/>
-        <g class="tailrotor" transform="translate(166 40)"><path d="M0 -14 V14"/></g>`,
-      update(rig, state) {
+      update(rig, state, dt) {
         const m = rig.mem;
-        if (!m.init) { m.init = true; m.rotor = rig.q('.rotor'); m.tail = rig.q('.tailrotor'); m.a = 0; }
-        // The rotor turns with airspeed and never stops: a helicopter with a
-        // still rotor is a helicopter falling. These were CSS loops that stopped
-        // matching anything when the vehicle was redrawn, and no suite noticed.
-        m.a += (2.6 + state.speed * 0.02);
-        if (m.rotor) m.rotor.setAttribute('transform', `rotate(${(m.a % 360).toFixed(1)} 70 9)`);
-        if (m.tail) m.tail.setAttribute('transform', `translate(166 40) rotate(${((m.a * 3) % 360).toFixed(1)})`);
+        if (!m.init) {
+          m.init = true;
+          m.prop = rig.q('.prop');
+          m.blade = rig.q('.blade');
+          m.cloth = rig.q('.cloth');
+          m.a = 0;
+        }
+        m.a += 22 + state.speed * 0.12;
+        // A disc, plus one blade sweeping through it. The disc alone is a grey
+        // ellipse; the blade alone is a flicker. Together they read as turning.
+        if (m.blade) sweep(m.blade, m.a, 7, 22);
+
+        // The banner ripples, and each face rides its own point of the wave.
+        // Travelling BACKWARDS along the cloth, away from the aircraft: the
+        // ripple starts where the rope pulls and runs out to the loose end.
+        const wave = (x) => 7 * Math.sin((x / 40) + rig.t * 5.5);
+        if (m.cloth) {
+          let d = 'M36 58';
+          for (let x = 46; x <= 196; x += 10) d += ` L${x} ${(58 + wave(x)).toFixed(1)}`;
+          m.cloth.setAttribute('d', d);
+        }
+        [60, 116, 172].forEach((x, k) => {
+          const seat = rig.seat(k);
+          if (!seat) return;
+          const y = wave(x);
+          const slope = (wave(x + 8) - wave(x - 8)) / 16;
+          // Translate and rotate only — never scale or skew a face.
+          seat.style.transform = `translateY(${y.toFixed(2)}px) rotate(${(Math.atan(slope) * 180 / Math.PI).toFixed(1)}deg)`;
+        });
       },
     },
+
+
+    /* THE HELICOPTER -----------------------------------------------------------
+       A bubble sized for a whole face, not a porthole with a face behind it.
+       It pitches nose down to set off and nose up to stop, from acceleration —
+       which is how a helicopter actually moves, and is most of what tells you
+       it is one. */
+    helicopter: {
+      vb: [210, 120], seats: 1, colour: '#5D7CA6', speed: 60, lane: 'upper', dir: 1,
+      band: 0.06,
+      slots: [[68, 62, 14]],
+      art: `
+        <g class="tip">
+          <path class="boom" d="M104 62 h68 q7 0 7 7 v5 h-75 z"/>
+          <path class="fin" d="M168 56 h9 v20 h-9 z"/>
+          <path class="body" d="M26 62 q0-30 42-30 q40 0 46 30 l6 18 q0 14-18 14 H42 q-18 0-18-14 z"/>
+          <path class="bubble" d="M34 62 q2-22 34-22 q32 0 34 22 z"/>
+          <path class="skid" d="M30 106 h64 M44 92 v14 M84 92 v14"/>
+          <path class="mast" d="M68 32 V16"/>
+          <ellipse class="disc" cx="68" cy="14" rx="74" ry="9"/>
+          <path class="rotor" d="M-6 14 L142 14"/>
+          <g class="tailrotor" data-base="translate(180 62)"><path d="M0 -16 V16"/></g>
+        </g>`,
+      update(rig, state, dt) {
+        const m = rig.mem;
+        if (!m.init) {
+          m.init = true;
+          m.rotor = rig.q('.rotor');
+          m.tail = rig.q('.tailrotor');
+          m.tip = rig.q('.tip');
+          m.pitch = { x: 0, v: 0 };
+          m.a = 0;
+        }
+        const h = K.clampDt(dt);
+        m.a += 26 + state.speed * 0.05;
+        // Swept round the disc's ellipse, not spun in the plane of the screen:
+        // a rotor seen from the side passes in front of the mast and behind it,
+        // it does not stand on end. See VEHICLES.plane.blade.
+        if (m.rotor) sweep(m.rotor, m.a, 74, 9, 68, 14);
+        if (m.tail) m.tail.setAttribute('transform', `translate(180 62) rotate(${((m.a * 2.6) % 360).toFixed(1)})`);
+        // Nose down to go, nose up to stop, and a slow breath while it holds
+        // still — the hover lane is the only one that stops.
+        const bob = 1.6 * Math.sin(rig.t * 1.7);
+        m.pitch = K.spring(m.pitch, Math.max(-12, Math.min(12, -state.accel * 0.05)), h, 34, 10);
+        if (m.tip) {
+          m.tip.setAttribute('transform',
+            `translate(0 ${bob.toFixed(2)}) rotate(${m.pitch.x.toFixed(2)} 68 62)`);
+        }
+      },
+    },
+
 
     /* THE CAR ---------------------------------------------------------------
        A CONVERTIBLE, because a roof is a lid over the one thing worth looking
@@ -472,75 +568,212 @@
     },
 
 
+    /* THE BALLOON --------------------------------------------------------------
+       The burner is the whole point of a balloon at night: it flares, it lights
+       the envelope FROM INSIDE, and the lift follows the same clock, because
+       the flare is what the lift is for. Faces sit over the basket rim, not
+       inside a box. */
     balloon: {
-      vb: [128, 118], seats: 2, colour: '#A96FA0', speed: 24, lane: 'rise',
-      slots: [[42, 101, 9], [86, 101, 9]],
-      art: `<path class="hull" d="M64 6 q40 0 40 40 q0 26-24 44 H48 q-24-18-24-44 q0-40 40-40 z"/>
-        <path class="thin" d="M64 6 q-16 20-16 44 q0 22 10 40"/>
-        <path class="thin" d="M64 6 q16 20 16 44 q0 22-10 40"/>
-        <path class="thin" d="M44 92 L52 104 M84 92 L76 104"/>
-        <path class="burner" d="M58 90 h12 l-3 12 h-6 z"/>
-        <path class="hull" d="M46 102 h36 q4 0 4 5 v10 q0 4-4 4 H46 q-4 0-4-4 v-10 q0-5 4-5 z"/>
-        <path class="thin" d="M46 110 H86"/>`,
+      vb: [150, 168], seats: 2, colour: '#A96FA0', speed: 24, lane: 'rise',
+      // OVER the rim, not in front of the basket. At y=140 the faces covered
+      // the basket entirely, which reads as two heads on a rope.
+      slots: [[56, 118, 12], [96, 118, 12]],
+      art: `
+        <g class="lift">
+          <path class="env" d="M75 6 q46 0 46 46 q0 32-28 52 H57 q-28-20-28-52 q0-46 46-46 z"/>
+          <path class="panel a" d="M75 6 q-18 23-18 50 q0 26 11 48 h-11 q-28-20-28-52 q0-46 46-46 z"/>
+          <path class="panel b" d="M75 6 q18 23 18 50 q0 26-11 48 h11 q28-20 28-52 q0-46-46-46 z"/>
+          <ellipse class="inner" cx="75" cy="58" rx="40" ry="44"/>
+          <path class="rope" d="M52 104 L60 126 M98 104 L90 126"/>
+          <path class="burner" d="M68 110 h14 l-3 -14 q-4 -9-8 0 z"/>
+          <path class="basket" d="M52 124 h46 q6 0 6 6 v22 q0 6-6 6 H52 q-6 0-6-6 v-22 q0-6 6-6 z"/>
+          <path class="rim" d="M46 130 H104"/>
+          <circle class="sandbag" cx="46" cy="158" r="7"/>
+          <circle class="sandbag" cx="104" cy="158" r="7"/>
+        </g>`,
       update(rig, state, dt) {
         const m = rig.mem;
-        if (!m.init) { m.init = true; m.burner = rig.q('.burner'); m.t = 0; }
-        m.t += K.clampDt(dt);
-        // A burn every four seconds or so, and the envelope lifts on the same
-        // clock: the flare is what the lift is FOR.
-        const phase = (m.t % 4.2) / 4.2;
-        const on = phase > 0.68 && phase < 0.88;
+        if (!m.init) {
+          m.init = true;
+          m.burner = rig.q('.burner');
+          m.inner = rig.q('.inner');
+          m.lift = rig.q('.lift');
+          m.rise = { x: 0, v: 0 };
+        }
+        const h = K.clampDt(dt);
+        // One clock for the burn and the lift.
+        const phase = (rig.t % 4.2) / 4.2;
+        const burn = phase > 0.66 && phase < 0.9
+          ? Math.sin(((phase - 0.66) / 0.24) * Math.PI) : 0;
         if (m.burner) {
-          m.burner.style.opacity = on ? '0.95' : '0';
-          m.burner.style.transform = `scaleY(${on ? 1.15 : 0.2})`;
+          m.burner.style.opacity = (0.15 + burn * 0.85).toFixed(2);
+          m.burner.style.transform = `scaleY(${(0.25 + burn * 1.1).toFixed(2)})`;
+        }
+        // Lit from inside, and ONLY AT NIGHT: a glow on a white wall is a
+        // smudge. Handed to the stylesheet as a number rather than written as
+        // an opacity, because an inline opacity would beat the day rule and the
+        // glow would burn through the afternoon.
+        if (m.inner) m.inner.style.setProperty('--burn', burn.toFixed(3));
+        m.rise = K.spring(m.rise, -burn * 5, h, 26, 9);
+        if (m.lift) m.lift.setAttribute('transform', `translate(0 ${m.rise.x.toFixed(2)})`);
+      },
+    },
+
+
+    /* THE PARACHUTE ------------------------------------------------------------
+       It swings FROM THE CANOPY. `pivot` was declared here and read by nothing,
+       so it turned about its own middle and the canopy and the rider swung in
+       opposite directions — which is not how anything hanging from anything has
+       ever moved. The pivot is honoured in fly() now.
+
+       The canopy fills in a glide and slackens in a stall; the legs dangle and
+       swing a beat behind the body, through a spring. */
+    parachute: {
+      vb: [140, 170], seats: 1, colour: '#6FA96B', speed: 29, lane: 'leaf',
+      slots: [[70, 124, 13]],
+      pivot: [70, 34],
+      art: `
+        <g class="canopy">
+          <path class="dome" d="M10 68 q0-58 60-58 q60 0 60 58 q-26-13-60-13 q-34 0-60 13 z"/>
+          <path class="gore" d="M40 60 q8-40 30-50 M100 60 q-8-40-30-50"/>
+        </g>
+        <path class="lines" d="M10 68 L58 116 M70 55 L70 116 M130 68 L82 116"/>
+        <g class="rider">
+          <path class="body" d="M54 112 h32 q6 0 6 7 v20 q0 7-6 7 H54 q-6 0-6-7 v-20 q0-7 6-7 z"/>
+          <g class="legs"><path d="M60 146 V164 M80 146 V164"/></g>
+        </g>`,
+      update(rig, state, dt) {
+        const m = rig.mem;
+        if (!m.init) {
+          m.init = true;
+          m.dome = rig.q('.dome');
+          m.legs = rig.q('.legs');
+          m.swing = { x: 0, v: 0 };
+          m.lastRot = state.rot;
+        }
+        const h = K.clampDt(dt);
+        // Fills in a glide, slackens in a stall. Scale on the CANOPY only —
+        // never on anything carrying a face.
+        const fill = 0.94 + Math.min(0.1, state.speed / 900);
+        if (m.dome) m.dome.setAttribute('transform', `translate(70 68) scale(${fill.toFixed(3)} ${(2 - fill).toFixed(3)}) translate(-70 -68)`);
+        // The legs trail the body by a beat.
+        const swayTo = (state.rot - m.lastRot) * 6;
+        m.lastRot = state.rot;
+        m.swing = K.spring(m.swing, Math.max(-22, Math.min(22, swayTo)), h, 24, 7);
+        if (m.legs) m.legs.setAttribute('transform', `rotate(${m.swing.x.toFixed(2)} 70 146)`);
+      },
+    },
+
+
+    /* THE DANCER ---------------------------------------------------------------
+       Two-segment limbs, so there are elbows and knees: a straight line from
+       shoulder to hand swinging about one joint is a signpost, not an arm.
+       Clothes in colour, and musical notes left behind in the air. */
+    dancer: {
+      vb: [110, 160], seats: 1, colour: '#D98CB3', speed: 42, lane: 'promenade', dir: 1,
+      slots: [[55, 30, 14]],
+      art: `
+        <circle class="head" cx="55" cy="30" r="19"/>
+        <path class="shirt" d="M36 56 q0-8 19-8 q19 0 19 8 v30 q0 6-6 6 H42 q-6 0-6-6 z"/>
+        <path class="shorts" d="M38 88 h34 v16 q0 5-5 5 H43 q-5 0-5-5 z"/>
+        <g class="arm left">
+          <path class="upper" d="M40 62 L26 82"/>
+          <g class="fore" data-base="translate(26 82)"><path d="M0 0 L-14 18"/><circle class="hand" cx="-14" cy="18" r="4"/></g>
+        </g>
+        <g class="arm right">
+          <path class="upper" d="M70 62 L84 82"/>
+          <g class="fore" data-base="translate(84 82)"><path d="M0 0 L14 18"/><circle class="hand" cx="14" cy="18" r="4"/></g>
+        </g>
+        <g class="leg left">
+          <path class="upper" d="M46 106 L38 130"/>
+          <g class="shin" data-base="translate(38 130)"><path d="M0 0 L-6 26"/><path class="foot" d="M-6 26 H-18"/></g>
+        </g>
+        <g class="leg right">
+          <path class="upper" d="M64 106 L72 130"/>
+          <g class="shin" data-base="translate(72 130)"><path d="M0 0 L6 26"/><path class="foot" d="M6 26 H18"/></g>
+        </g>`,
+      update(rig, state, dt) {
+        const m = rig.mem;
+        if (!m.init) {
+          m.init = true;
+          m.arms = rig.qa('.arm');
+          m.fores = rig.qa('.fore');
+          m.legs = rig.qa('.leg');
+          m.shins = rig.qa('.shin');
+          m.next = 0;
+        }
+        const t = rig.t;
+        // Each joint on its own tempo, none a multiple of another, so the pose
+        // never lands on a beat and it does not read as two frames.
+        const sw = (hz, amp, ph) => amp * Math.sin(t * hz + ph);
+        m.arms.forEach((a, k) => a.setAttribute('transform',
+          `rotate(${sw(6.4 + k * 0.7, 38, k * 2.1).toFixed(1)} ${k ? 70 : 40} 62)`));
+        m.fores.forEach((f, k) => f.setAttribute('transform',
+          `${f.dataset.base} rotate(${sw(7.9 - k * 0.6, 34, 1.3 + k).toFixed(1)})`));
+        m.legs.forEach((l, k) => l.setAttribute('transform',
+          `rotate(${sw(5.1 + k * 0.5, 16, 0.6 + k * 1.7).toFixed(1)} ${k ? 64 : 46} 106)`));
+        m.shins.forEach((sh, k) => sh.setAttribute('transform',
+          `${sh.dataset.base} rotate(${sw(6.8 - k * 0.4, 20, 2.4 + k).toFixed(1)})`));
+
+        // Notes, drifting up and back. They belong to the air like everything
+        // else released into the world, so the dancer walks away from them.
+        if (t > m.next) {
+          m.next = t + 0.55 + Math.random() * 0.5;
+          if (!rig.notes) rig.notes = K.particles(16);
+          const p = rig.point(80, 12);
+          rig.notes.emit({
+            x: p.x, y: p.y,
+            vx: -26 - Math.random() * 20, vy: -34 - Math.random() * 18,
+            life: 2.1, size: 9 * (state.scale || 1),
+            spin: (Math.random() < 0.5 ? -1 : 1) * (20 + Math.random() * 25),
+          });
         }
       },
     },
 
-    parachute: {
-      vb: [108, 118], seats: 1, colour: '#6FA96B', speed: 29, lane: 'leaf',
-      slots: [[54, 100, 13]],
-      art: `<path class="hull" d="M8 52 q0-44 46-44 q46 0 46 44 q-20-10-46-10 q-26 0-46 10 z"/>
-        <path class="thin" d="M31 46 q6-30 23-38 M77 46 q-6-30-23-38"/>
-        <path class="thin" d="M8 52 L48 90 M54 42 L54 90 M100 52 L60 90"/>
-        <path class="hull" d="M40 86 h28 q5 0 5 6 v14 q0 6-5 6 H40 q-5 0-5-6 V92 q0-6 5-6 z"/>`,
-      pivot: [54, 26],
-    },
 
-    dancer: {
-      vb: [96, 136], seats: 1, colour: '#D98CB3', speed: 42, lane: 'promenade', dir: 1,
-      slots: [[48, 26, 15]],
-      art: `<circle class="head" cx="48" cy="26" r="16"/>
-        <path class="torso" d="M48 44 V84"/>
-        <g class="limb armL"><path d="M48 56 L22 74"/><circle class="solid" cx="22" cy="74" r="3.5"/></g>
-        <g class="limb armR"><path d="M48 56 L74 74"/><circle class="solid" cx="74" cy="74" r="3.5"/></g>
-        <g class="limb legL"><path d="M48 84 L30 120"/><path class="thin" d="M30 120 H18"/></g>
-        <g class="limb legR"><path d="M48 84 L66 120"/><path class="thin" d="M66 120 H78"/></g>`,
-    },
-
+    /* THE ROCKET ---------------------------------------------------------------
+       A porthole sized for a whole face. The flame's length follows thrust, and
+       the exhaust column STAYS HANGING in the air — a rocket whose smoke goes up
+       with it is a rocket standing still. */
     rocket: {
-      vb: [120, 132], seats: 1, colour: '#C2703D', speed: 200, lane: 'launch',
-      slots: [[60, 34, 12]],
-      art: `<path class="hull" d="M60 4 q24 22 24 58 v20 H36 V62 q0-36 24-58 z"/>
-        <path class="hull" d="M36 66 L14 92 q-2 14 6 18 l16-14 z"/>
-        <path class="hull" d="M84 66 L106 92 q2 14-6 18 l-16-14 z"/>
-        <path class="hull" d="M36 82 h48 v14 q0 6-6 6 H42 q-6 0-6-6 z"/>
-        <path class="thin" d="M44 74 H76"/>
-        <g class="flame">
-          <path class="flame outer" d="M50 102 q10 26 10 30 q0-4 10-30 z"/>
-          <path class="flame inner" d="M54 102 q6 18 6 22 q0-4 6-22 z"/>
+      vb: [150, 176], seats: 1, colour: '#C2703D', speed: 200, lane: 'launch',
+      slots: [[75, 52, 13]],
+      art: `
+        <path class="shell" d="M75 6 q30 28 30 72 v30 H45 V78 q0-44 30-72 z"/>
+        <path class="fin" d="M45 84 L18 116 q-3 17 8 22 l19-17 z"/>
+        <path class="fin" d="M105 84 L132 116 q3 17-8 22 l-19-17 z"/>
+        <path class="skirt" d="M45 106 h60 v18 q0 8-8 8 H53 q-8 0-8-8 z"/>
+        <path class="stripe" d="M52 96 H98"/>
+        <g class="flame" data-base="translate(75 132)">
+          <path class="outer" d="M-13 0 q13 34 13 40 q0-6 13-40 z"/>
+          <path class="inner" d="M-7 0 q7 24 7 28 q0-4 7-28 z"/>
         </g>`,
-      update(rig, state) {
+      update(rig, state, dt) {
         const m = rig.mem;
-        if (!m.init) { m.init = true; m.flame = rig.q('.flame'); m.t = 0; }
-        m.t += 1;
-        // Length follows thrust: a rocket that is still accelerating is still
-        // burning hard. The flicker is on top of that, not instead of it.
-        const thrust = Math.max(0.5, Math.min(1.6, 0.6 + state.speed / 400));
-        const flick = 1 + 0.22 * Math.sin(m.t * 0.9);
-        if (m.flame) m.flame.setAttribute('transform', `translate(60 102) scale(1 ${(thrust * flick).toFixed(2)}) translate(-60 -102)`);
+        if (!m.init) { m.init = true; m.flame = rig.q('.flame'); m.next = 0; m.f = 0; }
+        m.f += 1;
+        const sc = state.scale || 1;
+        const thrust = Math.max(0.45, Math.min(1.7, 0.5 + state.speed / 520));
+        const flick = 1 + 0.2 * Math.sin(m.f * 0.9);
+        if (m.flame) {
+          m.flame.setAttribute('transform',
+            `${m.flame.dataset.base} scale(1 ${(thrust * flick).toFixed(2)})`);
+        }
+        // The column is left where it was burnt.
+        if (rig.t > m.next) {
+          m.next = rig.t + 0.045;
+          const p = rig.point(75, 150);
+          rig.smoke.emit({
+            x: p.x + (Math.random() - 0.5) * 8 * sc,
+            y: p.y,
+            vx: (Math.random() - 0.5) * 30, vy: 18 + Math.random() * 26,
+            life: 1.9, size: 5 * sc, grow: 26 * sc,
+          });
+        }
       },
     },
+
   };
 
   globalThis.shabbosVehicles = { VEHICLES, DEFS, RAIL, CAR_PITCH, DRIVE_R, ENGINE_S, ENGINE_X };

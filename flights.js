@@ -405,18 +405,26 @@
   // Smoke lives in the world layer at screen coordinates, so the vehicle moves
   // away from it. Drawn as plain circles: no filters, which are slow on iPad
   // Safari and are what a glow would otherwise cost.
+  // A quaver: head, stem, flag, one path. Drawn about its own origin so a
+  // particle can carry it anywhere and turn it.
+  const NOTE = 'M-4 6 a4 3.2 0 1 0 4-3.2 V-11 q7 2 8 8 q3-8-8-12 z';
+
   function stepSmoke(rig, dt) {
     paint(rig, 'smoke', 'puffNodes', 'puff', rig.smoke.step(dt, { drag: 0.97 }));
     paint(rig, 'spray', 'sprayNodes', 'spray', rig.spray.step(dt, { drag: 0.99, gravity: 420 }));
+    // Notes only exist for the vehicles that make them; no rig pays for the
+    // system until it emits one.
+    if (rig.notes) paint(rig, 'notes', 'noteNodes', 'note', rig.notes.step(dt, { drag: 0.995 }), NOTE);
   }
 
-  function paint(rig, _which, key, cls, list) {
+  function paint(rig, _which, key, cls, list, d = null) {
     const w2 = ensureWorld();
     if (!w2) return;
     if (!rig[key]) rig[key] = [];
     while (rig[key].length < list.length) {
-      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      const c = document.createElementNS('http://www.w3.org/2000/svg', d ? 'path' : 'circle');
       c.setAttribute('class', cls);
+      if (d) c.setAttribute('d', d);
       w2.puffs.appendChild(c);
       rig[key].push(c);
     }
@@ -428,9 +436,23 @@
       // Where it was RELEASED, carried on the node. A particle belonging to the
       // air rather than to the vehicle is the whole claim being made here, and
       // the only honest way to check it is against the spot it came from.
-      if (node.dataset.x0 === undefined || node.dataset.born !== String(p.born)) {
+      //
+      // Matched on the PARTICLE ITSELF, not on a stamp it may not carry. Nodes
+      // are recycled as fast as a hard-capped emitter drops its oldest, and
+      // keyed on `born` — which only the train sets — every emitter added since
+      // reused a node while keeping the first particle's release point. The
+      // exhaust then measured as if it had travelled with the rocket.
+      if (node.__p !== p) {
+        node.__p = p;
         node.dataset.x0 = (p.x0 ?? p.x).toFixed(1);
-        node.dataset.born = String(p.born);
+      }
+      if (d) {
+        // A glyph is placed and turned, never resized by its radius: a note
+        // that swells as it fades reads as a balloon.
+        node.setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) `
+          + `scale(${(p.size / 6).toFixed(3)}) rotate(${((p.spin ?? 0) * age).toFixed(1)})`);
+        node.style.opacity = (0.95 * Math.min(1, 2.4 * (1 - age))).toFixed(2);
+        return;
       }
       node.setAttribute('cx', p.x.toFixed(1));
       node.setAttribute('cy', p.y.toFixed(1));
@@ -477,6 +499,15 @@
         return `<img src="${f.url}" style="left:${(cx - R) / vw * 100}%;top:${(cy - R) / vh * 100}%;`
           + `width:${R * 2 / vw * 100}%;height:${R * 2 / vh * 100}%;border-color:${f.ring}">`;
       }).join('');
+    // A part that update() places carries data-base: where it sits before the
+    // rotation is added. Until the first update runs it has no transform at
+    // all, so it renders at the viewBox origin — the helicopter's tail rotor
+    // spent its opening frame in the top left corner, twenty units clear of the
+    // aircraft. update() does not run on frame one (there is no previous sample
+    // to difference), so this is the frame everyone sees.
+    el.querySelectorAll('[data-base]').forEach((n) => {
+      if (!n.hasAttribute('transform')) n.setAttribute('transform', n.dataset.base);
+    });
     return el;
   }
 
@@ -558,13 +589,26 @@
       }
     }
 
+    // WHAT IT SWINGS ABOUT. A parachute hangs from its canopy and swings from
+    // there; rotated about its middle, the canopy and the rider swing opposite
+    // ways, which is not how anything under a parachute has ever moved. `pivot`
+    // was declared on the parachute and never read by anything.
+    //
+    // The origin moves AND the centring translate moves with it, so the pivot
+    // point still lands on the path: translate(-ox%, -oy%) puts that point at
+    // (x, y), and the matching transform-origin turns the rotation about it.
+    const pv = v.pivot;
+    const ox = pv ? (pv[0] / vw) * 100 : 50;
+    const oy = pv ? (pv[1] / vh) * 100 : 50;
+    if (pv) el.style.transformOrigin = `${ox}% ${oy}%`;
+
     const t0 = performance.now();
     let last = null;
     (function step(now) {
       const p = (now - t0) / ms;
       if (p >= 1) { el.remove(); rails?.remove(); rig.own?.remove(); return; }
       const pose = LANES[lane](p, v, W, H);
-      el.style.transform = `translate(${pose.x}px, ${pose.y}px) translate(-50%, -50%) `
+      el.style.transform = `translate(${pose.x}px, ${pose.y}px) translate(${-ox}%, ${-oy}%) `
         + `rotate(${pose.rot}deg) scale(${scale})`;
       rig.at = pose;
 

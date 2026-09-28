@@ -28,16 +28,12 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* Every vehicle is painted in its own colours now, rather than four shades of
+   one. .hull survives because several still use it as a body fill. */
 .flight .hull {
   fill: color-mix(in srgb, var(--vc) 22%, transparent);
   stroke-width: 3.6;
 }
-.flight .glass {
-  fill: color-mix(in srgb, var(--vc) 38%, transparent);
-  stroke-width: 2.2;
-}
-.flight .thin { stroke-width: 2; opacity: 0.8; }
-.flight .solid { fill: var(--vc); stroke: none; }
 /* A seat, so a face sits IN the vehicle rather than on top of it. Drawn under
    the faces, a touch wider than the photo, and dark enough to separate a bright
    crop from a bright hull. */
@@ -84,36 +80,82 @@
 .boat svg { animation: bob 2.4s ease-in-out infinite; }
 @keyframes bob { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-4px) rotate(3deg); } }
 
-/* The dancer ---------------------------------------------------------------
-   Every limb on its own joint at its own tempo, and no duration a multiple of
-   another — so the pose never repeats on a beat and it does not read as a
-   two-frame animation. Nothing here changes the element's box: the limbs move
-   inside the SVG, so the lap circuit still knows where the figure is. */
-/* A head that exists whether or not a face loaded. The slot puts the photo
-   inside this ring; with the photos locked it is still a person rather than a
-   headless figure jigging across the wall. */
-.dancer .head { fill: color-mix(in srgb, var(--vc) 18%, transparent); stroke-width: 3.2; }
-.dancer .limb { transform-box: view-box; }
-.dancer .armL { transform-origin: 48px 56px; animation: armL 430ms ease-in-out infinite alternate; }
-.dancer .armR { transform-origin: 48px 56px; animation: armR 370ms ease-in-out infinite alternate; }
-.dancer .legL { transform-origin: 48px 84px; animation: legL 510ms ease-in-out infinite alternate; }
-.dancer .legR { transform-origin: 48px 84px; animation: legR 590ms ease-in-out infinite alternate; }
-.dancer .torso { transform-box: view-box; transform-origin: 48px 84px;
-  animation: sway 610ms ease-in-out infinite alternate; }
-/* The arms hang DOWN and swing up and out, rather than starting raised and
-   swinging further — at the top of that range the hands ended up inside the
-   head, which reads as awkward rather than energetic. 78 degrees puts a hand
-   well clear of the face at full stretch. */
-@keyframes armL { from { transform: rotate(6deg); }   to { transform: rotate(78deg); } }
-@keyframes armR { from { transform: rotate(-6deg); }  to { transform: rotate(-72deg); } }
-@keyframes legL { from { transform: rotate(-20deg); } to { transform: rotate(16deg); } }
-@keyframes legR { from { transform: rotate(18deg); }  to { transform: rotate(-14deg); } }
-@keyframes sway { from { transform: rotate(-5deg); }  to { transform: rotate(5deg); } }
-/* And the whole figure hops, which is what sells it as dancing rather than
-   flailing. Faster than any limb, so the bounce reads as the beat they are all
-   moving to. */
-.dancer svg { animation: hop 305ms ease-in-out infinite alternate; }
-@keyframes hop { from { transform: translateY(0) scaleY(1); } to { transform: translateY(-7px) scaleY(1.04); } }
+/* THE PLANE ----------------------------------------------------------------
+   The banner is cloth: update() runs a travelling wave along it and each face
+   rides its own point of the wave. */
+.plane .fuse { fill: #6E8BD6; stroke: #2E4470; stroke-width: 3; }
+.plane .wing, .plane .tail { fill: #5878B8; stroke: #2E4470; stroke-width: 2.8; }
+.plane .bubble { fill: rgba(200, 226, 240, 0.5); stroke: #CFE4F2; stroke-width: 2.8; }
+.plane .disc { fill: rgba(200, 216, 240, 0.22); stroke: none; }
+.plane .blade { stroke: #C8D8F0; stroke-width: 4; }
+.plane .cloth { fill: none; stroke: #E8C547; stroke-width: 5; stroke-linecap: round; }
+.plane .rope { fill: none; stroke: #9AA3B8; stroke-width: 2.8; }
+
+/* THE HELICOPTER -----------------------------------------------------------
+   A bubble sized for a whole face, and a pitch that comes from acceleration:
+   nose down to set off, nose up to stop. */
+.helicopter .body { fill: #5D7CA6; stroke: #22364F; stroke-width: 3; }
+.helicopter .boom, .helicopter .fin { fill: #46618A; stroke: #22364F; stroke-width: 2.8; }
+.helicopter .bubble { fill: rgba(200, 226, 240, 0.45); stroke: #CFE4F2; stroke-width: 3; }
+.helicopter .skid { fill: none; stroke: #C8D8F0; stroke-width: 3.4; stroke-linecap: round; }
+.helicopter .mast { stroke: #C8D8F0; stroke-width: 3.2; }
+.helicopter .rotor, .helicopter .tailrotor path { stroke: #C8D8F0; stroke-width: 4; }
+.helicopter .disc { fill: rgba(200, 216, 240, 0.16); stroke: none; }
+
+/* THE BALLOON --------------------------------------------------------------
+   The burner flares and lights the envelope from inside, and the lift follows
+   the same clock — the flare is what the lift is for. Only at night: a glow on
+   a white wall is a smudge. */
+.balloon .env { fill: #8E5A88; stroke: #4C2E49; stroke-width: 3; }
+.balloon .panel { stroke: #4C2E49; stroke-width: 2.6; }
+.balloon .panel.a { fill: #A96FA0; }
+.balloon .panel.b { fill: #7A4A74; }
+.balloon .inner { fill: #FFD79A; stroke: none; opacity: 0; }
+/* update() sets --burn, the stylesheet decides whether it shows: by day the
+   envelope is lit from outside and an inner glow is a stain on it. */
+body:not(.day) .balloon .inner { opacity: calc(var(--burn, 0) * 0.5); }
+.balloon .basket { fill: #8A6A3A; stroke: #4A3A20; stroke-width: 2.8; }
+.balloon .rim { stroke: #C9A45E; stroke-width: 4; }
+.balloon .rope { fill: none; stroke: #C9A45E; stroke-width: 2.8; }
+.balloon .sandbag { fill: #6B5530; stroke: #4A3A20; stroke-width: 2.6; }
+.balloon .burner { fill: #FFB03A; stroke: none; opacity: 0.15;
+  transform-box: fill-box; transform-origin: 50% 0; }
+
+/* THE PARACHUTE ------------------------------------------------------------
+   It swings from the CANOPY — pivot was declared here and read by nothing, so
+   it turned about its middle and canopy and rider swung opposite ways. */
+.parachute .dome { fill: #6FA96B; stroke: #2F5A2C; stroke-width: 3; }
+.parachute .gore { fill: none; stroke: #A9D6A5; stroke-width: 2.8; }
+.parachute .lines { fill: none; stroke: #C9D6C6; stroke-width: 2.6; }
+.parachute .body { fill: #C2703D; stroke: #6B3C18; stroke-width: 2.8; }
+.parachute .legs path { stroke: #C2703D; stroke-width: 6; stroke-linecap: round; }
+
+/* THE ROCKET ---------------------------------------------------------------
+   The exhaust column stays hanging in the air: a rocket whose smoke climbs
+   with it is a rocket standing still. */
+.rocket .shell { fill: #C2703D; stroke: #6B3C18; stroke-width: 3; }
+.rocket .fin { fill: #9E5730; stroke: #6B3C18; stroke-width: 2.8; }
+.rocket .skirt { fill: #7A4423; stroke: #6B3C18; stroke-width: 2.8; }
+.rocket .stripe { stroke: #F5D2A0; stroke-width: 3.2; }
+.rocket .flame { stroke: none; }
+.rocket .flame .outer { fill: #E0A030; opacity: 0.9; }
+.rocket .flame .inner { fill: #F7EDBE; }
+
+/* THE DANCER ---------------------------------------------------------------
+   Two-segment limbs: a straight line from shoulder to hand swinging about one
+   joint is a signpost, not an arm. Every joint moves on its own tempo from
+   update(), none a multiple of another, so the pose never lands on a beat. */
+.dancer .head { fill: #F0C9A0; stroke: #D98CB3; stroke-width: 3.4; }
+.dancer .shirt { fill: #D98CB3; stroke: none; }
+.dancer .shorts { fill: #6E8BD6; stroke: none; }
+.dancer .upper, .dancer .fore path, .dancer .shin path { stroke: #F0C9A0; stroke-width: 7; stroke-linecap: round; }
+.dancer .hand { fill: #F0C9A0; stroke: none; }
+.dancer .foot { stroke: #5D4037; stroke-width: 6; stroke-linecap: round; }
+/* Notes, left in the air behind. */
+.flyway .puff { fill: #C9CFDC; stroke: none; }
+/* Notes are a glyph, not a puff: a dancer trailing grey circles is a dancer on
+   fire. Warm, because they are the one thing on screen that is a sound. */
+.flyway .note { fill: #F2D06B; stroke: none; }
 
 /* THE CAR -----------------------------------------------------------------
    A convertible: no roof over the one thing worth looking at. The body leans
@@ -193,7 +235,6 @@ body:not(.day) .train .lamp, body:not(.day) .train .beam { opacity: 1; }
 /* THE WORLD LAYER: things that have left a vehicle and belong to the air, and
    the track, which the train crosses rather than carries. */
 .flyway .world { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.flyway .puff { fill: #C9CFDC; stroke: none; }
 .flyway .rail { stroke: #6C7486; stroke-width: 3; }
 .flyway .sleepers { stroke: #8A6A3A; stroke-width: 5; opacity: 0.55; }
 

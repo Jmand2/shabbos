@@ -46,63 +46,135 @@ await page.route('**/api.open-meteo.com/**', (r) => r.abort());
 // lamps and burners are explicitly NOT for.
 await page.addInitScript(() => {
   localStorage.setItem('shabbos-clock-settings', JSON.stringify({ theme: 'night' }));
+  // Kept so the wait can stop the world on the frame it approved of, and start
+  // it again for the next vehicle. flights.js calls the bare global once per
+  // frame, so replacing it ends the loop where it stands.
+  window.__raf = window.requestAnimationFrame.bind(window);
 });
 await page.goto(`http://127.0.0.1:${server.address().port}/index.html`, { waitUntil: 'load' });
 await page.waitForTimeout(1400);
 
 const names = want.length ? want : await page.evaluate(() => window.shabbosFlights.names());
+
+// Clear the stage: the previous vehicle, its leavings, and any pan.
+const reset = (face) => page.evaluate((f) => {
+  window.requestAnimationFrame = window.__raf;
+  const fw = document.querySelector('.flyway');
+  if (fw) { fw.style.transform = ''; fw.style.overflow = ''; }
+  const scr = document.getElementById('screen');
+  if (scr) scr.style.overflow = '';
+  document.querySelectorAll('.card,.weather,.topline,.footer,.horizon').forEach((n) => { n.style.visibility = 'hidden'; });
+  document.querySelectorAll('.flight').forEach((n) => n.remove());
+  // The world layer outlives any one flight by design — smoke belongs to the
+  // air, and the track stays put while the train crosses it. That is right in
+  // life and wrong in a reference render, where the previous vehicle's leavings
+  // would appear in the next one's portrait.
+  document.querySelectorAll('.flyway .puffs > *, .flyway .rails > *').forEach((n) => n.remove());
+  window.__face = `data:image/svg+xml;base64,${btoa(f)}`;
+}, face);
+
+const send = (name) => page.evaluate((n) => {
+  window.__sent = performance.now();
+  window.shabbosFlights.send(n);
+  // Faces on at once, not after the wait: the rocket climbs about 490 px a
+  // second, so half a second spent dressing it is half the screen, and it had
+  // left before the shutter.
+  const f = document.querySelector(`.flight.${n}`);
+  if (!f) return;
+  const v = window.shabbosFlights.spec(n);
+  const [vw, vh] = v.vb;
+  const rings = ['#E8C547', '#5FC9A0', '#D98CC8', '#F5A25D'];
+  v.slots.forEach(([cx, cy, r], i) => {
+    const R = r * 2.1;
+    const img = document.createElement('img');
+    img.src = window.__face;
+    img.style.cssText = `left:${(cx - R) / vw * 100}%;top:${(cy - R) / vh * 100}%;`
+      + `width:${R * 2 / vw * 100}%;height:${R * 2 / vh * 100}%;border-color:${rings[i % 4]}`;
+    f.appendChild(img);
+  });
+}, name);
+
+// Wait for a frame worth photographing, then STOP THE WORLD on that frame. A
+// screenshot costs a couple of hundred milliseconds, which for the rocket is
+// most of the screen: its portrait came back as an exhaust column with nothing
+// on the end of it, because it had climbed out of the top of the frame between
+// the test passing and the shutter opening.
+//
+// `strict` wants the whole vehicle in the frame. Most of them manage it and
+// their portraits are then the screen exactly as it is. The rocket never does —
+// it climbs at 82% of the width and grows past the 180 px it has to its right
+// as it tilts — so it gets a second run under the loose test, and a pan.
+const settle = (name, strict) => page.waitForFunction(({ n, strict: hard }) => {
+  const el = document.querySelector(`.flight.${n}`);
+  if (!el) return false;
+  const b = el.getBoundingClientRect();
+  if (!b.width) return false;
+  // Not in its first second and a bit. update() is skipped on frame one — there
+  // is no previous sample to difference — so a vehicle photographed the instant
+  // it appears is a pile of undriven parts: the rotor a straight bar across its
+  // disc, the prop a stick, nothing yet where its motion puts it. Long enough,
+  // too, for what a vehicle LEAVES BEHIND to exist: a dancer drops a note about
+  // twice a second, and a portrait taken before the first one has no wake.
+  // The loose pass waits longer: it is there for the vehicles that are only
+  // ever partly in frame, and those are the fast ones, whose wake is the other
+  // half of the picture. A rocket photographed at 1.2 s has a stub of exhaust.
+  if (performance.now() - window.__sent < (hard ? 1200 : 2000)) return false;
+  // Strict: all of it inside, on each axis where it fits. Loose: anywhere on
+  // screen at all, because a pan follows and will put it in the middle. Asking
+  // a loose frame to be CENTRED is asking the same impossible thing again —
+  // the rocket's lane is at 82% of the width, so its centre is never near the
+  // middle of the screen and that test simply never fired.
+  const span = (lo, hi, size, limit) => (hard
+    ? size >= limit - 40 || (lo > -16 && hi < limit + 16)
+    : hi > 0 && lo < limit);
+  // A light that only comes on part of the time is the point of the vehicle it
+  // is on — the balloon's burner is what a balloon does at night — and a
+  // portrait taken between flares shows a vehicle that does not do it.
+  const lit = el.querySelector('.inner');
+  if (lit && Number(getComputedStyle(lit).opacity) < 0.3) return false;
+  const good = span(b.left, b.right, b.width, innerWidth)
+    && span(b.top, b.bottom, b.height, innerHeight);
+  if (good) window.requestAnimationFrame = () => 0;
+  return good;
+}, { n: name, strict }, { timeout: strict ? 14000 : 20000 }).then(() => true, () => false);
+
+// Pan to what could not fit, by moving the whole flyway rather than the
+// vehicle. Smoke, exhaust, the sea and the track are world-space siblings of
+// the flight inside that layer, so they travel with it. Moving the vehicle
+// alone would leave its own wake behind, pointing at where it used to be.
+const panTo = (name) => page.evaluate((n) => {
+  const el = document.querySelector(`.flight.${n}`);
+  const fw = document.querySelector('.flyway');
+  if (!el || !fw) return;
+  const b = el.getBoundingClientRect();
+  const pan = (lo, hi, limit) => (lo > -8 && hi < limit + 8 ? 0 : limit / 2 - (lo + hi) / 2);
+  // The layer clips to the screen, and the clip travels with the layer: pan it
+  // 500 px right and the vehicle arrives in the middle of the frame with its
+  // own left edge cut off, which is how the helicopter's portrait came back as
+  // a sliver of tail fin on an empty sky.
+  fw.style.overflow = 'visible';
+  const scr = document.getElementById('screen');
+  if (scr) scr.style.overflow = 'visible';
+  fw.style.transform = `translate(${Math.round(pan(b.left, b.right, innerWidth))}px, `
+    + `${Math.round(pan(b.top, b.bottom, innerHeight))}px)`;
+}, name);
+
 for (const name of names) {
-  await page.evaluate((face) => {
-    document.querySelectorAll('.card,.weather,.topline,.footer,.horizon').forEach((n) => { n.style.visibility = 'hidden'; });
-    document.querySelectorAll('.flight').forEach((n) => n.remove());
-    // The world layer outlives any one flight by design — smoke belongs to the
-    // air, and the track stays put while the train crosses it. That is right in
-    // life and wrong in a reference render, where the previous vehicle's
-    // leavings would appear in the next one's portrait.
-    document.querySelectorAll('.flyway .puffs > *, .flyway .rails > *').forEach((n) => n.remove());
-    window.__face = `data:image/svg+xml;base64,${btoa(face)}`;
-  }, FACE);
-  await page.evaluate((n) => {
-    window.shabbosFlights.send(n);
-    // Faces on at once, not after the wait: the rocket climbs about 490 px a
-    // second, so half a second spent dressing it is half the screen, and it had
-    // left before the shutter.
-    const f = document.querySelector(`.flight.${n}`);
-    if (!f) return;
-    const v = window.shabbosFlights.spec(n);
-    const [vw, vh] = v.vb;
-    const rings = ['#E8C547', '#5FC9A0', '#D98CC8', '#F5A25D'];
-    v.slots.forEach(([cx, cy, r], i) => {
-      const R = r * 2.1;
-      const img = document.createElement('img');
-      img.src = window.__face;
-      img.style.cssText = `left:${(cx - R) / vw * 100}%;top:${(cy - R) / vh * 100}%;`
-        + `width:${R * 2 / vw * 100}%;height:${R * 2 / vh * 100}%;border-color:${rings[i % 4]}`;
-      f.appendChild(img);
-    });
-  }, name);
-  // Wait for it to be ON SCREEN rather than for a fixed moment. Lanes differ by
-  // a factor of five in speed and the hover lane eases in slowly, so a single
-  // delay caught some vehicles mid-entrance and others already leaving.
-  await page.waitForFunction((n) => {
-    const el = document.querySelector(`.flight.${n}`);
-    if (!el) return false;
-    const b = el.getBoundingClientRect();
-    if (!b.width) return false;
-    const cx = b.left + b.width / 2;
-    const cy = b.top + b.height / 2;
-    // Wide, because several lanes deliberately keep OUT of the middle: the
-    // rocket, balloon and parachute go up one side or the other at 18% or 82%
-    // of the width, which a centre-band predicate never matches at all.
-    return cx > innerWidth * 0.14 && cx < innerWidth * 0.86
-      && cy > innerHeight * 0.1 && cy < innerHeight * 0.9;
-  }, name, { timeout: 20000 }).catch(() => {});
+  await reset(FACE);
+  await send(name);
+  let framed = await settle(name, true);
+  if (!framed) {
+    await reset(FACE);
+    await send(name);
+    framed = await settle(name, false);
+    await panTo(name);
+  }
   await page.screenshot({ path: join(OUT, `${name}.png`) });
   await page.evaluate(() => { document.documentElement.style.filter = 'blur(3px)'; });
   await page.waitForTimeout(150);
   await page.screenshot({ path: join(OUT, `${name}-room.png`) });
   await page.evaluate(() => { document.documentElement.style.filter = ''; });
-  console.log(`  ${name}`);
+  console.log(`  ${name}${framed ? '' : ' (never framed)'}`);
 }
 await browser.close();
 server.close();
