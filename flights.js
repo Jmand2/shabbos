@@ -137,6 +137,13 @@
     balloon: 1.4, rocket: 1.35, parachute: 1.5, car: 1.6,
   };
 
+  // One formula for how big a vehicle flies, used by fly() AND by the checks,
+  // so a test measures the real thing rather than a copy of it. The gates in
+  // check-vehicles.mjs turn on face diameter and stroke width AT SCREEN SIZE,
+  // and a second copy of this arithmetic would let the artwork drift under a
+  // suite that went on passing.
+  const scaleFor = (name, W) => Math.min(1, W / 1024) * 1.8 * (SIZE[name] ?? 1);
+
   function faceRadius(v, i) {
     const [cx, cy, r] = v.slots[i];
     let gap = Infinity;
@@ -148,7 +155,7 @@
 
   const VEHICLES = {
     train: {
-      vb: [210, 66], seats: 4, colour: '#D9544D', speed: 67, lane: 'horizon', dir: 1,
+      vb: [210, 66], seats: 4, colour: '#D9544D', speed: 67, lane: 'horizon', dir: 1, band: 0.045,
       slots: [[24, 33, 11], [66, 33, 11], [108, 33, 11], [150, 33, 11]],
       art: `<rect class="hull" x="6" y="18" width="36" height="28" rx="6"/>
         <rect class="hull" x="48" y="18" width="36" height="28" rx="6"/>
@@ -170,7 +177,7 @@
         </g>`,
     },
     boat: {
-      vb: [134, 74], seats: 2, colour: '#4FA3A5', speed: 47, lane: 'horizon', dir: -1,
+      vb: [134, 74], seats: 2, colour: '#4FA3A5', speed: 47, lane: 'horizon', dir: -1, band: -0.055,
       slots: [[38, 52, 10], [92, 52, 10]],
       art: `<path class="hull" d="M14 42 H120 L104 64 H30 z"/>
         <path class="glass" d="M66 38 V6 L104 34 z"/>
@@ -183,7 +190,7 @@
         </g>`,
     },
     plane: {
-      vb: [252, 62], seats: 3, colour: '#6E8BD6', speed: 98, lane: 'upper', dir: 1,
+      vb: [252, 62], seats: 3, colour: '#6E8BD6', speed: 98, lane: 'upper', dir: 1, band: -0.045,
       slots: [[32, 32, 15], [80, 32, 15], [128, 32, 15]],
       art: `<rect class="hull" x="6" y="12" width="124" height="40" rx="8"/>
         <path class="thin" d="M130 32 H150"/>
@@ -193,7 +200,7 @@
         <path class="glass" d="M198 25 q11-2 18 7 q-7 9-18 7 z"/>`,
     },
     helicopter: {
-      vb: [190, 92], seats: 1, colour: '#5D7CA6', speed: 60, lane: 'upper', dir: 1,
+      vb: [190, 92], seats: 1, colour: '#5D7CA6', speed: 60, lane: 'upper', dir: 1, band: 0.06,
       slots: [[70, 62, 15]],
       art: `<path class="hull" d="M34 62 q0-30 36-30 q34 0 44 26 q2 6-4 10 H42 q-8 0-8-6 z"/>
         <path class="hull" d="M112 54 L176 46 q8-1 8 6 q0 7-8 7 l-64 4 z"/>
@@ -243,7 +250,7 @@
     // durations a multiple of another, so the loop never lands in the same
     // pose twice running and it does not read as a two-frame GIF.
     dancer: {
-      vb: [96, 136], seats: 1, colour: '#D98CB3', speed: 42, lane: 'lap', dir: 1,
+      vb: [96, 136], seats: 1, colour: '#D98CB3', speed: 42, lane: 'promenade', dir: 1,
       slots: [[48, 26, 15]],
       art: `<circle class="head" cx="48" cy="26" r="16"/>
         <path class="torso" d="M48 44 V84"/>
@@ -268,10 +275,30 @@
   // p is 0..1 of the journey. Returns position in px plus rotation.
 
   const LANES = {
-    horizon: (p, v, W, H) => ({ x: (v.dir > 0 ? -0.15 + p * 1.3 : 1.15 - p * 1.3) * W, y: H * 0.56, rot: 0 }),
+    horizon: (p, v, W, H) => ({
+      x: (v.dir > 0 ? -0.15 + p * 1.3 : 1.15 - p * 1.3) * W,
+      // [4] The train and the boat both live here and travel towards each
+      // other, so in a parade they met in the middle and drove through one
+      // another. A lane offset separates them by a body's height: the outbound
+      // one runs a little nearer, the inbound one a little further away, which
+      // also reads as depth rather than as a dodge.
+      y: H * (0.56 + (v.band ?? 0)),
+      rot: 0,
+    }),
+    // ALONG THE BOTTOM, UPRIGHT. Its own comment said "across the bottom of the
+    // screen" while its lane was the full lap — so it danced up the walls
+    // sideways and crossed the top upside down. It also shared the circuit with
+    // the car, which travels at 80 px/s against its 42 and caught it about two
+    // and a half seconds after a parade launched them together.
+    promenade: (p, v, W, H) => ({
+      x: (v.dir > 0 ? -0.15 + p * 1.3 : 1.15 - p * 1.3) * W,
+      y: H - lapMargin(v),
+      rot: 0,
+    }),
     upper: (p, v, W, H) => ({
       x: (-0.15 + p * 1.3) * W,
-      y: H * (0.30 + 0.05 * Math.sin(p * Math.PI * 2 * 1.3 + 0.4)),
+      // [4] Shared by the plane and the helicopter, offset the same way.
+      y: H * (0.30 + (v.band ?? 0) + 0.05 * Math.sin(p * Math.PI * 2 * 1.3 + 0.4)),
       rot: 4 * Math.cos(p * Math.PI * 2 * 1.3 + 0.4),
     }),
     // Slow into the middle, hover, then away. Only vehicle that stops.
@@ -384,6 +411,7 @@
 
   const LENGTH = {
     horizon: (W, H) => W * 1.3, upper: (W, H) => W * 1.3, hover: (W, H) => W * 1.3,
+    promenade: (W, H) => W * 1.3,
     lap: (W, H, v) => 2 * ((W - lapMargin(v) * 2) + (H - lapMargin(v) * 2)),
     leaf: (W, H) => H * 1.3, rise: (W, H) => H * 1.3, launch: (W, H) => H * 1.3,
   };
@@ -460,7 +488,7 @@
 
     // Everything flies larger now, and the multi-seat bonus is gone: the faces
     // themselves already carry those vehicles.
-    const scale = Math.min(1, W / 1024) * 1.8 * (SIZE[name] ?? 1);
+    const scale = scaleFor(name, W);
     // Carried on the per-flight copy so a path can ask how big it actually is.
     // Set BEFORE the duration is worked out: the lap's length depends on its
     // margin, and its margin depends on this. Computing ms first gave the car a
@@ -531,6 +559,9 @@
   // The ordinary stagger is over inside this, so the parade reads as one event.
   // Only a repeat pushes past it, and a repeat has to.
   const PARADE_WINDOW_MS = 2200;
+  // How long a vehicle is still coming in through its edge. Nothing else enters
+  // that way until it is clear.
+  const PARADE_SIDE_CLEAR_MS = 2600;
 
   // `force` is the deliberate launch, from the settings sheet or a test. It
   // skips the same guards send() skips: those are about whether the hour should
@@ -546,6 +577,9 @@
     const kinds = Object.keys(VEHICLES);
     const used = new Map();
     const lastOut = new Map();
+    // Sides currently being entered through, released once a vehicle is clear
+    // of the edge it came in at.
+    const taken = new Set();
     let at = 0;
     let sent = 0;
     for (let i = 0; i < n; i += 1) {
@@ -553,8 +587,18 @@
       // clump — a kind pulled four times has to be spaced four times, and the
       // tail of the parade ended up ten seconds behind its head, which is no
       // longer one event. Twice is enough for a repeat to read as deliberate.
+      // AND NOT ONTO AN OCCUPIED SIDE. Vehicles that share a lane and a
+      // direction enter the screen through the same doorway; two of them
+      // launched together arrive stacked. Lane offsets separate a train from a
+      // boat coming the other way, but nothing separates two things coming from
+      // the same side at the same moment — so a side is claimed for as long as
+      // a vehicle is still entering through it.
+      const sideOf = (k) => `${VEHICLES[k].lane}|${VEHICLES[k].dir ?? 0}`;
       let name = kinds[Math.floor(Math.random() * kinds.length)];
-      for (let tries = 0; (used.get(name) ?? 0) >= 2 && tries < 20; tries += 1) {
+      for (let tries = 0; tries < 24; tries += 1) {
+        const tooMany = (used.get(name) ?? 0) >= 2;
+        const blocked = taken.has(sideOf(name));
+        if (!tooMany && !blocked) break;
         name = kinds[Math.floor(Math.random() * kinds.length)];
       }
       used.set(name, (used.get(name) ?? 0) + 1);
@@ -567,6 +611,10 @@
       const twin = lastOut.get(name);
       const go = twin === undefined ? base : Math.max(base, twin + PARADE_SAME_KIND_MS);
       lastOut.set(name, go);
+      const side = sideOf(name);
+      taken.add(side);
+      // Long enough for the one that went first to be fully on screen.
+      setTimeout(() => taken.delete(side), go + PARADE_SIDE_CLEAR_MS);
       setTimeout(() => {
         try { fly(name); } catch (err) { console.error(err); }
       }, go);
@@ -702,6 +750,15 @@
       // minutes apart, and gone in seconds.
       send: (name) => { try { fly(name ?? vehicleBag()[0]); } catch (e) { console.error(e); } },
       names: () => Object.keys(VEHICLES),
+      // What a vehicle actually measures on screen at a given width: the scale
+      // it flies at, and each face's radius in real pixels. The size gates need
+      // the numbers the display uses, not the numbers in the artwork.
+      metrics: (name, W = 1024) => {
+        const v = VEHICLES[name];
+        if (!v) return null;
+        const scale = scaleFor(name, W);
+        return { scale, faces: v.slots.map((_, i) => faceRadius(v, i) * scale) };
+      },
       // Where a vehicle would BE at a given point of its journey, without
       // waiting for the journey. A lap takes the better part of a minute and a
       // test cannot watch one — sampling the rendered element only ever sees

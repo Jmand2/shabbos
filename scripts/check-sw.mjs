@@ -29,8 +29,8 @@ const TYPES = {
 // so the one file most likely to be edited on its own was the one file this
 // test never checked was part of the generation.
 const SHELL = ['index.html', 'styles.css', 'flights.css', 'flights.js',
-  'util.js', 'calendar.js', 'settings.js', 'minyanim.js', 'weather.js',
-  'sports.js', 'display.js', 'app.js'];
+  'kinetics.js', 'util.js', 'calendar.js', 'settings.js', 'minyanim.js',
+  'weather.js', 'sports.js', 'display.js', 'app.js'];
 
 let generation = 'A';
 // Requests the server should refuse, to stand in for a network that is up but
