@@ -57,32 +57,28 @@
 }
 
 /* Secondary motion. Each is the thing that makes the vehicle read as itself. */
-.train svg, .car svg { animation: chug 260ms steps(2, end) infinite; }
+/* The car still chugs on a timer; the train does not, because it is rigged —
+   its wheels roll the distance travelled and its riders jostle on the rail
+   joints, and a body-wide judder on top of that fights the rig. */
+.car svg { animation: chug 260ms steps(2, end) infinite; }
 @keyframes chug { from { transform: translateY(0); } to { transform: translateY(-1.5px); } }
-
-.flight .wheel { animation: spin 600ms linear infinite; transform-origin: center; transform-box: fill-box; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.helicopter .rotor, .helicopter .tailrotor {
-  stroke: #C8D8F0; stroke-width: 4;
-  transform-box: fill-box; transform-origin: 50% 50%;
-  animation: spin 190ms linear infinite;
-}
-.helicopter .tailrotor { animation-duration: 90ms; }
+/* Driven by update(), not by a timer: a rotor's speed is the aircraft's, and
+   these were CSS loops that quietly stopped matching anything when the vehicle
+   was redrawn — the gate exists because of exactly that. */
+.helicopter .rotor, .helicopter .tailrotor { stroke: #C8D8F0; stroke-width: 4; }
+.helicopter .mast { stroke-width: 3.2; }
 .helicopter .disc { stroke-opacity: 0.22; }
 
-.rocket .flame { stroke: none; animation: flicker 110ms ease-in-out infinite alternate; transform-box: fill-box; transform-origin: 50% 0; }
+.rocket .flame { stroke: none; }
 .rocket .flame.outer { fill: #E0A030; opacity: 0.9; }
 .rocket .flame.inner { fill: #F7EDBE; }
-@keyframes flicker { from { transform: scaleY(0.72); } to { transform: scaleY(1.28); } }
-
-/* The burner fires for a beat, then goes quiet. */
-.balloon .burner { stroke: none; fill: #E0A030; animation: burn 4.2s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
-@keyframes burn {
-  0%, 68% { opacity: 0; transform: scaleY(0.2); }
-  74%     { opacity: 0.95; transform: scaleY(1.15); }
-  86%     { opacity: 0.9; transform: scaleY(0.9); }
-  100%    { opacity: 0; transform: scaleY(0.2); }
+/* The burner fires for a beat, then goes quiet — on update()'s clock, the same
+   clock the lift follows, because the flare is what the lift is for. */
+.balloon .burner {
+  stroke: none; fill: #E0A030; opacity: 0;
+  transform-box: fill-box; transform-origin: 50% 100%;
 }
 
 .boat svg { animation: bob 2.4s ease-in-out infinite; }
@@ -130,20 +126,41 @@
 .boat .wake.slow { animation-duration: 3.4s; opacity: 0.55; }
 @keyframes drift { from { transform: translateX(0); } to { transform: translateX(44px); } }
 
-/* Smoke, three puffs on one loop a third apart. */
-.train .puff {
-  fill: color-mix(in srgb, var(--vc) 45%, transparent);
-  stroke: none;
-  transform-box: fill-box;
-  transform-origin: 50% 100%;
-  animation: puff 2.1s ease-out infinite;
-}
-.train .puff:nth-child(2) { animation-delay: 0.7s; }
-.train .puff:nth-child(3) { animation-delay: 1.4s; }
-@keyframes puff {
-  from { opacity: 0.75; transform: translate(0, 0) scale(0.4); }
-  to   { opacity: 0; transform: translate(-26px, -34px) scale(2.1); }
-}
+/* THE TRAIN ---------------------------------------------------------------
+   Rebuilt as a rigged object. Everything here is fill, colour and light: no
+   stroke under 2.6 units, because at this vehicle's scale that is the 2.5 px
+   floor below which a line is not there at all across a room. */
+.train .body { fill: #C4433C; stroke: #1B1F2C; stroke-width: 2.6; }
+.train .trim { fill: #E8C547; stroke: none; }
+.train .trim2 { fill: #E8C547; opacity: 0.85; stroke: none; }
+.train .frame { fill: #141824; stroke: none; }
+.train .shirt { stroke: none; }
+.train .coupler { stroke: #141824; stroke-width: 5; }
+.train .boiler, .train .dome, .train .funnel { fill: #2C3448; stroke: #E8C547; stroke-width: 2.6; }
+.train .cab { fill: #C4433C; stroke: #1B1F2C; stroke-width: 2.6; }
+.train .cabroof, .train .funnelcap, .train .bell { fill: #E8C547; stroke: none; }
+.train .band { fill: #E8C547; opacity: 0.9; stroke: none; }
+.train .cyl { fill: #2C3448; stroke: #E8C547; stroke-width: 2.6; }
+.train .cow { fill: #141824; stroke: #E8C547; stroke-width: 2.6; }
+.train .coupling { stroke: #C9CED9; stroke-width: 5; stroke-linecap: round; }
+.train .mainrod { stroke: #AEB5C4; stroke-width: 4; stroke-linecap: round; }
+.train .pistonrod { stroke: #9AA3B8; stroke-width: 3.2; }
+.train .tyre { fill: #141824; stroke: #E8C547; stroke-width: 3; }
+.train .spokes { stroke: #E8C547; stroke-width: 2.8; opacity: 0.85; }
+.train .hub { fill: #E8C547; stroke: none; }
+/* [3] Light is the most visible detail on a dark wall — and only at night. */
+.train .lampbox { fill: #E8C547; stroke: none; }
+.train .lamp { fill: url(#g-glow); stroke: none; opacity: 0; }
+.train .beam { fill: url(#g-beam); stroke: none; opacity: 0; }
+body:not(.day) .train .lamp, body:not(.day) .train .beam { opacity: 1; }
+
+/* THE WORLD LAYER: things that have left a vehicle and belong to the air, and
+   the track, which the train crosses rather than carries. */
+.flyway .world { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.flyway .puff { fill: #C9CFDC; stroke: none; }
+.flyway .rail { stroke: #6C7486; stroke-width: 3; }
+.flyway .sleepers { stroke: #8A6A3A; stroke-width: 5; opacity: 0.55; }
+
 
 /* The settings block this module injects. */
 .unlock { display: flex; gap: 0.6em; align-items: center; }

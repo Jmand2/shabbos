@@ -865,6 +865,79 @@ for (const view of VIEWS) {
   ok(many.hourMs === 3600000,
     `on the hour exactly, it waits for the next (${many.hourMs}ms)`);
 
+  /* THE TRAIN IS RIGGED, not animated ------------------------------------
+
+     Two things separate a rigged vehicle from a picture on a timer, and both
+     are invisible to every static gate:
+
+     the wheels roll the distance actually travelled — they used to turn on a
+     fixed CSS interval with no relation to the speed, which is why the car
+     skidded its whole lap;
+
+     and the smoke, once it leaves the funnel, belongs to the air. It used to be
+     drawn inside the vehicle and travelled along with it, which is precisely
+     why the train never looked like it was going anywhere. */
+  const rigged = await page.evaluate(async () => {
+    document.querySelectorAll('.flight').forEach((n) => n.remove());
+    window.shabbosFlights.send('train');
+    const el = document.querySelector('.flight.train');
+    const wheel = el.querySelector('.engine .wheel');
+    const readX = (n) => {
+      const m = /translate\(([-\d.]+)px/.exec(getComputedStyle(n).transform === 'none'
+        ? n.style.transform : n.style.transform);
+      return m ? Number(m[1]) : NaN;
+    };
+    const readSpin = () => {
+      const m = /rotate\(([-\d.]+)\)/.exec(wheel.getAttribute('transform') ?? '');
+      return m ? Number(m[1]) : NaN;
+    };
+    // How far each puff has wandered from where it was released. Comparing the
+    // MEAN x of all puffs was the wrong measure and passed for the wrong
+    // reason: the set is not the same set a second later, so its average
+    // tracked the funnel whether or not any individual puff had moved.
+    const puffDrift = () => [...document.querySelectorAll('.flyway .puff')]
+      .filter((n) => n.style.display !== 'none' && n.dataset.x0 !== undefined)
+      .map((n) => Math.abs(Number(n.getAttribute('cx')) - Number(n.dataset.x0)));
+
+    await new Promise((r) => setTimeout(r, 1400));
+    const a = { x: readX(el), spin: readSpin(), puffs: puffDrift() };
+    await new Promise((r) => setTimeout(r, 1400));
+    const b = { x: readX(el), spin: readSpin(), puffs: puffDrift() };
+    const { scale } = window.shabbosFlights.metrics('train', innerWidth);
+    el.remove();
+    return { a, b, scale };
+  });
+
+  {
+    const moved = Math.abs(rigged.b.x - rigged.a.x);
+    // Radius in screen pixels: 15 artwork units, the engine group's 1.3, and
+    // whatever the vehicle is flying at.
+    const r = 15 * 1.3 * rigged.scale;
+    const wantDeg = ((moved / r) * 180) / Math.PI;
+    // The wheel's rotate() wraps; compare the turn modulo a revolution.
+    const gotDeg = ((rigged.b.spin - rigged.a.spin) % 360 + 360) % 360;
+    const wantMod = (wantDeg % 360 + 360) % 360;
+    const err = Math.abs(gotDeg - wantMod);
+    const off = Math.min(err, 360 - err);
+    // Enough travel that a wheel has turned several times; the train crosses at
+    // about 60 px/s on screen and this samples 1.4 s of it.
+    ok(moved > 50, `the train covers ground to measure (${moved.toFixed(0)} px)`);
+    ok(off / 360 < 0.01,
+      `its wheels roll the distance travelled, within 1% (${off.toFixed(1)}° out of 360)`);
+  }
+  {
+    const movedTrain = Math.abs(rigged.b.x - rigged.a.x);
+    const all = [...rigged.a.puffs, ...rigged.b.puffs];
+    ok(rigged.a.puffs.length > 0, `the funnel is emitting (${rigged.a.puffs.length} puffs up)`);
+    // Each puff against ITS OWN release point. They have a little sideways
+    // velocity of their own and air to drift in, so this is not zero — but it
+    // is nothing like the distance the train covers in the same time.
+    const worst = all.length ? Math.max(...all) : 0;
+    ok(worst < movedTrain * 0.2,
+      `and each puff stays where it was released (worst ${worst.toFixed(0)} px `
+      + `while the train went ${movedTrain.toFixed(0)})`);
+  }
+
   await page.close();
 }
 

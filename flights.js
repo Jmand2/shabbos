@@ -133,7 +133,10 @@
   // beside them. These even the footprints out by lifting the small ones rather
   // than shrinking the large, since bigger is the point.
   const SIZE = {
-    plane: 1, train: 1.05, helicopter: 1.2, boat: 1.35,
+    // The train is drawn at its natural size now — a locomotive and three
+    // carriages measured in the same units as a 72 px face — so it needs far
+    // less multiplying than a four-face sketch did.
+    plane: 1, train: 0.56, helicopter: 1.2, boat: 1.35,
     balloon: 1.4, rocket: 1.35, parachute: 1.5, car: 1.6,
   };
 
@@ -153,123 +156,13 @@
     return Math.min(r * FACE, gap * NEIGHBOUR);
   }
 
-  const VEHICLES = {
-    train: {
-      vb: [210, 66], seats: 4, colour: '#D9544D', speed: 67, lane: 'horizon', dir: 1, band: 0.045,
-      slots: [[24, 33, 11], [66, 33, 11], [108, 33, 11], [150, 33, 11]],
-      art: `<rect class="hull" x="6" y="18" width="36" height="28" rx="6"/>
-        <rect class="hull" x="48" y="18" width="36" height="28" rx="6"/>
-        <rect class="hull" x="90" y="18" width="36" height="28" rx="6"/>
-        <rect class="hull" x="132" y="18" width="36" height="28" rx="6"/>
-        <path class="hull" d="M174 46 V24 q0-8 8-8 h14 q6 0 6 6 v24 z"/>
-        <path class="solid" d="M180 16 h10 v-9 h-10 z"/>
-        <path class="thin" d="M6 12 H196"/>
-        <path d="M2 50 H204"/>
-        <circle class="solid" cx="18" cy="54" r="5"/><circle class="solid" cx="34" cy="54" r="5"/>
-        <circle class="solid" cx="60" cy="54" r="5"/><circle class="solid" cx="76" cy="54" r="5"/>
-        <circle class="solid" cx="102" cy="54" r="5"/><circle class="solid" cx="118" cy="54" r="5"/>
-        <circle class="solid" cx="144" cy="54" r="5"/><circle class="solid" cx="160" cy="54" r="5"/>
-        <circle class="solid" cx="186" cy="54" r="6"/>
-        <g class="smoke">
-          <circle class="puff" cx="185" cy="8" r="5"/>
-          <circle class="puff" cx="185" cy="8" r="5"/>
-          <circle class="puff" cx="185" cy="8" r="5"/>
-        </g>`,
-    },
-    boat: {
-      vb: [134, 74], seats: 2, colour: '#4FA3A5', speed: 47, lane: 'horizon', dir: -1, band: -0.055,
-      slots: [[38, 52, 10], [92, 52, 10]],
-      art: `<path class="hull" d="M14 42 H120 L104 64 H30 z"/>
-        <path class="glass" d="M66 38 V6 L104 34 z"/>
-        <path d="M66 4 V44"/>
-        <g class="wake">
-          <path class="thin" d="M-40 68 q12-7 22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0"/>
-        </g>
-        <g class="wake slow">
-          <path class="thin" d="M-40 62 q14-5 26 0 t26 0 t26 0 t26 0 t26 0 t26 0 t26 0"/>
-        </g>`,
-    },
-    plane: {
-      vb: [252, 62], seats: 3, colour: '#6E8BD6', speed: 98, lane: 'upper', dir: 1, band: -0.045,
-      slots: [[32, 32, 15], [80, 32, 15], [128, 32, 15]],
-      art: `<rect class="hull" x="6" y="12" width="124" height="40" rx="8"/>
-        <path class="thin" d="M130 32 H150"/>
-        <path class="hull" d="M150 32 q28-16 62-14 q14 1 20 14 q-6 13-20 14 q-34 2-62-14 z"/>
-        <path class="hull" d="M176 26 L168 4 h12 l18 22 z"/>
-        <path class="hull" d="M176 38 L168 60 h12 l18-22 z"/>
-        <path class="glass" d="M198 25 q11-2 18 7 q-7 9-18 7 z"/>`,
-    },
-    helicopter: {
-      vb: [190, 92], seats: 1, colour: '#5D7CA6', speed: 60, lane: 'upper', dir: 1, band: 0.06,
-      slots: [[70, 62, 15]],
-      art: `<path class="hull" d="M34 62 q0-30 36-30 q34 0 44 26 q2 6-4 10 H42 q-8 0-8-6 z"/>
-        <path class="hull" d="M112 54 L176 46 q8-1 8 6 q0 7-8 7 l-64 4 z"/>
-        <path class="hull" d="M40 72 q34 10 66 0 q-4 8-14 8 H54 q-10 0-14-8 z"/>
-        <path d="M70 32 V16"/>
-        <ellipse class="glass" cx="70" cy="12" rx="62" ry="5"/>
-        <circle class="thin" cx="180" cy="52" r="13"/>
-        <path class="thin" d="M180 39 V65 M167 52 H193"/>
-        <path class="thin" d="M46 84 H96"/>`,
-    },
-    car: {
-      vb: [116, 62], seats: 1, colour: '#E0A030', speed: 80, lane: 'lap', dir: 1,
-      slots: [[52, 32, 10]],
-      art: `<path class="hull" d="M6 48 L10 34 q3-9 14-9 h60 q11 0 15 9 l8 14 z"/>
-        <path class="glass" d="M24 32 q3-5 10-5 h38 q7 0 10 5 l3 8 H21 z"/>
-        <path class="hull" d="M2 46 H114 q4 0 4 5 v3 q0 4-4 4 H2 q-4 0-4-4 v-3 q0-5 4-5 z"/>
-        <g class="wheel"><circle class="solid" cx="28" cy="56" r="8"/>
-          <path class="spoke" d="M28 50 V62 M22 56 H34"/></g>
-        <g class="wheel"><circle class="solid" cx="88" cy="56" r="8"/>
-          <path class="spoke" d="M88 50 V62 M82 56 H94"/></g>`,
-    },
-    balloon: {
-      vb: [128, 118], seats: 2, colour: '#A96FA0', speed: 24, lane: 'rise',
-      slots: [[42, 101, 9], [86, 101, 9]],
-      art: `<path class="hull" d="M64 6 q40 0 40 40 q0 26-24 44 H48 q-24-18-24-44 q0-40 40-40 z"/>
-        <path class="thin" d="M64 6 q-16 20-16 44 q0 22 10 40"/>
-        <path class="thin" d="M64 6 q16 20 16 44 q0 22-10 40"/>
-        <path class="thin" d="M44 92 L52 104 M84 92 L76 104"/>
-        <path class="hull" d="M46 102 h36 q4 0 4 5 v10 q0 4-4 4 H46 q-4 0-4-4 v-10 q0-5 4-5 z"/>
-        <path class="thin" d="M46 110 H86"/>`,
-    },
-    parachute: {
-      vb: [108, 118], seats: 1, colour: '#6FA96B', speed: 29, lane: 'leaf',
-      slots: [[54, 100, 13]],
-      art: `<path class="hull" d="M8 52 q0-44 46-44 q46 0 46 44 q-20-10-46-10 q-26 0-46 10 z"/>
-        <path class="thin" d="M31 46 q6-30 23-38 M77 46 q-6-30-23-38"/>
-        <path class="thin" d="M8 52 L48 90 M54 42 L54 90 M100 52 L60 90"/>
-        <path class="hull" d="M40 86 h28 q5 0 5 6 v14 q0 6-5 6 H40 q-5 0-5-6 V92 q0-6 5-6 z"/>`,
-      pivot: [54, 26],
-    },
-    // NOT A VEHICLE. Somebody dancing across the bottom of the screen with
-    // their own face on, which is the whole joke — every other thing here is
-    // something you ride, and this one is a person having a very good time.
-    //
-    // The limbs are separate groups so each can swing about its own joint at
-    // its own tempo: arms off the shoulder, legs off the hip, and none of the
-    // durations a multiple of another, so the loop never lands in the same
-    // pose twice running and it does not read as a two-frame GIF.
-    dancer: {
-      vb: [96, 136], seats: 1, colour: '#D98CB3', speed: 42, lane: 'promenade', dir: 1,
-      slots: [[48, 26, 15]],
-      art: `<circle class="head" cx="48" cy="26" r="16"/>
-        <path class="torso" d="M48 44 V84"/>
-        <g class="limb armL"><path d="M48 56 L22 74"/><circle class="solid" cx="22" cy="74" r="3.5"/></g>
-        <g class="limb armR"><path d="M48 56 L74 74"/><circle class="solid" cx="74" cy="74" r="3.5"/></g>
-        <g class="limb legL"><path d="M48 84 L30 120"/><path class="thin" d="M30 120 H18"/></g>
-        <g class="limb legR"><path d="M48 84 L66 120"/><path class="thin" d="M66 120 H78"/></g>`,
-    },
-    rocket: {
-      vb: [120, 132], seats: 1, colour: '#C2703D', speed: 200, lane: 'launch',
-      slots: [[60, 34, 12]],
-      art: `<path class="hull" d="M60 4 q24 22 24 58 v20 H36 V62 q0-36 24-58 z"/>
-        <path class="hull" d="M36 66 L14 92 q-2 14 6 18 l16-14 z"/>
-        <path class="hull" d="M84 66 L106 92 q2 14-6 18 l-16-14 z"/>
-        <path class="hull" d="M36 82 h48 v14 q0 6-6 6 H42 q-6 0-6-6 z"/>
-        <path class="thin" d="M44 74 H76"/>
-        <path class="solid" d="M52 104 q8 20 8 26 q0-6 8-26 z"/>`,
-    },
-  };
+  // The artwork and rigging live in vehicles.js. flights.js keeps scheduling,
+  // faces, paths, the parade and the frame loop; a vehicle keeps what it looks
+  // like and how its own parts move. The split is what lets check-vehicles
+  // reason about artwork without booting the whole module.
+  const { VEHICLES, DEFS, RAIL: RAIL_UNITS } = globalThis.shabbosVehicles;
+  const K = globalThis.shabbosKinetics;
+
 
   /* Paths ----------------------------------------------------------------- */
   // p is 0..1 of the journey. Returns position in px plus rotation.
@@ -444,6 +337,56 @@
 
   /* Flight ---------------------------------------------------------------- */
 
+  // Smoke lives in the world layer at screen coordinates, so the vehicle moves
+  // away from it. Drawn as plain circles: no filters, which are slow on iPad
+  // Safari and are what a glow would otherwise cost.
+  function stepSmoke(rig, dt) {
+    const list = rig.smoke.step(dt, { drag: 0.97 });
+    const w2 = ensureWorld();
+    if (!w2) return;
+    if (!rig.puffNodes) rig.puffNodes = [];
+    while (rig.puffNodes.length < list.length) {
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('class', 'puff');
+      w2.puffs.appendChild(c);
+      rig.puffNodes.push(c);
+    }
+    rig.puffNodes.forEach((node, i) => {
+      const p = list[i];
+      if (!p) { node.style.display = 'none'; return; }
+      const age = p.age / p.life;
+      node.style.display = '';
+      // Where it was RELEASED, carried on the node. A particle belonging to the
+      // air rather than to the vehicle is the whole claim being made here, and
+      // the only honest way to check it is against the spot it came from.
+      if (node.dataset.x0 === undefined || node.dataset.born !== String(p.born)) {
+        node.dataset.x0 = (p.x0 ?? p.x).toFixed(1);
+        node.dataset.born = String(p.born);
+      }
+      node.setAttribute('cx', p.x.toFixed(1));
+      node.setAttribute('cy', p.y.toFixed(1));
+      node.setAttribute('r', (p.size + (p.grow ?? 0) * age).toFixed(1));
+      node.style.opacity = (0.42 * (1 - age)).toFixed(2);
+    });
+  }
+
+  // ONE <defs> AND ONE PARTICLE CANVAS, both in the flyway layer, both made
+  // once. The gradients are shared because ids cannot be: two trains in a
+  // parade would duplicate them and removing the first would take the second's
+  // paint with it. The particle canvas is shared because smoke, once it leaves
+  // the funnel, belongs to the air rather than to the train — it has to outlive
+  // the vehicle's own element and stay where it was released.
+  let world = null;
+  function ensureWorld() {
+    if (world || !layer) return world;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'world');
+    svg.innerHTML = `<defs>${DEFS}</defs><g class="puffs"></g><g class="rails"></g>`;
+    layer.appendChild(svg);
+    world = { svg, puffs: svg.querySelector('.puffs'), rails: svg.querySelector('.rails') };
+    return world;
+  }
+
   function build(name, riders) {
     const v = VEHICLES[name];
     const [vw, vh] = v.vb;
@@ -499,13 +442,75 @@
     el.style.setProperty('--vs', scale);
     layer.appendChild(el);
 
+    // THE RIG: what a vehicle's update() is handed. Queries are cached by the
+    // vehicle itself on its first frame; `mem` is its own scratch space.
+    const [vw, vh] = v.vb;
+    const svg = el.querySelector('svg');
+    const imgs = [...el.querySelectorAll('img')];
+    const rig = {
+      el,
+      svg,
+      mem: {},
+      q: (sel) => svg.querySelector(sel),
+      qa: (sel) => [...svg.querySelectorAll(sel)],
+      seat: (i) => imgs[i] ?? null,
+      smoke: K.particles(),
+      // Artwork coordinates to screen coordinates. The element is translated to
+      // the path point, centred, then scaled, so a point in the viewBox lands
+      // this far from that centre.
+      point: (ax, ay) => ({
+        x: rig.at.x + (ax - vw / 2) * scale,
+        y: rig.at.y + (ay - vh / 2) * scale,
+      }),
+      at: { x: 0, y: 0 },
+    };
+
+    // Track, laid along the lane once and left alone: the train crosses it, it
+    // does not travel with the train.
+    let rails = null;
+    if (v.track) {
+      const w2 = ensureWorld();
+      if (w2) {
+        const y = LANES[lane](0.5, v, W, H).y + (RAIL_UNITS - vh / 2) * scale;
+        rails = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        rails.setAttribute('class', 'track');
+        rails.innerHTML = `<path class="rail" d="M0 ${y.toFixed(1)} H${W}"/>`
+          + `<path class="sleepers" stroke-dasharray="${(7 * scale).toFixed(1)} ${(11 * scale).toFixed(1)}" `
+          + `d="M0 ${(y + 5 * scale).toFixed(1)} H${W}"/>`;
+        w2.rails.appendChild(rails);
+      }
+    }
+
     const t0 = performance.now();
+    let last = null;
     (function step(now) {
       const p = (now - t0) / ms;
-      if (p >= 1) { el.remove(); return; }
-      const { x, y, rot } = LANES[lane](p, v, W, H);
-      el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) `
-        + `rotate(${rot}deg) scale(${scale})`;
+      if (p >= 1) { el.remove(); rails?.remove(); return; }
+      const pose = LANES[lane](p, v, W, H);
+      el.style.transform = `translate(${pose.x}px, ${pose.y}px) translate(-50%, -50%) `
+        + `rotate(${pose.rot}deg) scale(${scale})`;
+      rig.at = pose;
+
+      // Velocity and acceleration by differencing the path, so every vehicle
+      // gets physical inputs without a single lane having to know about them.
+      // On the first frame there is no previous sample: seed from the pose and
+      // skip the derivatives rather than dividing by a dt of zero.
+      const dt = K.clampDt(last ? (now - last.t) / 1000 : 0);
+      if (!last) {
+        last = { t: now, x: pose.x, y: pose.y, speed: 0, dist: 0 };
+      } else if (dt > 0) {
+        const vx = (pose.x - last.x) / dt;
+        const vy = (pose.y - last.y) / dt;
+        const speed = Math.hypot(vx, vy);
+        const accel = (speed - last.speed) / dt;
+        const dist = last.dist + speed * dt;
+        last = { t: now, x: pose.x, y: pose.y, speed, dist };
+        if (v.update) {
+          try { v.update(rig, { ...pose, speed, accel, dist, p, scale }, dt); }
+          catch (err) { console.error(err); }
+        }
+      }
+      stepSmoke(rig, dt);
       requestAnimationFrame(step);
     })(t0);
 
@@ -740,6 +745,11 @@
     layer.className = 'flyway';
     layer.setAttribute('aria-hidden', 'true');
     (document.getElementById('screen') ?? document.body).appendChild(layer);
+    // Before any flight, so the world sits UNDER them and — just as much to the
+    // point — so a flight is still the last child of the layer. Creating this
+    // lazily on the first puff put it after the first vehicle, and the suites
+    // that reach for `.flight:last-child` quietly stopped finding one.
+    ensureWorld();
     mountSettings();
     // One line for the status panel in Settings. This module keeps its own
     // state and its own storage and reads nothing from app.js; this is the only
@@ -764,10 +774,14 @@
       // test cannot watch one — sampling the rendered element only ever sees
       // the first second or two of it, which on the lap circuit is the opening
       // straight where nothing turns at all.
-      path: (name, p, W, H) => {
+      path: (name, p, W, H, side = 0.82) => {
         const v = VEHICLES[name];
         if (!v) return null;
-        return LANES[name === 'helicopter' ? 'hover' : v.lane](p, v, W, H);
+        // `side` is chosen per flight in fly(), not stored on the definition, so
+        // asking the definition for a path gave NaN on every lane that uses it —
+        // the rocket, the parachute and the balloon all go up one side or the
+        // other. A default keeps the hook usable; callers that care pass one.
+        return LANES[name === 'helicopter' ? 'hover' : v.lane](p, { ...v, side }, W, H);
       },
       // The hourly parade, on demand. Waiting up to an hour to see whether it
       // works is no way to check it, and a test cannot wait at all.

@@ -33,7 +33,7 @@ const PREFIX = 'shabbos-clock-';
 const CACHE = `${PREFIX}${VERSION}`;
 const APP = ['util.js', 'calendar.js', 'settings.js', 'minyanim.js', 'weather.js', 'sports.js', 'display.js', 'app.js'];
 const FILES = ['./', 'index.html', 'styles.css', ...APP,
-  'flights.css', 'flights.js', 'kinetics.js',
+  'flights.css', 'flights.js', 'kinetics.js', 'vehicles.js',
   'vendor/kosher-zmanim.min.js', 'data/shuls.json', 'manifest.webmanifest',
   'icons/icon-180.png'];
 
@@ -44,7 +44,7 @@ const FILES = ['./', 'index.html', 'styles.css', ...APP,
 // kinetics.js is coupled for the same reason flights.js is: flights.js calls
 // into it by name, so serving one generation's caller against another's maths
 // breaks it exactly as a script/stylesheet mismatch would.
-const COUPLED = new RegExp(`/(${[...APP, 'styles.css', 'index.html', 'flights.js', 'flights.css', 'kinetics.js']
+const COUPLED = new RegExp(`/(${[...APP, 'styles.css', 'index.html', 'flights.js', 'flights.css', 'kinetics.js', 'vehicles.js']
   .map((f) => f.replace('.', '\\.')).join('|')})$`);
 // Long enough for a slow wifi handshake, short enough that a dead network never
 // leaves the wall blank: past this we show the cached generation instead.

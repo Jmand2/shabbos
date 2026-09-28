@@ -1,4 +1,13 @@
 node_modules/
 .DS_Store
 faces-src/
-screenshots/
+# screenshots/* rather than screenshots/: git cannot re-include anything inside
+# a directory it has excluded, so the negation below is dead unless the
+# exclusion names the CONTENTS.
+screenshots/*
+# ...except the vehicle references. These are the record of what a redraw
+# actually looks like, sharp and blurred to viewing distance, and the room test
+# is the gate that decides whether a vehicle reads at all. A handoff that says
+# "look at them" needs them to be there to look at.
+!screenshots/vehicles/
+!screenshots/vehicles/**
