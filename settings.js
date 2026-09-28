@@ -85,8 +85,19 @@ function sourceSummary(entry) {
   if (!src) return entry?.source === 'shul' ? 'site' : 'agg';
   const parts = [];
   for (const [g, label] of [['shacharis', 'Shacharis'], ['mincha', 'Mincha'],
-    ['maariv', 'Maariv'], ['edge', 'Candles']]) {
+    ['maariv', 'Maariv']]) {
     if (src[g]) parts.push(`${label} ${SOURCE_SHORT[src[g]] ?? src[g]}`);
+  }
+  // The edge is not always candle lighting. This said "Candles" for every one
+  // of them, so a hand-entered HAVDALAH — which is what a Sunday night of a
+  // three-day chag carries — was reported as a manual candle time. Named from
+  // what the entry actually holds.
+  if (src.edge) {
+    const keys = Object.keys(entry.edge ?? {});
+    const what = keys.length
+      ? keys.map((k) => (k === 'havdalah' ? 'Havdalah' : 'Candles')).join('/')
+      : 'Edge';
+    parts.push(`${what} ${SOURCE_SHORT[src.edge] ?? src.edge}`);
   }
   return parts.join(' · ') || 'none';
 }
@@ -97,8 +108,16 @@ function shulSources(now, days) {
       const entry = minyanim.days?.[isoOf(day)]?.[s.slug];
       const label = dayName(now, day).label.split(' · ')[0];
       if (!entry) return `${label} —`;
-      return `${label} ${sourceSummary(entry)}`
-        + ` ${ago(entry.fetched_at ?? minyanim.generated_at)}`;
+      // fetched_at belongs to the SCRAPE. Appending it to a line that includes
+      // hand-entered services said a schedule transcribed from a printed
+      // calendar in September was twenty minutes old because the scraper had
+      // refreshed the Shacharis beside it. The typed part carries the day it
+      // was typed.
+      const live = entry.hand && Object.keys(entry.sources ?? {})
+        .every((k) => entry.sources[k] === 'manual')
+        ? '' : ` ${ago(entry.fetched_at ?? minyanim.generated_at)}`;
+      const typed = entry.hand?.entered_at ? ` · typed ${entry.hand.entered_at}` : '';
+      return `${label} ${sourceSummary(entry)}${live}${typed}`;
     });
     return [s.name, parts.join('  ·  ')];
   });

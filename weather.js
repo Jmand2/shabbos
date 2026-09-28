@@ -343,24 +343,6 @@ function spanLabel(run) {
 // unit and is mostly the model's own noise.
 const WEATHER_MM_FLOOR = 0.2;
 
-// Millimetres in, the reader's own unit out — converted on screen like the
-// temperatures, so the units toggle still costs no refetch and still works
-// with no network at all.
-function amountOf(mm) {
-  const v = Number(mm);
-  if (!Number.isFinite(v) || v < WEATHER_MM_FLOOR) return null;
-  if (settings.units !== 'F') {
-    return `<span class="wpop wamt">${v < 10 ? v.toFixed(1) : Math.round(v)}mm</span>`;
-  }
-  const inches = v / 25.4;
-  // Two decimals below a tenth, one above: 0.04" and 0.3" rather than 0.04"
-  // and 0.30", which reads as more precision than a forecast has.
-  const shown = inches < 0.1 ? inches.toFixed(2) : inches.toFixed(1);
-  return `<span class="wpop wamt">${shown}\u2033</span>`;
-}
-
-// Above this a stated amount is a forecast rather than a hypothetical.
-const WEATHER_AMOUNT_POP = 55;
 
 // ALWAYS THE CHANCE, NEVER THE AMOUNT.
 //
@@ -373,8 +355,9 @@ const WEATHER_AMOUNT_POP = 55;
 // The amount has not gone: it is in the note, in words, where "a fifth of an
 // inch" can be said once about the spell rather than twelve times about its
 // hours.
-// The same number amountOf() renders, as plain text for the note. Below the
-// floor it is not worth a word.
+// How much, as plain text for the note. The hourly tiles print a chance and
+// only a chance — this is the one place an amount is stated, once, about the
+// whole spell. Below the floor it is not worth a word.
 function amountText(mm) {
   const v = Number(mm);
   if (!Number.isFinite(v) || v < WEATHER_MM_FLOOR) return '';
@@ -392,8 +375,11 @@ function wetCell(r) {
 function weatherNote(rows) {
   if (rows.length < 2) return '';
 
-  const gust = Math.max(0, ...rows.map((r) => Number(r.gust) || 0));
-  const windy = gust >= NOTE_GUST_MPH;
+  // Scoped per spell below, not once across the whole window. Taking the
+  // maximum over every hour and then appending it to a sentence about 5-7pm
+  // said "Rain likely 5-7pm · gusts 35 mph" when the 35 was at eleven at night:
+  // two true facts printed as one, which reads as a claim about the rain.
+  const gustIn = (run) => Math.max(0, ...run.map((r) => Number(r.gust) || 0));
 
   // Rain first. It is the one that changes whether you carry something.
   const wet = longestRun(rows, (r) => Number(r.pop) >= NOTE_WET);
@@ -412,16 +398,21 @@ function weatherNote(rows) {
     const bits = [`${what} ${how} ${spanLabel(wet)}`];
     const much = amountText(total);
     if (much) bits.push(much);
-    if (windy) bits.push(`gusts ${Math.round(gust)} mph`);
+    // Only gusts DURING the rain. A blustery night after a wet afternoon is a
+    // separate fact, and rain already won the one line this note gets.
+    const rainGust = gustIn(wet);
+    if (rainGust >= NOTE_GUST_MPH) bits.push(`gusts ${Math.round(rainGust)} mph`);
     return bits.join(' \u00b7 ');
   }
 
-  // Wind on its own, when there is no rain to lead with.
-  if (windy) {
-    const run = longestRun(rows, (r) => Number(r.gust) >= NOTE_GUST_MPH);
-    return run.length && run[0] !== rows[0]
-      ? `Windy from ${noteHour(run[0].at)} \u00b7 gusts ${Math.round(gust)} mph`
-      : `Windy \u00b7 gusts ${Math.round(gust)} mph`;
+  // Wind on its own, when there is no rain to lead with. The figure is the
+  // strongest gust INSIDE the spell being named, for the same reason.
+  const blow = longestRun(rows, (r) => Number(r.gust) >= NOTE_GUST_MPH);
+  if (blow.length) {
+    const peak = Math.round(gustIn(blow));
+    return blow[0] !== rows[0]
+      ? `Windy from ${noteHour(blow[0].at)} \u00b7 gusts ${peak} mph`
+      : `Windy \u00b7 gusts ${peak} mph`;
   }
 
   // Then cold, which is the other thing you dress for. Measured on the

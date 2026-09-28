@@ -394,8 +394,16 @@ console.log('\n=== G4: "Times shown per shul" actually caps ===');
     // havdalah are rows in the same card but they are not something you daven,
     // and counting them would mean choosing "4 times" and getting three.
     const times = w.document.querySelectorAll('.card .time:not(.edgetime)').length;
-    ok(times > 0 && times <= Number(cap),
-      `perShul=${cap} yields ${times} minyan times (<= ${cap})`);
+    // EXACTLY the number asked for, not merely no more than it.
+    //
+    // "<= cap" is the assertion that let the regression through: when whole
+    // services were briefly enforced under an explicit count too, a "Next 4"
+    // took three Shacharis, skipped a two-time Mincha because it would have
+    // made five, and returned THREE — which passes "<= 4" without complaint.
+    // Bnai Yeshurun have far more than twelve times ahead of them at 5am, so
+    // the count is always reachable here.
+    ok(times === Number(cap),
+      `perShul=${cap} yields exactly ${cap} minyan times (got ${times})`);
   }
   // A stored value from the old option set must fall back, not blank the card.
   // The default is Auto now, and Auto with no geometry to measure — which is
@@ -403,11 +411,15 @@ console.log('\n=== G4: "Times shown per shul" actually caps ===');
   const { w } = await boot('2026-09-22T05:00:00-04:00',
     { settings: { shuls: ['bnai-yeshurun'], perShul: '3' } });
   const times = w.document.querySelectorAll('.card .time:not(.edgetime)').length;
-  // Auto's ceiling follows how many DAYS the board reaches — eight a day — so
-  // this bound is no longer a single number. The assertion is that a stale
-  // value falls back to a working Auto rather than to NaN or nothing.
-  ok(times > 0 && times <= 8 * 4,
-    `a stale perShul="3" falls back to Auto, not NaN (${times} times)`);
+  // Compared against Auto ITSELF rather than a number. Auto's ceiling is
+  // services per day now, so any constant here is a guess that goes stale the
+  // next time the ceiling moves — and the property under test was never a
+  // count. It is that a value no longer in the list behaves exactly as Auto.
+  const { w: autoW } = await boot('2026-09-22T05:00:00-04:00',
+    { settings: { shuls: ['bnai-yeshurun'], perShul: 'auto' } });
+  const autoTimes = autoW.document.querySelectorAll('.card .time:not(.edgetime)').length;
+  ok(times > 0 && times === autoTimes,
+    `a stale perShul="3" behaves exactly as Auto (${times} vs ${autoTimes})`);
   ok(w.document.getElementById('perShul').value === 'auto',
     'and the settings sheet shows Auto rather than a blank select');
 }
@@ -858,6 +870,37 @@ console.log('\n=== Y1d: a service is shown whole or not at all ===');
     `including the ones that used to fall off the end (${shown.join(' ')})`);
 }
 
+console.log('\n=== Y1e: Auto keeps every day, whatever its first service costs ===');
+{
+  // The whole-service rewrite made only the FIRST day's first service
+  // unconditional, so a later day whose opening service crossed the internal
+  // cap vanished entirely — which is the exact failure the per-day allocation
+  // was written to prevent, reintroduced by the thing meant to improve it.
+  //
+  // Auto's cap counts SERVICES PER DAY now, so this cannot arise: every day
+  // gets its share and the fit loop decides whether the result is readable.
+  const many = { generated_at: new Date().toISOString(), days: {} };
+  for (const [iso, base] of [['2027-04-22', 5], ['2027-04-23', 6], ['2027-04-24', 7]]) {
+    many.days[iso] = { 'beth-aaron': {
+      shacharis: Array.from({ length: 5 }, (_, i) => ({
+        label: 'Shacharis', time: `${base + i}:00 AM` })),
+      mincha: [{ label: 'Mincha', time: '1:30 PM' }],
+      maariv: [{ label: 'Maariv', time: '8:45 PM' }],
+      fetched_at: '2027-04-21T06:00:00Z' } };
+  }
+  const { w } = await boot('2027-04-21T15:00:00-04:00',
+    { minyanim: many, settings: { shuls: ['beth-aaron'] } });
+  const groups = groupsOn(w);
+  ok(groups.length >= 3,
+    `every day of the chag is on the card (${groups.join(' / ') || 'none'})`);
+  // And still whole: five Shacharis or none, never two of them.
+  const times = [...w.document.querySelectorAll('.card .time:not(.edgetime)')]
+    .map((n) => n.textContent.trim());
+  const mornings = times.filter((t) => /am$/.test(t)).length;
+  ok(mornings % 5 === 0,
+    `and no morning is shown in part (${mornings} am times)`);
+}
+
 console.log('\n=== Y2: an ordinary week is unchanged ===');
 {
   const { w } = await boot('2027-04-13T15:00:00-04:00',
@@ -1102,6 +1145,44 @@ console.log('\n=== E0b: a real schedule that has been and gone still says so ===
     { minyanim: past, settings: { shuls: ['beth-aaron'] } });
   const card = w.document.querySelector('.card').textContent;
   ok(/Done for today/i.test(card), `a real schedule that has passed says so (${card.slice(0, 60)})`);
+}
+
+console.log('\n=== S5: the footer credits who actually supplied the times ===');
+{
+  // The scraper moved provenance into entry.sources, where a day can be part
+  // shul and part aggregator. The footer went on reading entry.source — a key
+  // many entries no longer carry — and `undefined === 'shul'` is false, so a
+  // shul whose every service came from its own site was credited to
+  // teaneckminyanim. That was live on the board, not hypothetical.
+  const own = { generated_at: new Date().toISOString(), days: {
+    '2026-09-22': {
+      // The shape the scraper writes now: no entry.source at all.
+      'beth-aaron': { shacharis: [{ label: 'Shacharis', time: '7:00 AM' }],
+        mincha: [{ label: 'Mincha', time: '6:30 PM' }],
+        sources: { shacharis: 'shul', mincha: 'shul' }, fetched_at: '2026-09-22T06:00:00Z' },
+    },
+  } };
+  const { w } = await boot('2026-09-22T05:00:00-04:00',
+    { minyanim: own, settings: { shuls: ['beth-aaron'] } });
+  const foot = $(w, 'freshness').textContent;
+  ok(/own website/.test(foot) && !/teaneckminyanim/.test(foot),
+    `all-shul days credit the shuls alone (${foot.slice(0, 60)})`);
+}
+{
+  // And a mixed board still names both.
+  const mixed = { generated_at: new Date().toISOString(), days: {
+    '2026-09-22': {
+      'beth-aaron': { shacharis: [{ label: 'Shacharis', time: '7:00 AM' }],
+        mincha: [{ label: 'Mincha', time: '6:30 PM' }],
+        sources: { shacharis: 'shul', mincha: 'aggregator' },
+        fetched_at: '2026-09-22T06:00:00Z' },
+    },
+  } };
+  const { w } = await boot('2026-09-22T05:00:00-04:00',
+    { minyanim: mixed, settings: { shuls: ['beth-aaron'] } });
+  const foot = $(w, 'freshness').textContent;
+  ok(/teaneckminyanim/.test(foot),
+    `a day assembled from both names both (${foot.slice(0, 70)})`);
 }
 
 console.log('\n=== O: the board follows the order the person chose ===');

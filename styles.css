@@ -782,13 +782,21 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
    quietest surface of the three. */
 .weather.sports {
   /* A touch more presence than the weather band, so a glance can tell which of
-     the two is currently up without reading either. */
-  background: color-mix(in srgb, var(--panel) 82%, var(--accent) 6%);
-  background:
+     the two is up without reading either.
+
+     background-COLOR, not the shorthand. This was written as `background:` and
+     the rule below it is also a `background:` shorthand — which resets every
+     background property, colour included — so the tint was discarded the moment
+     it was set and the band never looked any different. */
+  background-color: color-mix(in srgb, var(--panel) 88%, var(--accent) 8%);
+  /* The gradient as an IMAGE over that colour. It used to be a `background:`
+     shorthand ending in var(--panel), which set the colour back to plain panel
+     a line after the tint was applied — so the band the scores borrow looked
+     exactly like the weather band it had replaced. */
+  background-image:
     linear-gradient(to bottom,
       color-mix(in srgb, var(--accent) 6%, transparent),
-      color-mix(in srgb, var(--accent) 2%, transparent)),
-    var(--panel);
+      color-mix(in srgb, var(--accent) 2%, transparent));
   border-color: color-mix(in srgb, var(--rule) 70%, var(--accent));
 }
 .snow {

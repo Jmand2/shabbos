@@ -400,7 +400,7 @@ function renderShuls(now, days) {
 
   // Counted per card, not pooled. Averaging across the board let one heavy shul
   // hide behind two light ones and clip its own times.
-  const build = (cap, withEdges = true) => {
+  const build = (cap, withEdges = true, maxDays = Infinity) => {
   const perCardLines = [];
   let lines = 0;
 
@@ -427,7 +427,19 @@ function renderShuls(now, days) {
       if (!grouped.has(k)) grouped.set(k, []);
       grouped.get(k).push(r);
     }
-    const ahead = capRows(grouped, cap, { whole: settings.perShul === 'auto' });
+    // FEWER DAYS IS THE LAST LEVER, and Auto needs one.
+    //
+    // A service is indivisible now, so the smallest thing Auto can show is one
+    // whole service per day per shul — and on the smallest supported window
+    // that is still too much: 900x620 came out at 17px against a 20px floor.
+    // Something has to give, and the honest order is services per day, then the
+    // candle rows, then DAYS. Two days shown completely beats three days with
+    // their mornings cut in half: the board stays true, it just reaches less far.
+    const window = maxDays === Infinity ? grouped
+      : new Map([...grouped].slice(0, Math.max(1, maxDays)));
+    // Auto counts SERVICES per day; an explicit setting counts TIMES. Two
+    // different questions — see capRuns/capTimes.
+    const ahead = auto ? capRuns(window, cap) : capTimes(window, cap);
     const next = ahead[0];
 
     const byDay = new Map();
@@ -532,12 +544,7 @@ function renderShuls(now, days) {
   // cannot fit that many at any size it shows fewer rather than clipping them,
   // because a clipped time is worse than an absent one.
   const auto = settings.perShul === 'auto';
-  // How many days the board actually reaches — one on a Tuesday, three on the
-  // eve of a long chag. The ceiling follows it.
-  const spanDays = Math.max(1, days.length);
-  const ceiling = auto
-    ? Math.max(AUTO_MAX, AUTO_MAX_PER_DAY * spanDays)
-    : Number(settings.perShul);
+  const ceiling = auto ? AUTO_MAX_RUNS : Number(settings.perShul);
   const floor = auto ? AUTO_MIN_PX : 0;
   // Each probe REBUILDS every card and then measures it, which is the most
   // expensive thing the board does and the reason the search is a binary one.
@@ -546,11 +553,11 @@ function renderShuls(now, days) {
   // on — two full rebuilds per render that had already been performed.
   const probed = new Map();
   let painted = null;
-  const goodAt = (cap, withEdges = true) => {
-    const memo = `${cap}|${withEdges}`;
+  const goodAt = (cap, withEdges = true, maxDays = Infinity) => {
+    const memo = `${cap}|${withEdges}|${maxDays}`;
     if (probed.has(memo)) return probed.get(memo);
     painted = memo;
-    const r = build(cap, withEdges);
+    const r = build(cap, withEdges, maxDays);
     // No geometry to measure (jsdom, or a board with no times on it) — take the
     // requested count at face value rather than searching against nothing.
     const good = r.px === null ? true : (r.fitted && r.px >= floor);
@@ -559,12 +566,14 @@ function renderShuls(now, days) {
   };
 
   // Only if the board is not already showing it.
-  const paint = (cap, withEdges = true) => {
-    if (painted !== `${cap}|${withEdges}`) build(cap, withEdges);
+  const paint = (cap, withEdges = true, maxDays = Infinity) => {
+    if (painted !== `${cap}|${withEdges}|${maxDays}`) build(cap, withEdges, maxDays);
   };
 
   const search = (withEdges) => {
-    let lo = AUTO_MIN_ROWS;
+    // One service per day is the floor in Auto; two times is the floor under an
+    // explicit count. Different units, so different numbers.
+    let lo = auto ? 1 : AUTO_MIN_ROWS;
     let hi = ceiling;
     while (lo < hi) {
       const mid = Math.ceil((lo + hi) / 2);
@@ -583,7 +592,18 @@ function renderShuls(now, days) {
   // one fewer line. They go last, and only here.
   if (auto && !goodAt(rowsShown, true)) {
     if (goodAt(ceiling, false)) { paintCountdowns(now); return; }
-    paint(search(false), false);
+    const withoutEdges = search(false);
+    if (goodAt(withoutEdges, false)) {
+      paint(withoutEdges, false);
+      paintCountdowns(now);
+      return;
+    }
+    // Still not readable. Give up DAYS, furthest first, rather than start
+    // cutting services in half.
+    for (let d = days.length - 1; d >= 1; d -= 1) {
+      if (goodAt(1, false, d)) { paint(1, false, d); paintCountdowns(now); return; }
+    }
+    paint(1, false, 1);
     paintCountdowns(now);
     return;
   }
@@ -634,8 +654,10 @@ const AUTO_MIN_PX = 22;
 // fit loop make that decision honestly and will still refuse anything that
 // cannot be read; an arbitrary count sitting above them was making it for a
 // different reason and getting it wrong.
-const AUTO_MAX_PER_DAY = 8;
-const AUTO_MAX = 14;          // the one-day ceiling, kept for a single-day board
+// Auto's ceiling is SERVICES ON THE CARD — three days of a chag rarely reach a
+// dozen and never this. A sanity stop, not a limit anything real meets: the px
+// floor and the fit loop are what decide how much goes on the board.
+const AUTO_MAX_RUNS = 24;
 const AUTO_MIN_ROWS = 2;
 
 function fitBoard() {
@@ -876,7 +898,17 @@ function renderFreshness(now = new Date(), days = [now]) {
   for (const day of days) {
     for (const shul of shown) {
       const entry = minyanim.days?.[isoOf(day)]?.[shul.slug];
-      if (entry) sources.add(entry.source === 'shul' ? 'shul' : 'aggregator');
+      // PER SERVICE. The scraper moved provenance into entry.sources, where a
+      // day can legitimately be part shul and part aggregator, and this went on
+      // reading entry.source — a key many entries no longer carry at all. On
+      // today's data both shuls' times came from their own sites and the footer
+      // still credited teaneckminyanim, because Ohr Saadya had no entry.source
+      // and undefined is not 'shul'. The old key stays as a fallback for a file
+      // written before the migration.
+      if (!entry) continue;
+      const per = Object.values(entry.sources ?? {});
+      if (per.length) for (const v of per) sources.add(v === 'shul' ? 'shul' : v === 'manual' ? 'manual' : 'aggregator');
+      else sources.add(entry.source === 'shul' ? 'shul' : 'aggregator');
     }
   }
   const source = !sources.has('shul') ? 'teaneckminyanim.com'
