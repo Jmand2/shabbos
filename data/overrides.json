@@ -77,6 +77,68 @@
           }
         }
       }
+    },
+    {
+      "shul": "beth-aaron",
+      "covers": "2026-10-02/2026-10-04",
+      "source": "Congregation Beth Aaron monthly calendar, September 2026 / Tishrei 5787 (printed 2026-09-02), trailing week and the Simchas Torah inset, linked from bethaaron.org",
+      "entered_at": "2026-09-28",
+      "note": "Hoshana Rabbah, Shemini Atzeres and Simchas Torah. Mincha, Maariv and the edges only \u2014 teaneckminyanim carries this shul's Shacharis for these days and not its afternoons, which is the same gap it had over Succos. Shacharis is deliberately NOT here: the calendar prints four for Shemini Atzeres and there are two, so the live source is the better record and fill-only leaves it alone. Cross-check: the calendar states Havdalah 7:27pm on 10/4, and Maariv 7:18pm plus this shul's havdalahAfterMaariv of 9 gives 7:27 exactly.",
+      "days": {
+        "2026-10-02": {
+          "mincha": [
+            {
+              "label": "Mincha / Kabbalas Shabbos",
+              "time": "6:20 PM"
+            }
+          ],
+          "edge": {
+            "candles": "6:18 PM"
+          }
+        },
+        "2026-10-03": {
+          "mincha": [
+            {
+              "label": "Early Mincha",
+              "time": "1:45 PM"
+            },
+            {
+              "label": "Mincha",
+              "time": "6:10 PM"
+            }
+          ],
+          "maariv": [
+            {
+              "label": "Maariv",
+              "time": "7:18 PM"
+            }
+          ],
+          "edge": {
+            "candles": "7:27 PM"
+          }
+        },
+        "2026-10-04": {
+          "mincha": [
+            {
+              "label": "Early Mincha",
+              "time": "1:45 PM"
+            },
+            {
+              "label": "Mincha",
+              "time": "6:10 PM"
+            }
+          ],
+          "maariv": [
+            {
+              "label": "Maariv",
+              "time": "7:18 PM"
+            }
+          ],
+          "edge": {
+            "havdalah": "7:27 PM"
+          }
+        }
+      }
     }
   ]
 }
