@@ -76,6 +76,62 @@ const ok = (cond, msg, extra = '') => {
   else { fail += 1; console.log('  FAIL', msg, extra); }
 };
 
+/* THE LISTS THAT HAVE TO AGREE ------------------------------------------- */
+//
+// The shell is written down in three places — sw.js precaches it, sw.js couples
+// it, and this file asserts on it — and index.html is what actually loads it.
+// Every one of them is edited by hand, and a file added to the page and left
+// out of one list fails in a way none of the runtime checks can see: it is
+// simply fetched from the network, outside the generation, and the atomic
+// promise quietly stops covering it. kinetics.js and vehicles.js arrived that
+// way and had to be added to all three by hand.
+//
+// Not consolidated into one shared file on purpose: sw.js is a worker that must
+// know its shell before it can fetch anything, and reading the list over the
+// network first would put a request in front of the atomic addAll that the
+// whole model rests on. Kept in three places and checked to be the same.
+{
+  const sw = await readFile(join(ROOT, 'sw.js'), 'utf8');
+  const html = await readFile(join(ROOT, 'index.html'), 'utf8');
+  const list = (name) => {
+    const m = new RegExp(`const ${name} = \\[([\\s\\S]*?)\\]`).exec(sw);
+    return m ? [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]) : [];
+  };
+  const APP = list('APP');
+  const FILES = list('FILES').flatMap((f) => (f === '...APP' ? APP : [f]));
+  // FILES splices APP in with a spread, which the quote scan above cannot see.
+  const precached = new Set([...FILES, ...APP]);
+  const coupledSrc = /const COUPLED = new RegExp\(`\/\(\$\{\[([\s\S]*?)\]/.exec(sw);
+  const coupled = new Set([
+    ...APP,
+    ...(coupledSrc ? [...coupledSrc[1].matchAll(/'([^']+)'/g)].map((x) => x[1]) : []),
+  ]);
+
+  // What the page actually loads, minus the vendored library, which is third
+  // party and versioned by its filename rather than by our generation.
+  const loaded = [
+    ...[...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]),
+    ...[...html.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/g)].map((m) => m[1]),
+    ...[...html.matchAll(/<link[^>]+href="([^"]+)"[^>]+rel="stylesheet"/g)].map((m) => m[1]),
+  ].filter((f) => !/^https?:/.test(f));
+
+  const missing = loaded.filter((f) => !precached.has(f));
+  ok(!missing.length, `every file index.html loads is precached (${missing.join(', ') || 'all of them'})`);
+
+  const ours = loaded.filter((f) => !f.startsWith('vendor/'));
+  const uncoupled = ours.filter((f) => !coupled.has(f));
+  ok(!uncoupled.length,
+    `and every one of ours moves with the generation (${uncoupled.join(', ') || 'all of them'})`);
+
+  const want = [...coupled].filter((f) => f !== 'index.html').sort();
+  const have = [...SHELL].filter((f) => f !== 'index.html').sort();
+  const drift = [
+    ...want.filter((f) => !have.includes(f)).map((f) => `+${f}`),
+    ...have.filter((f) => !want.includes(f)).map((f) => `-${f}`),
+  ];
+  ok(!drift.length, `and this suite checks exactly that set (${drift.join(' ') || 'no drift'})`);
+}
+
 // Asks the PAGE which generation each shell file came from. Fetching from the
 // page means the request goes through the worker, which is the thing under test.
 const GENS = (files) => Promise.all(files.map(async (f) => {

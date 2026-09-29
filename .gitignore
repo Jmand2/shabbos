@@ -11,3 +11,7 @@ screenshots/*
 # "look at them" needs them to be there to look at.
 !screenshots/vehicles/
 !screenshots/vehicles/**
+# And the motion frames: the evidence that a rider stays in the seat while the
+# vehicle under them moves, which is a thing you finally have to see.
+!screenshots/motion/
+!screenshots/motion/**

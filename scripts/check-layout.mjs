@@ -1483,6 +1483,94 @@ for (const view of VIEWS) {
         `and its rider stays in its seat (worst ${held?.drift.toFixed(2)} px out of place)`);
     }
     await page.evaluate(() => { document.querySelectorAll('.flight').forEach((x) => x.remove()); });
+
+    // FRAMES TO LOOK AT. The assertions above are geometric; these are for a
+    // person, because "the rider is in the seat" is finally a thing you see.
+    if (keepShots) {
+      const dir = join(SHOTS, 'motion');
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      for (const name of ['boat', 'balloon', 'helicopter', 'rocket']) {
+        await page.evaluate((n) => {
+          document.querySelectorAll('.flight').forEach((x) => x.remove());
+          document.querySelectorAll('.flyway .puffs > *, .flyway .rails > *').forEach((x) => x.remove());
+          document.querySelectorAll('.card,.weather,.topline,.footer,.horizon')
+            .forEach((x) => { x.style.visibility = 'hidden'; });
+          window.shabbosFlights.send(n);
+        }, name);
+        // Wait for it to be in the frame before the shutter. Lanes enter from
+        // the edge, so a fixed delay photographs whatever happened to be on
+        // screen — which for the boat was a bow and half a face.
+        await page.waitForFunction((n) => {
+          const el = document.querySelector(`.flight.${n}`);
+          if (!el) return false;
+          const b = el.getBoundingClientRect();
+          return b.width > 0 && b.left > -16 && b.right < innerWidth + 16
+            && b.top > -16 && b.bottom < innerHeight + 16;
+        }, name, { timeout: 20000, polling: 'raf' }).catch(() => {});
+        for (let f = 0; f < 3; f += 1) {
+          await page.screenshot({ path: join(dir, `${name}-${f + 1}.png`) });
+          await page.waitForTimeout(420);
+        }
+      }
+      await page.evaluate(() => {
+        document.querySelectorAll('.flight').forEach((x) => x.remove());
+        document.querySelectorAll('.card,.weather,.topline,.footer,.horizon')
+          .forEach((x) => { x.style.visibility = ''; });
+      });
+    }
+  }
+
+  /* WHAT A ROTATED VEHICLE PUTS INTO THE WORLD ----------------------------- */
+  {
+    // The geometry check below proves the transform; this proves it is the one
+    // actually used. The rocket climbs at an angle, and its exhaust has to
+    // leave the nozzle it is drawn under — measured against the flame's own
+    // rectangle, which the browser places, not against the same arithmetic the
+    // code under test uses.
+    const exhaust = await page.evaluate(async () => {
+      document.querySelectorAll('.flight').forEach((n) => n.remove());
+      document.querySelectorAll('.flyway .puffs > *').forEach((n) => n.remove());
+      window.shabbosFlights.send('rocket');
+      const el = document.querySelector('.flight.rocket');
+      const mid = (b) => ({ x: b.left + b.width / 2, y: b.top + b.height / 2 });
+      let worst = 0;
+      let turned = 0;
+      let seen = 0;
+      let last = '';
+      for (let i = 0; i < 240 && el.isConnected; i += 1) {
+        await new Promise((r) => requestAnimationFrame(r));
+        const flame = el.querySelector('.flame');
+        // The newest puff: nodes are painted index for index against the
+        // particle list, so the last visible one is the one just released.
+        const puffs = [...document.querySelectorAll('.flyway .puff')]
+          .filter((n) => n.style.display !== 'none');
+        if (!flame || !puffs.length) continue;
+        const newest = puffs[puffs.length - 1];
+        // ON THE FRAME IT APPEARS. The rocket emits every 45ms and travels
+        // about five hundred pixels a second, so a puff that is three frames
+        // old is a puff the vehicle has already left behind — which is the
+        // point of it, and no evidence at all about where it came out.
+        const key = `${newest.getAttribute('cx')},${newest.getAttribute('cy')}`;
+        if (key === last) continue;
+        last = key;
+        const rot = Math.abs(Number(/rotate\(([-\d.]+)deg\)/.exec(el.style.transform)?.[1] ?? 0));
+        turned = Math.max(turned, rot);
+        const f = mid(flame.getBoundingClientRect());
+        const p = mid(newest.getBoundingClientRect());
+        worst = Math.max(worst, Math.hypot(p.x - f.x, p.y - f.y));
+        seen += 1;
+      }
+      if (el.isConnected) el.remove();
+      document.querySelectorAll('.flyway .puffs > *').forEach((n) => n.remove());
+      return { worst, turned, seen };
+    });
+    ok(exhaust.seen > 20, `the rocket is watched while it burns (${exhaust.seen} puffs)`);
+    ok(exhaust.turned > 2, `and it is genuinely tilted while it is (${exhaust.turned.toFixed(1)}°)`);
+    // Generous, because the flame's own rectangle is the whole flame and the
+    // exhaust leaves from the end of it — but nothing like the hundreds of
+    // pixels an unrotated transform put it out by.
+    ok(exhaust.worst < 60,
+      `and its exhaust leaves the nozzle it is drawn under (worst ${exhaust.worst.toFixed(0)} px)`);
   }
 
   /* WORLD COORDINATES OF A ROTATED VEHICLE --------------------------------- */
