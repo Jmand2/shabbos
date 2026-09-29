@@ -1068,6 +1068,115 @@ for (const view of VIEWS) {
     ok(tilt <= 30, `and never past 30° (worst ${tilt.toFixed(1)}°)`);
   }
 
+  /* THE PARADE CLEANS UP AFTER ITSELF -------------------------------------- */
+  {
+    // The heaviest thing this app does: up to ten vehicles at once, each with
+    // its own smoke, spray, notes, steam, track, sea and anything it sheds, all
+    // of it in a world layer shared with every other flight. Not an FPS
+    // assertion — those are noise on CI — but a resource one: whatever it puts
+    // on the page has to come back off it.
+    await page.evaluate(() => window.shabbosFlights.stand(4));
+    const parade = await page.evaluate(async () => {
+      document.querySelectorAll('.flight').forEach((n) => n.remove());
+      document.querySelectorAll('.flyway .puffs > *, .flyway .rails > *').forEach((n) => n.remove());
+      await new Promise((r) => setTimeout(r, 400));
+      const nodes = () => document.querySelectorAll('*').length;
+      const flights = () => document.querySelectorAll('.flight').length;
+      const world = () => document.querySelectorAll('.flyway .puffs > *, .flyway .rails > *').length;
+      // How much rAF the rest of the app asks for when nothing is flying, so a
+      // flight loop still running afterwards can be told from the clock.
+      const rafRate = async () => {
+        let n = 0;
+        const real = window.requestAnimationFrame.bind(window);
+        window.requestAnimationFrame = (cb) => { n += 1; return real(cb); };
+        await new Promise((r) => setTimeout(r, 600));
+        window.requestAnimationFrame = real;
+        return n;
+      };
+      const base = { nodes: nodes(), raf: await rafRate() };
+      const sent = window.shabbosFlights.parade();
+      const peak = { flights: 0, world: 0, nodes: 0 };
+      const t0 = performance.now();
+      // Until everything has gone, or long enough that something is wrong: the
+      // lap is the longest lane and takes the better part of a minute.
+      while (performance.now() - t0 < 90000) {
+        await new Promise((r) => setTimeout(r, 200));
+        peak.flights = Math.max(peak.flights, flights());
+        peak.world = Math.max(peak.world, world());
+        peak.nodes = Math.max(peak.nodes, nodes());
+        if (!flights() && performance.now() - t0 > 4000) break;
+      }
+      // Past the linger and the belt-and-braces sweep behind it.
+      await new Promise((r) => setTimeout(r, 6000));
+      return {
+        sent,
+        base,
+        peak,
+        left: { flights: flights(), world: world(), nodes: nodes() },
+        raf: await rafRate(),
+      };
+    });
+    ok(parade.sent >= 7, `the parade launches a crowd (${parade.sent})`);
+    ok(parade.peak.flights >= 5, `and they are in the air together (${parade.peak.flights} at once)`);
+    ok(parade.peak.world > 20, `and they fill the world layer (${parade.peak.world} objects at its peak)`);
+    ok(parade.left.flights === 0, `every flight is gone afterwards (${parade.left.flights} left)`);
+    ok(parade.left.world === 0,
+      `and so is everything they put in the world (${parade.left.world} left of ${parade.peak.world})`);
+    ok(parade.left.nodes <= parade.base.nodes + 4,
+      `and the page is back to its own size (${parade.left.nodes} against ${parade.base.nodes} before, `
+      + `${parade.peak.nodes} at its peak)`);
+    // Every flight's rAF loop stops with it. One that carried on would keep
+    // asking for frames for an element that is not on the page.
+    ok(parade.raf <= parade.base.raf + 4,
+      `and no flight is still asking for frames (${parade.raf} against ${parade.base.raf} before)`);
+  }
+
+  /* THE TWO SWITCHES ARE INDEPENDENT --------------------------------------- */
+  {
+    // Settings offer "Something crosses" and "On the hour" as two controls, but
+    // the parade's guards also checked the crossings setting — so
+    // crossings off + hour on disabled both, and a display set up to fly things
+    // only on the hour flew nothing at all, ever.
+    //
+    // Each combination is checked twice: that the right timers are ARMED, and
+    // that an hour arriving does or does not launch anything.
+    await page.evaluate(() => window.shabbosFlights.stand(4));
+    const matrix = [
+      ['off', 'off', false, false],
+      ['2-5', 'off', true, false],
+      ['off', 'on', false, true],
+      ['2-5', 'on', true, true],
+    ];
+    for (const [every, hourly, wantCross, wantHour] of matrix) {
+      const got = await page.evaluate(async ({ e, h }) => {
+        window.shabbosFlights.setting('every', e);
+        window.shabbosFlights.setting('hourly', h);
+        const armed = window.shabbosFlights.armed();
+        document.querySelectorAll('.flight').forEach((n) => n.remove());
+        // What the hour itself would do, through the same call the hour timer
+        // makes rather than through the deliberate override.
+        const sent = window.shabbosFlights.paradeIfDue();
+        document.querySelectorAll('.flight').forEach((n) => n.remove());
+        return { armed, sent, status: window.shabbosFlights.status() };
+      }, { e: every, h: hourly });
+      const label = `crossings ${every}, hour ${hourly}`;
+      ok(got.armed.crossings === wantCross,
+        `${label}: crossings ${wantCross ? 'run' : 'do not run'}`);
+      ok(got.armed.hourly === wantHour,
+        `${label}: the hour ${wantHour ? 'is armed' : 'is not armed'}`);
+      ok((got.sent > 0) === wantHour,
+        `${label}: the hour ${wantHour ? `sends (${got.sent})` : `sends nothing (${got.sent})`}`);
+      const off = !wantCross && !wantHour;
+      ok(off ? got.status === 'off' : got.status !== 'off',
+        `${label}: System Status says ${off ? 'off' : `"${got.status}"`}`);
+    }
+    await page.evaluate(() => {
+      window.shabbosFlights.setting('every', '2-5');
+      window.shabbosFlights.setting('hourly', 'on');
+      document.querySelectorAll('.flight').forEach((n) => n.remove());
+    });
+  }
+
   /* RIDERS ARE ATTACHED TO THEIR VEHICLES ---------------------------------- */
   {
     // The regression this exists for: whole-vehicle motion used to transform a

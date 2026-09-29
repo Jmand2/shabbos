@@ -668,6 +668,11 @@
       q: (sel) => svg.querySelector(sel),
       qa: (sel) => [...svg.querySelectorAll(sel)],
       seat: (i) => imgs[i] ?? null,
+      // HARD CAPS, per flight, on everything that emits. A parade puts up to
+      // ten vehicles on an iPad at once and several of them emit every frame,
+      // so none of these may rely on particles eventually dying: the cap is
+      // what bounds the work, and dying is only what makes it look right.
+      // 40 smoke (kinetics' own default), 24 spray, 30 steam, 16 notes.
       smoke: K.particles(),
       // Spray is not smoke: it is thrown up and falls back. Its own system, so
       // it can be integrated with gravity while the smoke drifts.
@@ -718,6 +723,10 @@
         g.innerHTML = markup;
         w3.rails.appendChild(g);
         if (!rig.debris) rig.debris = [];
+        // Capped like everything else, though nothing currently sheds more than
+        // one thing per flight. A future vehicle that drops something on a
+        // timer should find the ceiling already there rather than discover it.
+        if (rig.debris.length >= 6) rig.debris.shift().node.remove();
         rig.debris.push({
           node: g, rot: 0, age: 0, spin: 0, life: 2.6, scale: 1, vx: 0, vy: 0, ...at,
         });
@@ -869,6 +878,9 @@
 
   function schedule() {
     clearTimeout(timer);
+    // Nulled, not merely cleared: a cleared handle is still a number, so
+    // anything asking whether the schedule is armed got a stale yes.
+    timer = null;
     if (settings.every === 'off' || !faces.length) return;
     timer = setTimeout(() => { tick(); schedule(); }, nextGap());
   }
@@ -908,7 +920,11 @@
   // fire on its own, not about whether the thing works.
   function parade(force = false) {
     if (!force) {
-      if (reduced() || settings.every === 'off' || settings.hourly === 'off') return 0;
+      // THE TWO SETTINGS ARE INDEPENDENT. This used to check `every` as well,
+      // so turning the ordinary crossings off turned the hourly parade off with
+      // them — which is not what the sheet says, and leaves someone who wanted
+      // the hour and nothing else with a display that never flies anything.
+      if (reduced() || settings.hourly === 'off') return 0;
       if (!faces.length) return 0;
     }
     const n = PARADE_MIN + Math.floor(Math.random() * (PARADE_MAX - PARADE_MIN + 1));
@@ -975,7 +991,9 @@
 
   function scheduleParade() {
     clearTimeout(hourTimer);
-    if (settings.every === 'off' || settings.hourly === 'off') return;
+    hourTimer = null;
+    // `hourly` only. See parade().
+    if (settings.hourly === 'off') return;
     hourTimer = setTimeout(() => { parade(); scheduleParade(); }, untilTheHour());
   }
 
@@ -1121,6 +1139,23 @@
       // The hourly parade, on demand. Waiting up to an hour to see whether it
       // works is no way to check it, and a test cannot wait at all.
       parade: () => parade(true),
+      // The same parade WITHOUT the deliberate override, so the guards that
+      // decide whether the hour fires on its own can be checked. `parade(true)`
+      // skips exactly those guards, which is the whole point of it.
+      paradeIfDue: () => parade(false),
+      // What is actually ARMED, as against what the sheet says. Turning the
+      // ordinary crossings off used to disarm the hourly parade too, silently
+      // and in contradiction of its own switch.
+      armed: () => ({ crossings: timer !== null, hourly: hourTimer !== null }),
+      // The two switches, settable the way the sheet sets them.
+      setting: (k, value) => {
+        if (k === 'every' && EVERY.includes(value)) settings.every = value;
+        if (k === 'hourly' && HOURLY.includes(value)) settings.hourly = value;
+        save();
+        schedule();
+        scheduleParade();
+        return { ...settings };
+      },
       untilTheHour: () => untilTheHour(),
       // The artwork and seat slots, so a reference sheet can be rendered
       // without waiting minutes for each vehicle to happen to fly past.
@@ -1147,14 +1182,21 @@
         return faces.length;
       },
       status: () => {
-        if (settings.every === 'off') return 'off';
+        // Reports what is actually on, which is now two switches and not one.
+        // It said 'off' whenever the crossings were off, including when the
+        // hourly parade was the only thing anyone had asked for.
+        const on = [
+          settings.every === 'off' ? null : `every ${settings.every} min`,
+          settings.hourly === 'off' ? null : 'on the hour',
+        ].filter(Boolean);
+        if (!on.length) return 'off';
         if (!faces.length) {
           return loadReport && loadReport.of
             ? `none of ${loadReport.of} could be loaded`
             : 'locked — passphrase not entered on this iPad';
         }
         const missing = loadReport?.lost ? `, ${loadReport.lost} unavailable` : '';
-        return `${faces.length} unlocked${missing} · every ${settings.every} min`;
+        return `${faces.length} unlocked${missing} · ${on.join(' · ')}`;
       },
     };
     try { faces = await loadFaces(); } catch { faces = []; }
