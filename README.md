@@ -994,7 +994,16 @@ pull this morning. `data/minyanim.json` is rewritten three times a day and
 trimmed to a few days either side of today, so tests pointed at it rot on their
 own — the dates stay in range while the times under them change.
 
-To refresh the fixture deliberately, copy the live file over it and then
+`check-layout.mjs` is frozen the same way, against
+`scripts/fixtures/minyanim-layout.json`, and for a sharper version of the same
+reason: every view there is pinned to a date, and the live file is trimmed to a
+few days either side of today, so within a week those dates fall off the front
+of it. The board for a pinned Friday is then drawn with no times for that day
+and two full days after it — a shape that never occurs in life — and two
+portrait views began overflowing on a scrape that had changed nothing about the
+app. That suite is about geometry, and geometry needs stable content.
+
+To refresh either fixture deliberately, copy the live file over it and then
 re-check every asserted time, because that is the moment they can legitimately
 change. `data/shuls.json` is deliberately NOT frozen: it is configuration, and a
 change to it should be caught by these tests rather than hidden from them.

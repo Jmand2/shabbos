@@ -74,12 +74,24 @@ const server = createServer(async (req, res) => {
       res.end(await pageHtml(current.at, current.settings, current.scores));
       return;
     }
-    // A stated schedule, when a test needs one. Everything else is served the
-    // repo's real data, which is the point of most of these views; the ones
-    // that push the board to its limits need to state their own.
-    if (path === '/data/minyanim.json' && current.minyanim) {
+    // A FROZEN SCHEDULE, for the same reason check-ui.mjs uses one.
+    //
+    // Every view here is pinned to a date, and data/minyanim.json is rewritten
+    // three times a day and trimmed to a few days either side of today — so the
+    // dates these views stand on fall off the front of it within a week. When
+    // they do, the board for "2026-09-25" is drawn with no times for that day
+    // and two full days after it, which is a shape that never occurs in life,
+    // and two portrait views started overflowing on a scrape that had changed
+    // nothing about the app. The suite is about geometry, and geometry needs
+    // stable content. The real file is still checked, by check-data.mjs and by
+    // check.mjs rendering all 365 days against it.
+    //
+    // `current.minyanim` overrides it where a view needs to state its own.
+    if (path === '/data/minyanim.json') {
+      const body = current.minyanim
+        ?? JSON.parse(await readFile(join(ROOT, 'scripts/fixtures/minyanim-layout.json'), 'utf8'));
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(current.minyanim));
+      res.end(JSON.stringify(body));
       return;
     }
     // The forecast never leaves this process: a layout test must not depend on
