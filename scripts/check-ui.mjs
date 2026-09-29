@@ -901,6 +901,65 @@ console.log('\n=== Y1e: Auto keeps every day, whatever its first service costs =
     `and no morning is shown in part (${mornings} am times)`);
 }
 
+console.log('\n=== Y1f: Auto keeps one service from every day it is showing ===');
+{
+  // The rule Auto is FOR: a day on the board keeps a whole service of its own
+  // before any day gets a second one, and a day only ever leaves the board
+  // through the explicit "give up the furthest day" fallback.
+  //
+  // capRuns is the fitting order, and it was a plain prefix of it. At a cap of
+  // two on a three-day chag that prefix is Thursday's first service and
+  // Friday's — Shabbos is not in it at all, and disappears at the fitting
+  // stage, silently, before any fallback has been consulted. Standing on
+  // Thursday you could not see Shabbos.
+  //
+  // Asked of capRuns directly, because the cap the fit search lands on depends
+  // on geometry that jsdom does not have. The three-day board itself is
+  // measured in the browser suite.
+  const { w } = await boot('2027-04-21T15:00:00-04:00',
+    { minyanim: schedule(PESACH), settings: { shuls: ['beth-aaron'] } });
+  const day = (n, first) => Array.from({ length: n }, (_, i) => ({
+    group: 'shacharis', label: 'Shacharis', at: new Date(2027, 3, first, 6 + i),
+  }));
+  // Three days, each with several services of its own.
+  const byDay = new Map([
+    ['2027-04-22', [...day(2, 22), { group: 'mincha', label: 'Mincha', at: new Date(2027, 3, 22, 13) }]],
+    ['2027-04-23', [...day(2, 23), { group: 'mincha', label: 'Mincha', at: new Date(2027, 3, 23, 13) }]],
+    ['2027-04-24', [...day(2, 24), { group: 'mincha', label: 'Mincha', at: new Date(2027, 3, 24, 13) }]],
+  ]);
+  const daysIn = (rows) => new Set(rows.map((r) => r.at.getDate())).size;
+  for (const cap of [1, 2, 3]) {
+    const got = w.capRuns(byDay, cap);
+    ok(daysIn(got) === 3,
+      `a cap of ${cap} still carries all three days (${daysIn(got)} days, ${got.length} times)`);
+  }
+  // And it still GROWS with the cap, which is what the fit search needs.
+  const sizes = [1, 2, 3, 4, 5, 6].map((c) => w.capRuns(byDay, c).length);
+  ok(sizes.every((n, i) => i === 0 || n >= sizes[i - 1]),
+    `and the content only ever grows with the cap (${sizes.join(' ≤ ')})`);
+  // Monotonic in the strict sense the binary search relies on: every time at
+  // cap n is still there at cap n+1.
+  const key = (r) => `${r.at.getTime()}`;
+  const nested = [1, 2, 3, 4, 5].every((c) => {
+    const small = new Set(w.capRuns(byDay, c).map(key));
+    const big = new Set(w.capRuns(byDay, c + 1).map(key));
+    return [...small].every((k) => big.has(k));
+  });
+  ok(nested, 'and each cap contains the one below it, so the fit search is sound');
+  // NEVER HALF A SERVICE. Each day's morning is two times; a cap may show both
+  // or neither.
+  for (const cap of [1, 2, 3, 4, 5, 6]) {
+    const rows = w.capRuns(byDay, cap);
+    const mornings = new Map();
+    for (const r of rows) {
+      if (r.group !== 'shacharis') continue;
+      mornings.set(r.at.getDate(), (mornings.get(r.at.getDate()) ?? 0) + 1);
+    }
+    const whole = [...mornings.values()].every((n) => n === 2);
+    ok(whole, `and no morning is split at a cap of ${cap} (${[...mornings.values()].join(',') || 'none'})`);
+  }
+}
+
 console.log('\n=== Y2: an ordinary week is unchanged ===');
 {
   const { w } = await boot('2027-04-13T15:00:00-04:00',
@@ -919,7 +978,12 @@ console.log('\n=== Y3: the cap still wins, and every day still gets a share ==='
       { minyanim: schedule(PESACH), settings: { shuls: ['beth-aaron'], perShul: cap } });
     const times = w.document.querySelectorAll('.card .body .time:not(.edgetime)').length;
     const groups = groupsOn(w).length;
-    ok(times <= Number(cap), `perShul=${cap} yields ${times} minyan times (<= ${cap})`);
+    // EXACTLY that many, not "no more than". The fixture carries twenty-two
+    // future times across the chag, so there is no shortage to hide behind —
+    // and `<= cap` passed for a "Next 12" that returned four. An explicit count
+    // is a number a person typed and it is the one promise the board makes
+    // about quantity; splitting a service to keep it is the point of it.
+    ok(times === Number(cap), `perShul=${cap} yields exactly ${cap} minyan times (got ${times})`);
     ok(groups >= 2, `and still spans ${groups} days rather than spending it all on today`);
   }
 }

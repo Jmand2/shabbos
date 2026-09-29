@@ -74,6 +74,14 @@ const server = createServer(async (req, res) => {
       res.end(await pageHtml(current.at, current.settings, current.scores));
       return;
     }
+    // A stated schedule, when a test needs one. Everything else is served the
+    // repo's real data, which is the point of most of these views; the ones
+    // that push the board to its limits need to state their own.
+    if (path === '/data/minyanim.json' && current.minyanim) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(current.minyanim));
+      return;
+    }
     // The forecast never leaves this process: a layout test must not depend on
     // the weather over Teaneck when it runs.
     if (path === '/forecast') {
@@ -1067,6 +1075,201 @@ for (const view of VIEWS) {
     ok(tilt > 0.2, `the boat is actually rocking (worst ${tilt.toFixed(1)}°)`);
     ok(tilt <= 30, `and never past 30° (worst ${tilt.toFixed(1)}°)`);
   }
+
+  await page.close();
+}
+
+/* A three-day Yom Tov on the smallest iPad, with everything on at once ----- */
+{
+  console.log('  three-day Auto, narrowest board');
+  // THE PRODUCT RULE, MEASURED WHERE IT MATTERS. Auto must keep one whole
+  // service from every day it is showing before any day gets a second, and a
+  // day may only leave the board through the explicit "give up the furthest
+  // day" fallback. jsdom computes no geometry, so it can check the ordering but
+  // never the thing the rule exists for: whether the mandatory set actually
+  // fits, at a size worth reading, on the narrowest screen this runs on.
+  //
+  // Deliberately the hardest board the app can be asked to draw: portrait
+  // iPad, two shuls, a three-day chag, five Shacharis and three Mincha and two
+  // Maariv on every day of it, candle lighting and havdalah, long holiday
+  // labels, and the weather strip up.
+  const DAYS = ['2027-04-21', '2027-04-22', '2027-04-23', '2027-04-24', '2027-04-25'];
+  const dense = { generated_at: '2027-04-21T06:00:00Z', days: {} };
+  for (const iso of DAYS) {
+    const entry = {
+      source: 'shul',
+      fetched_at: '2027-04-21T06:00:00Z',
+      shacharis: Array.from({ length: 5 }, (_, i) => ({
+        label: 'Shacharis', time: `${6 + Math.floor(i / 2)}:${i % 2 ? '45' : '15'} AM`,
+      })),
+      mincha: [
+        { label: 'Mincha', time: '1:30 PM' }, { label: 'Mincha', time: '5:15 PM' },
+        { label: 'Mincha', time: '7:05 PM' },
+      ],
+      maariv: [{ label: 'Maariv', time: '8:45 PM' }, { label: 'Maariv', time: '9:50 PM' }],
+    };
+    dense.days[iso] = { 'beth-aaron': entry, 'ohr-saadya': { ...entry } };
+  }
+  current = {
+    at: '2027-04-21T15:00:00-04:00',
+    minyanim: dense,
+    settings: { theme: 'night', shuls: ['beth-aaron', 'ohr-saadya'], showWeather: true },
+  };
+  // The narrowest iPad this supports, in portrait, which is the least room the
+  // board is ever given.
+  const page = await browser.newPage({ viewport: { width: 768, height: 1024 } });
+  await page.route('**/api.open-meteo.com/**', (r) => route_ok(r, forecast(current.at)));
+  await page.route('**site.api.espn.com**', (r) => r.abort());
+  await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
+  await settle(page);
+  // Until the board STOPS CHANGING. The weather strip arrives after the first
+  // paint and takes height with it, so a measurement taken at a fixed moment is
+  // a measurement of whichever render happened to be up when the timer expired.
+  await page.waitForFunction(() => {
+    const snap = [...document.querySelectorAll('.card .body .group')].map((n) => n.textContent).join('|')
+      + `#${document.querySelectorAll('.card .body .time').length}`
+      + `#${getComputedStyle(document.documentElement).getPropertyValue('--minyan-scale')}`;
+    const same = window.__snap === snap;
+    window.__snap = snap;
+    window.__stable = same ? (window.__stable ?? 0) + 1 : 0;
+    return window.__stable >= 3;
+  }, null, { timeout: 15000, polling: 400 }).catch(() => {});
+
+  const board = await page.evaluate(() => {
+    // Every card, walked in document order, so each row is attributed to the
+    // heading above it however the columns were dealt.
+    const cards = [];
+    for (const card of document.querySelectorAll('.card')) {
+      const body = card.querySelector('.body');
+      if (!body) continue;
+      const flat = [];
+      const walk = (n) => {
+        for (const kid of n.children) {
+          if (kid.classList.contains('col')) walk(kid);
+          else flat.push(kid);
+        }
+      };
+      walk(body);
+      const days = [];
+      for (const el of flat) {
+        if (el.classList.contains('group')) { days.push({ day: el.textContent.trim(), rows: [] }); continue; }
+        if (el.classList.contains('label') && days.length) {
+          days[days.length - 1].rows.push({ label: el.textContent.replace('Next', '').trim(), times: 0 });
+        }
+        if (el.classList.contains('times') && days.length) {
+          const row = days[days.length - 1].rows;
+          if (row.length) row[row.length - 1].times = el.querySelectorAll('.time').length;
+        }
+      }
+      cards.push({ name: card.querySelector('.name')?.textContent.trim() ?? '?', days });
+    }
+    // Rows against the body they sit in, and against each other.
+    const overlaps = [];
+    for (const body of document.querySelectorAll('.card .body')) {
+      const box = body.getBoundingClientRect();
+      const seen = [];
+      for (const el of body.querySelectorAll('.group, .label, .times')) {
+        const r = el.getBoundingClientRect();
+        if (!r.width) continue;
+        if (r.bottom > box.bottom + 1 || r.right > box.right + 1 || r.left < box.left - 1) {
+          overlaps.push(`"${el.textContent.trim().slice(0, 18)}" outside its card`);
+        }
+        // A heading printing over a row, or two rows over each other, in the
+        // same column. Different columns legitimately share vertical space.
+        for (const p of seen) {
+          const sameColumn = Math.abs(p.r.left - r.left) < 4 || Math.abs(p.r.right - r.right) < 4;
+          const over = r.top < p.r.bottom - 2 && r.bottom > p.r.top + 2;
+          if (sameColumn && over && p.el !== el.previousElementSibling && el.previousElementSibling !== p.el) {
+            overlaps.push(`"${p.el.textContent.trim().slice(0, 14)}" over `
+              + `"${el.textContent.trim().slice(0, 14)}"`);
+          }
+        }
+        seen.push({ el, r });
+      }
+    }
+    const times = [...document.querySelectorAll('.card .body .time:not(.edgetime)')]
+      .map((el) => parseFloat(getComputedStyle(el).fontSize)).filter((n) => n > 0);
+    const foot = document.querySelector('.footer')?.getBoundingClientRect() ?? null;
+    return {
+      cards,
+      overlaps,
+      timePx: times.length ? Math.min(...times) : null,
+      footer: foot ? { top: Math.round(foot.top), bottom: Math.round(foot.bottom) } : null,
+      viewport: { w: innerWidth, h: innerHeight },
+      headings: [...document.querySelectorAll('.card .body .group')].map((n) => n.textContent.trim()),
+      edges: document.querySelectorAll('.card .body .edgetime').length,
+    };
+  });
+
+  const perCard = board.cards.map((c) => c.days.map((d) => d.day));
+  const daysShown = perCard[0] ?? [];
+  ok(board.cards.length === 2, `two cards on a 768 px board (${board.cards.length})`);
+
+  // EVERY DAY THAT IS SHOWN HAS A WHOLE SERVICE OF ITS OWN. This is the rule
+  // stated as something observable: a day never appears as a heading with the
+  // tail of somebody else's schedule under it, and never appears empty.
+  const bare = [];
+  for (const card of board.cards) {
+    for (const d of card.days) if (!d.rows.length) bare.push(`${card.name} ${d.day}`);
+  }
+  ok(!bare.length, `every day on the board has a service of its own (${bare.join(', ') || 'all do'})`);
+
+  // AND IF THE BOARD DID NOT HAVE TO GIVE ANYTHING UP, every day is on it. The
+  // fallback chain drops candle lighting and havdalah BEFORE it drops a day, so
+  // edge rows still being there means no day was sacrificed — and then all four
+  // days the board reaches have to be present.
+  //
+  // Stated as a condition rather than flatly, because a board that cannot show
+  // the mandatory set at a readable size is allowed to drop its furthest day;
+  // that is the fallback, and it is the only thing permitted to take a day off.
+  const gaveNothingUp = board.edges > 0;
+  ok(!gaveNothingUp || daysShown.length >= 4,
+    `nothing was given up, so all four days are shown (${daysShown.length}: ${daysShown.join(' / ')})`);
+  ok(daysShown.length >= 3,
+    `and even under pressure it keeps most of the chag (${daysShown.join(' / ') || 'none'})`);
+
+  // NO SERVICE SHOWN IN PART. Every day after today gets whole runs or none:
+  // five Shacharis, three Mincha, two Maariv. Today is exempt — its earlier
+  // times are in the past, which is not a split.
+  const whole = { Shacharis: 5, Mincha: 3, Maariv: 2 };
+  const split = [];
+  for (const card of board.cards) {
+    for (const d of card.days.slice(1)) {
+      for (const row of d.rows) {
+        const want = whole[row.label];
+        if (want && row.times !== want) split.push(`${d.day} ${row.label} ${row.times}/${want}`);
+      }
+    }
+  }
+  ok(!split.length, `no service is shown in part (${split.join(', ') || 'none split'})`);
+
+  // A DROPPED DAY IS ALWAYS THE FURTHEST. Whatever is shown must be a prefix of
+  // what the board reaches — a hole in the middle means something other than
+  // the day-drop fallback took a day off.
+  const contiguous = board.cards.every((c) => {
+    const names = c.days.map((d) => d.day);
+    return names.every((n, i) => n === daysShown[i]);
+  });
+  ok(contiguous, `every card shows the same leading run of days (${perCard.map((p) => p.length).join('/')})`);
+
+  ok(!board.overlaps.length,
+    `nothing overlaps or leaves its card (${board.overlaps.slice(0, 3).join('; ') || 'clean'})`);
+  ok(board.footer !== null && board.footer.bottom <= board.viewport.h + 1,
+    `and the footer is still on the screen (${board.footer?.bottom} of ${board.viewport.h})`);
+
+  if (keepShots) {
+    await page.screenshot({ path: join(SHOTS, 'three-day-auto-portrait.png') });
+  }
+  await page.close();
+  current = { at: null, settings: {} };
+}
+
+{
+  const page = await browser.newPage({ viewport: { width: 1180, height: 820 } });
+  await page.route('**/api.open-meteo.com/**', (r) => r.abort());
+  await page.route('**site.api.espn.com**', (r) => r.abort());
+  await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
+  await settle(page);
 
   /* THE PARADE CLEANS UP AFTER ITSELF -------------------------------------- */
   {

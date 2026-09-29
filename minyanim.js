@@ -117,6 +117,22 @@ function scheduleFor(slug, now, days) {
 // The order interleaves the days — every day's first service, then every day's
 // second — so a long morning cannot crowd out the day behind it, and the step
 // is a single service.
+// EVERY REPRESENTED DAY KEEPS ITS FIRST SERVICE, whatever the cap says.
+//
+// Because the order interleaves, its first `represented` entries ARE one
+// service from every day — so the floor is a slice length and nothing more
+// elaborate. Without it, a cap of two on a three-day Yom Tov returned
+// Thursday's Shacharis and Friday's and no Shabbos at all: the third day
+// vanished silently, at the fitting stage, long before the explicit "give up
+// the furthest day" fallback that is supposed to be the only thing that can
+// take a day off the board. Standing on Thursday you could not see Shabbos.
+//
+// The Auto cap is a fitting control, not a promise about a number of times.
+// Nothing outside the search reads it, the search only needs the content to
+// grow with it, and it still does: for every n at or below the floor the
+// answer is the same mandatory set, and above it services are added one at a
+// time in interleaved order. An explicit 4 / 8 / 12 is a different question
+// and goes through capTimes, which is exact.
 function capRuns(byDay, n) {
   const perDay = [...byDay.values()].map((rows) => runsOf(rows));
   const depth = Math.max(0, ...perDay.map((r) => r.length));
@@ -124,7 +140,9 @@ function capRuns(byDay, n) {
   for (let i = 0; i < depth; i += 1) {
     for (const runs of perDay) if (runs[i]) order.push(runs[i]);
   }
-  return order.slice(0, Math.max(1, n))
+  const represented = perDay.filter((runs) => runs.length).length;
+  const take = Math.max(represented, Math.max(1, n));
+  return order.slice(0, take)
     .flatMap((r) => r.times)
     .sort((a, b) => a.at - b.at);
 }
