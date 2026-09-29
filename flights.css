@@ -43,6 +43,17 @@
   stroke-width: 2;
 }
 
+/* Artwork, seats and faces in one box. Whole-vehicle motion — a hull riding a
+   swell, a balloon lifting on its burner, a helicopter pitching to set off —
+   moves THIS, so the riders go with it. Anything that moves independently of
+   the vehicle (wheels, rotors, propellers, limbs, cloth, flame, suspension)
+   still moves inside the svg, because it genuinely does move on its own. */
+.flight .body {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+}
+
 /* Faces sit in the seat slots, positioned as a percentage of the viewBox. */
 .flight img {
   position: absolute;
@@ -52,13 +63,16 @@
   background: var(--panel, #1a1e2c);
 }
 
-/* Secondary motion. Each is the thing that makes the vehicle read as itself. */
-/* The car still chugs on a timer; the train does not, because it is rigged —
-   its wheels roll the distance travelled and its riders jostle on the rail
-   joints, and a body-wide judder on top of that fights the rig. */
-.car svg { animation: chug 260ms steps(2, end) infinite; }
-@keyframes chug { from { transform: translateY(0); } to { transform: translateY(-1.5px); } }
-@keyframes spin { to { transform: rotate(360deg); } }
+/* Secondary motion. Each is the thing that makes the vehicle read as itself.
+
+   NO WHOLE-VEHICLE ANIMATION LIVES HERE ANY MORE. The car chugged on a 260ms
+   timer and the boat bobbed on a 2.4s one, both on `svg` — which is to say on
+   the artwork and not on the faces, and on a clock of their own rather than on
+   what the vehicle was doing. Both fought the rig that replaced them: the boat
+   already rides a real sea through hullTarget() and a spring, and a ±3° sine
+   laid over that is a second, contradictory swell. Motion that belongs to the
+   whole vehicle goes through update() and moves .body; do not add keyframes
+   on top of it. */
 
 /* Driven by update(), not by a timer: a rotor's speed is the aircraft's, and
    these were CSS loops that quietly stopped matching anything when the vehicle
@@ -77,8 +91,6 @@
   transform-box: fill-box; transform-origin: 50% 100%;
 }
 
-.boat svg { animation: bob 2.4s ease-in-out infinite; }
-@keyframes bob { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-4px) rotate(3deg); } }
 
 /* THE PLANE ----------------------------------------------------------------
    The banner is cloth: update() runs a travelling wave along it and each face

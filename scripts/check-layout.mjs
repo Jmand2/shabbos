@@ -1003,6 +1003,43 @@ for (const view of VIEWS) {
       return worst;
     });
     ok(upright <= 15, `the rider stays within 15° of level (worst ${upright.toFixed(1)}°)`);
+
+    // WHICH WAY IT LEANS. The lean side was read from `state.rot - m.prevRot`
+    // AFTER prevRot had been set to state.rot, so the difference was exactly
+    // zero on every frame and the car leant the same way into left-hand and
+    // right-hand bends alike. Driven at a steady turn rate in each direction.
+    const lean = await page.evaluate(async () => {
+      const spec = window.shabbosFlights.spec('car');
+      const shell = { attr: '', style: {}, dataset: {}, setAttribute(_, v) { this.attr = v; }, getAttribute: () => '' };
+      const run = (sign) => {
+        const made = new Map();
+        const stub = () => ({ style: {}, dataset: {}, setAttribute() {}, getAttribute: () => '' });
+        const rig = {
+          mem: {},
+          q: (sel) => (sel === '.shell' ? shell : made.get(sel) ?? (made.set(sel, stub()), made.get(sel))),
+          qa: () => [],
+          seat: () => stub(),
+          point: () => ({ x: 0, y: 0 }),
+          pose: () => {},
+          smoke: { emit() {} },
+          spray: { emit() {} },
+          t: 0,
+        };
+        for (let i = 0; i < 240; i += 1) {
+          spec.update(rig, {
+            x: 500, y: 400, rot: sign * i * 1.2, speed: 150, accel: 0,
+            dist: i * 2.5, p: 0.5, scale: 2,
+          }, 1 / 60);
+        }
+        return Number(/rotate\(([-\d.]+)/.exec(shell.attr)?.[1] ?? 0);
+      };
+      // Heading falling is a right-hand bend on this circuit; rising is a left.
+      return { right: run(-1), left: run(1) };
+    });
+    ok(Math.abs(lean.right) > 1 && Math.abs(lean.left) > 1,
+      `the car leans in a bend (${lean.right.toFixed(1)}° one way, ${lean.left.toFixed(1)}° the other)`);
+    ok(Math.sign(lean.right) === -Math.sign(lean.left),
+      'and it leans the OTHER way in a bend the other way');
   }
 
   {
@@ -1017,8 +1054,10 @@ for (const view of VIEWS) {
       let worst = 0;
       for (let i = 0; i < 150; i += 1) {
         await new Promise((r) => requestAnimationFrame(r));
-        const rock = el.querySelector('.rock');
-        const m = /rotate\(([-\d.]+)/.exec(rock?.getAttribute('transform') ?? '');
+        // The hull's roll is whole-vehicle motion now, so it is on .body with
+        // the riders inside it rather than on a group inside the svg.
+        const rock = el.querySelector('.body');
+        const m = /rotate\(([-\d.]+)/.exec(rock?.style.transform ?? '');
         if (m) worst = Math.max(worst, Math.abs(Number(m[1])));
       }
       el.remove();
@@ -1027,6 +1066,96 @@ for (const view of VIEWS) {
     });
     ok(tilt > 0.2, `the boat is actually rocking (worst ${tilt.toFixed(1)}°)`);
     ok(tilt <= 30, `and never past 30° (worst ${tilt.toFixed(1)}°)`);
+  }
+
+  /* RIDERS ARE ATTACHED TO THEIR VEHICLES ---------------------------------- */
+  {
+    // The regression this exists for: whole-vehicle motion used to transform a
+    // group INSIDE the svg while the faces were siblings of that svg. The boat
+    // rolled through the swell, the balloon lifted on its burner, the
+    // helicopter pitched to set off — and in all three the riders hung level
+    // and motionless in the air where the vehicle used to be.
+    //
+    // Measured as ATTACHMENT, not as movement: the offset between a face and
+    // the seat drawn under it, in screen pixels, over a couple of hundred
+    // frames. If the artwork moves and the face does not, that offset opens up.
+    await page.evaluate(() => window.shabbosFlights.stand(4));
+    for (const name of ['boat', 'balloon', 'helicopter']) {
+      const held = await page.evaluate(async (n) => {
+        document.querySelectorAll('.flight').forEach((x) => x.remove());
+        window.shabbosFlights.send(n);
+        const el = document.querySelector(`.flight.${n}`);
+        if (!el) return null;
+        const img = el.querySelector('img');
+        const seat = el.querySelector('.seat');
+        if (!img || !seat) return null;
+        const mid = (b) => ({ x: b.left + b.width / 2, y: b.top + b.height / 2 });
+        let drift = 0;
+        let swing = 0;
+        let first = null;
+        let anchor0 = null;
+        for (let i = 0; i < 200 && el.isConnected; i += 1) {
+          await new Promise((r) => requestAnimationFrame(r));
+          const f = mid(img.getBoundingClientRect());
+          const a = mid(seat.getBoundingClientRect());
+          const off = { x: f.x - a.x, y: f.y - a.y };
+          if (!first) { first = off; anchor0 = a; } else {
+            drift = Math.max(drift, Math.hypot(off.x - first.x, off.y - first.y));
+            // How far the vehicle itself got, so a still vehicle cannot pass
+            // this by never moving at all.
+            swing = Math.max(swing, Math.abs(a.y - anchor0.y));
+          }
+        }
+        el.remove();
+        document.querySelectorAll('.flyway .sea, .flyway .puffs > *').forEach((x) => x.remove());
+        return { drift, swing };
+      }, name);
+      ok(held !== null, `${name}: a rider can be seated and followed`);
+      ok(held && held.swing > 2,
+        `and the ${name} actually moves while it is watched (${held?.swing.toFixed(1)} px)`);
+      ok(held && held.drift < 1.5,
+        `and its rider stays in its seat (worst ${held?.drift.toFixed(2)} px out of place)`);
+    }
+    await page.evaluate(() => { document.querySelectorAll('.flight').forEach((x) => x.remove()); });
+  }
+
+  /* WORLD COORDINATES OF A ROTATED VEHICLE --------------------------------- */
+  {
+    // rig.point() places everything a vehicle releases: the funnel, the
+    // whistle, the rocket's nozzle, the stage it sheds, the boat's bow. It
+    // applied scale and translation but NOT the vehicle's heading, so a rocket
+    // climbing at an angle exhausted out of its side.
+    //
+    // Checked against an independent derivation rather than against itself.
+    const geo = await page.evaluate(() => {
+      const W = 1024;
+      const { scale } = window.shabbosFlights.metrics('rocket', W);
+      const [vw, vh] = window.shabbosFlights.spec('rocket').vb;
+      const nozzle = [75, 150];                       // where the flame leaves it
+      const at = { x: 500, y: 400 };
+      const out = [];
+      for (const deg of [0, 45, 90, -30, 180]) {
+        const got = window.shabbosFlights.toWorld('rocket', nozzle[0], nozzle[1], { ...at, rot: deg }, W);
+        // Independently: polar. The nozzle is this far from the pivot and at
+        // this bearing in the artwork; turning the vehicle turns the bearing.
+        const dx = (nozzle[0] - vw / 2) * scale;
+        const dy = (nozzle[1] - vh / 2) * scale;
+        const rad = Math.hypot(dx, dy);
+        const th = Math.atan2(dy, dx) + (deg * Math.PI) / 180;
+        const want = { x: at.x + rad * Math.cos(th), y: at.y + rad * Math.sin(th) };
+        out.push({ deg, err: Math.hypot(got.x - want.x, got.y - want.y), got, want });
+      }
+      return out;
+    });
+    const worst = Math.max(...geo.map((g) => g.err));
+    ok(worst < 0.01, `a rotated vehicle places its world points correctly (worst ${worst.toFixed(4)} px over `
+      + `${geo.map((g) => `${g.deg}°`).join(', ')})`);
+    // And it is genuinely rotating rather than ignoring the angle: the nozzle
+    // of a rocket turned through 180° ends up on the other side of it.
+    const flat = geo.find((g) => g.deg === 0);
+    const over = geo.find((g) => g.deg === 180);
+    const apart = Math.hypot(flat.got.x - over.got.x, flat.got.y - over.got.y);
+    ok(apart > 100, `and turning it end for end moves that point (${apart.toFixed(0)} px apart)`);
   }
 
   /* PHASE 4: rare moments -------------------------------------------------- */

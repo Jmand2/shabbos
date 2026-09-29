@@ -29,12 +29,6 @@ const server = createServer(async (req, res) => {
 await new Promise((r) => server.listen(0, r));
 await mkdir(OUT, { recursive: true });
 
-const FACE = `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80">
-  <circle cx="40" cy="40" r="40" fill="#e7b89a"/>
-  <path d="M0 38 a40 40 0 0 1 80 0 q-40 -20 -80 0z" fill="#5a3b2a"/>
-  <circle cx="26" cy="42" r="4" fill="#2a1d18"/><circle cx="54" cy="42" r="4" fill="#2a1d18"/>
-  <path d="M26 56 q14 12 28 0" stroke="#7a3b30" stroke-width="4" fill="none"/></svg>`;
-
 const browser = await webkit.launch();
 const want = process.argv.slice(2);
 const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
@@ -53,11 +47,13 @@ await page.addInitScript(() => {
 });
 await page.goto(`http://127.0.0.1:${server.address().port}/index.html`, { waitUntil: 'load' });
 await page.waitForTimeout(1400);
+// Five, so the longest train has a rider in every carriage.
+await page.evaluate(() => window.shabbosFlights.stand(5));
 
 const names = want.length ? want : await page.evaluate(() => window.shabbosFlights.names());
 
 // Clear the stage: the previous vehicle, its leavings, and any pan.
-const reset = (face) => page.evaluate((f) => {
+const reset = () => page.evaluate(() => {
   window.requestAnimationFrame = window.__raf;
   const fw = document.querySelector('.flyway');
   if (fw) { fw.style.transform = ''; fw.style.overflow = ''; }
@@ -70,28 +66,15 @@ const reset = (face) => page.evaluate((f) => {
   // life and wrong in a reference render, where the previous vehicle's leavings
   // would appear in the next one's portrait.
   document.querySelectorAll('.flyway .puffs > *, .flyway .rails > *').forEach((n) => n.remove());
-  window.__face = `data:image/svg+xml;base64,${btoa(f)}`;
-}, face);
+});
 
 const send = (name, rare = false) => page.evaluate(({ n, rare: r }) => {
   window.__sent = performance.now();
+  // Riders through the app's own stand-in hook, so the reference render is
+  // built by build() exactly as a real flight is — seat circles, slot
+  // arithmetic, face sizing and all. Dressing the vehicle by hand afterwards
+  // drew the faces but never the seats under them.
   window.shabbosFlights.send(n, r ? { rare: true } : undefined);
-  // Faces on at once, not after the wait: the rocket climbs about 490 px a
-  // second, so half a second spent dressing it is half the screen, and it had
-  // left before the shutter.
-  const f = document.querySelector(`.flight.${n}`);
-  if (!f) return;
-  const v = window.shabbosFlights.spec(n);
-  const [vw, vh] = v.vb;
-  const rings = ['#E8C547', '#5FC9A0', '#D98CC8', '#F5A25D'];
-  v.slots.forEach(([cx, cy, r], i) => {
-    const R = r * 2.1;
-    const img = document.createElement('img');
-    img.src = window.__face;
-    img.style.cssText = `left:${(cx - R) / vw * 100}%;top:${(cy - R) / vh * 100}%;`
-      + `width:${R * 2 / vw * 100}%;height:${R * 2 / vh * 100}%;border-color:${rings[i % 4]}`;
-    f.appendChild(img);
-  });
 }, { n: name, rare });
 
 // Wait for a frame worth photographing, then STOP THE WORLD on that frame. A
@@ -179,11 +162,11 @@ const rareKinds = new Set(await page.evaluate(
 ));
 
 const shoot = async (name, file, rare) => {
-  await reset(FACE);
+  await reset();
   await send(name, rare);
   let framed = await settle(name, true, rare);
   if (!framed) {
-    await reset(FACE);
+    await reset();
     await send(name, rare);
     framed = await settle(name, false, rare);
     await panTo(name);

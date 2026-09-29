@@ -28,6 +28,14 @@
   if (!EVERY.includes(String(settings.every))) settings.every = DEFAULTS.every;
   if (!HOURLY.includes(String(settings.hourly))) settings.hourly = DEFAULTS.hourly;
   let faces = [];
+
+  // A face-shaped crop for tests and reference renders: a head, hair, two eyes
+  // and a mouth, at the size and shape a real one occupies.
+  const STAND_IN = `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80">`
+    + `<circle cx="40" cy="40" r="40" fill="#e7b89a"/>`
+    + `<path d="M0 38 a40 40 0 0 1 80 0 q-40 -20 -80 0z" fill="#5a3b2a"/>`
+    + `<circle cx="26" cy="42" r="4" fill="#2a1d18"/><circle cx="54" cy="42" r="4" fill="#2a1d18"/>`
+    + `<path d="M26 56 q14 12 28 0" stroke="#7a3b30" stroke-width="4" fill="none"/></svg>`;
   // What the last load actually managed, for the status panel.
   let loadReport = null;
   let layer = null;
@@ -510,6 +518,23 @@
     return world;
   }
 
+  // LOCAL ARTWORK COORDINATES TO WORLD COORDINATES. Offset from the pivot,
+  // scaled, rotated by the heading, translated onto the path — which is exactly
+  // the matrix the browser builds for the element: with the matching
+  // transform-origin, T(at) · T(-pivot) · R · S reduces to T(at) · R · S ·
+  // T(-pivot).
+  //
+  // Pure and separate so it can be checked against an independent derivation
+  // rather than against itself.
+  function toWorld(ax, ay, at, scale, pivotX, pivotY) {
+    const dx = (ax - pivotX) * scale;
+    const dy = (ay - pivotY) * scale;
+    const r = ((at.rot ?? 0) * Math.PI) / 180;    // CSS degrees: clockwise, y down
+    const c = Math.cos(r);
+    const sn = Math.sin(r);
+    return { x: at.x + dx * c - dy * sn, y: at.y + dx * sn + dy * c };
+  }
+
   // The PER-FLIGHT spec, not the shared one: a rare flight may be a different
   // shape from its own kind — a longer train has another carriage, another
   // seat and a wider viewBox — and none of that may reach the definition every
@@ -519,6 +544,13 @@
     const el = document.createElement('div');
     el.className = `flight ${name}`;
     el.style.setProperty('--vc', v.colour);
+    // Its size, explicitly. It used to be whatever the in-flow <svg> made it;
+    // now that the svg sits inside an absolutely positioned .body, nothing is
+    // in flow and the flight box collapsed to nothing — which took the faces'
+    // percentages, the element's own bounding box and every test that measures
+    // one with it.
+    el.style.width = `${vw}px`;
+    el.style.height = `${vh}px`;
     // Seats are drawn from the slots rather than hand-placed in every art
     // string: they must line up with the faces exactly, and the faces are
     // already derived from the same numbers.
@@ -526,14 +558,24 @@
       const [cx, cy] = v.slots[i];
       return `<circle class="seat" cx="${cx}" cy="${cy}" r="${faceRadius(v, i) * 0.92}"/>`;
     }).join('');
-    el.innerHTML =
-      `<svg viewBox="0 0 ${vw} ${vh}" width="${vw}" height="${vh}">${v.art}${seats}</svg>` +
-      riders.map((f, i) => {
+    // THE BODY: artwork, seats and faces in ONE box, so that whatever moves the
+    // vehicle as a whole moves the people in it too. They used to be siblings —
+    // an <svg> and a row of <img> — and every vehicle that rocked, heaved or
+    // pitched did it by transforming a group INSIDE the svg. The boat rolled
+    // and its passengers stayed level and still, hanging in the air over a hull
+    // that had gone out from under them.
+    //
+    // Sized by `inset: 0`, so it is exactly the flight box and the faces' own
+    // percentages mean what they meant before.
+    el.innerHTML = `<div class="body">`
+      + `<svg viewBox="0 0 ${vw} ${vh}" width="${vw}" height="${vh}">${v.art}${seats}</svg>`
+      + riders.map((f, i) => {
         const [cx, cy] = v.slots[i];
         const R = faceRadius(v, i);
         return `<img src="${f.url}" style="left:${(cx - R) / vw * 100}%;top:${(cy - R) / vh * 100}%;`
           + `width:${R * 2 / vw * 100}%;height:${R * 2 / vh * 100}%;border-color:${f.ring}">`;
-      }).join('');
+      }).join('')
+      + `</div>`;
     // A part that update() places carries data-base: where it sits before the
     // rotation is added. Until the first update runs it has no transform at
     // all, so it renders at the viewBox origin — the helicopter's tail rotor
@@ -607,10 +649,21 @@
     // vehicle itself on its first frame; `mem` is its own scratch space.
     const [vw, vh] = v.vb;
     const svg = el.querySelector('svg');
+    const body = el.querySelector('.body');
     const imgs = [...el.querySelectorAll('img')];
+
+    // WHAT THE VEHICLE TURNS ABOUT, in artwork units. The element's transform
+    // is T(at) · R(rot) · S(scale) · T(-pivot) once the matching
+    // transform-origin is taken into account, so this is the point of the
+    // artwork that lands on the path and the point the heading turns around.
+    const pivotX = v.pivot ? v.pivot[0] : vw / 2;
+    const pivotY = v.pivot ? v.pivot[1] : vh / 2;
+
     const rig = {
       el,
       svg,
+      // The box that holds artwork, seats and faces together.
+      body,
       mem: {},
       q: (sel) => svg.querySelector(sel),
       qa: (sel) => [...svg.querySelectorAll(sel)],
@@ -619,14 +672,28 @@
       // Spray is not smoke: it is thrown up and falls back. Its own system, so
       // it can be integrated with gravity while the smoke drifts.
       spray: K.particles(24),
-      // Artwork coordinates to screen coordinates. The element is translated to
-      // the path point, centred, then scaled, so a point in the viewBox lands
-      // this far from that centre.
-      point: (ax, ay) => ({
-        x: rig.at.x + (ax - vw / 2) * scale,
-        y: rig.at.y + (ay - vh / 2) * scale,
-      }),
-      at: { x: 0, y: 0 },
+      // ARTWORK COORDINATES TO SCREEN COORDINATES, through the same transform
+      // the browser applies: offset from the pivot, scaled, ROTATED BY THE
+      // VEHICLE'S HEADING, and translated to where it is on the path.
+      //
+      // The rotation is the part that was missing. Everything a vehicle
+      // releases into the world is placed with this — the funnel, the whistle,
+      // the rocket's nozzle, the stage it sheds, the boat's bow — and for a
+      // rocket climbing at 30° or a car mid-corner the answer was the point it
+      // would have been at if the vehicle were level, which is metres away on
+      // the screen. Smoke came out of the side of the rocket.
+      point: (ax, ay) => toWorld(ax, ay, rig.at, scale, pivotX, pivotY),
+      // WHOLE-VEHICLE MOTION: everything in the body moves, riders included.
+      // In artwork units and degrees, because that is what a vehicle's own
+      // drawing is in; the element's scale carries it to the screen. `cx`/`cy`
+      // are what it turns about, defaulting to the pivot.
+      pose: (dx = 0, dy = 0, rot = 0, cx = pivotX, cy = pivotY) => {
+        if (!body) return;
+        body.style.transformOrigin = `${cx}px ${cy}px`;
+        body.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) `
+          + `rotate(${rot.toFixed(2)}deg)`;
+      },
+      at: { x: 0, y: 0, rot: 0 },
       // The layer a vehicle may put things into that outlive it: smoke, spray,
       // a sea, a track. Anything here is in screen coordinates and is the
       // vehicle's to remove when it goes.
@@ -682,10 +749,9 @@
     // The origin moves AND the centring translate moves with it, so the pivot
     // point still lands on the path: translate(-ox%, -oy%) puts that point at
     // (x, y), and the matching transform-origin turns the rotation about it.
-    const pv = v.pivot;
-    const ox = pv ? (pv[0] / vw) * 100 : 50;
-    const oy = pv ? (pv[1] / vh) * 100 : 50;
-    if (pv) el.style.transformOrigin = `${ox}% ${oy}%`;
+    const ox = (pivotX / vw) * 100;
+    const oy = (pivotY / vh) * 100;
+    if (v.pivot) el.style.transformOrigin = `${ox}% ${oy}%`;
 
     // Everything this flight put on the screen, in one place: its own element,
     // the track it was given, whatever it owns in the world layer, and anything
@@ -1059,6 +1125,27 @@
       // The artwork and seat slots, so a reference sheet can be rendered
       // without waiting minutes for each vehicle to happen to fly past.
       spec: (name) => (name ? VEHICLES[name] : VEHICLES),
+      // The same local-to-world transform every vehicle places its smoke,
+      // spray, debris and sea with, asked of a stated position and heading.
+      toWorld: (name, ax, ay, at, W = 1024) => {
+        const v = VEHICLES[name];
+        if (!v) return null;
+        const [vw, vh] = v.vb;
+        return toWorld(ax, ay, at, scaleFor(name, W),
+          v.pivot ? v.pivot[0] : vw / 2, v.pivot ? v.pivot[1] : vh / 2);
+      },
+      // STAND-IN RIDERS. The real faces are encrypted and JJ owns the
+      // passphrase, so nothing that runs in CI can build a vehicle with anyone
+      // in it — and half of what these vehicles are for is the person in them.
+      // Same crop size, same code path: seats, slots and sizing all come out of
+      // build() exactly as they do in life.
+      stand: (n = 4) => {
+        const rings = ['#E8C547', '#5FC9A0', '#D98CC8', '#F5A25D'];
+        const url = `data:image/svg+xml;base64,${btoa(STAND_IN)}`;
+        faces = Array.from({ length: n }, (_, i) => ({ url, ring: rings[i % rings.length] }));
+        faceBag = bag(faces);
+        return faces.length;
+      },
       status: () => {
         if (settings.every === 'off') return 'off';
         if (!faces.length) {

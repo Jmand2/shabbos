@@ -238,7 +238,11 @@
       const bump = 1.8 * Math.max(0, Math.sin(m.angle * 2 + i * 1.7));
       r.setAttribute('transform', `translate(0 ${(-bump).toFixed(2)})`);
       const seat = rig.seat(i);
-      if (seat) seat.style.transform = `translateY(${(-bump * state.scale).toFixed(2)}px)`;
+      // The same distance, in the same units. A face is inside the flight
+      // element, so its px ARE artwork units and the element's scale carries
+      // both to the screen: multiplying by the scale a second time moved the
+      // face further than the shoulders it is meant to sit on.
+      if (seat) seat.style.transform = `translateY(${(-bump).toFixed(2)}px)`;
     });
 
     // FOUR EXHAUST BEATS PER TURN of the driving wheels, each one a puff left
@@ -340,21 +344,18 @@
       slots: [[52, 46, 11], [96, 46, 11]],
       sea: true,
       art: `
-        <g class="rock">
-          <path class="mast" d="M104 62 V10"/>
-          <path class="sail" d="M100 58 V14 q-34 8-44 44 z"/>
-          <path class="flag" d="M104 12 q10 3 18 0 q-8 6 0 12 q-10-3-18 0 z"/>
-          <path class="hull" d="M12 62 H138 L120 88 H30 z"/>
-          <path class="deck" d="M12 62 H138"/>
-          <circle class="port" cx="46" cy="72" r="5"/>
-          <circle class="port" cx="104" cy="72" r="5"/>
-          <path class="bowwave" d="M6 84 q10-8 22-3"/>
-        </g>`,
+        <path class="mast" d="M104 62 V10"/>
+        <path class="sail" d="M100 58 V14 q-34 8-44 44 z"/>
+        <path class="flag" d="M104 12 q10 3 18 0 q-8 6 0 12 q-10-3-18 0 z"/>
+        <path class="hull" d="M12 62 H138 L120 88 H30 z"/>
+        <path class="deck" d="M12 62 H138"/>
+        <circle class="port" cx="46" cy="72" r="5"/>
+        <circle class="port" cx="104" cy="72" r="5"/>
+        <path class="bowwave" d="M6 84 q10-8 22-3"/>`,
       update(rig, state, dt) {
         const m = rig.mem;
         if (!m.init) {
           m.init = true;
-          m.rock = rig.q('.rock');
           m.heave = { x: 0, v: 0 };
           m.tilt = { x: 0, v: 0 };
           m.lastTilt = 0;
@@ -397,10 +398,10 @@
         const want = K.hullTarget(state.x, t, 126 * sc, y0, sc);
         m.heave = K.spring(m.heave, want.y - y0, h, 42, 10);
         m.tilt = K.spring(m.tilt, want.rot, h, 38, 9);
-        if (m.rock) {
-          m.rock.setAttribute('transform',
-            `translate(0 ${(m.heave.x / sc).toFixed(2)}) rotate(${m.tilt.x.toFixed(2)} 75 70)`);
-        }
+        // THE WHOLE BOAT, crew included. This used to transform a <g> inside
+        // the svg, so the hull rolled through the swell and the two faces hung
+        // level and motionless in the air above it.
+        rig.pose(0, m.heave.x / sc, m.tilt.x, 75, 70);
 
         // SPRAY ONLY WHEN THE BOW SLAMS. Not every wave — a boat that throws
         // water continuously is a fountain. The trigger is the RATE the tilt is
@@ -527,7 +528,6 @@
       band: 0.06,
       slots: [[68, 62, 14]],
       art: `
-        <g class="tip">
           <path class="boom" d="M104 62 h68 q7 0 7 7 v5 h-75 z"/>
           <path class="fin" d="M168 56 h9 v20 h-9 z"/>
           <path class="body" d="M26 62 q0-30 42-30 q40 0 46 30 l6 18 q0 14-18 14 H42 q-18 0-18-14 z"/>
@@ -536,15 +536,13 @@
           <path class="mast" d="M68 32 V16"/>
           <ellipse class="disc" cx="68" cy="14" rx="74" ry="9"/>
           <path class="rotor" d="M-6 14 L142 14"/>
-          <g class="tailrotor" data-base="translate(180 62)"><path d="M0 -16 V16"/></g>
-        </g>`,
+          <g class="tailrotor" data-base="translate(180 62)"><path d="M0 -16 V16"/></g>`,
       update(rig, state, dt) {
         const m = rig.mem;
         if (!m.init) {
           m.init = true;
           m.rotor = rig.q('.rotor');
           m.tail = rig.q('.tailrotor');
-          m.tip = rig.q('.tip');
           m.pitch = { x: 0, v: 0 };
           m.a = 0;
         }
@@ -559,10 +557,9 @@
         // still — the hover lane is the only one that stops.
         const bob = 1.6 * Math.sin(rig.t * 1.7);
         m.pitch = K.spring(m.pitch, Math.max(-12, Math.min(12, -state.accel * 0.05)), h, 34, 10);
-        if (m.tip) {
-          m.tip.setAttribute('transform',
-            `translate(0 ${bob.toFixed(2)}) rotate(${m.pitch.x.toFixed(2)} 68 62)`);
-        }
+        // The airframe, and the pilot in it. Pitching the drawing alone left a
+        // face sitting level in a bubble that had tipped forward around it.
+        rig.pose(0, bob, m.pitch.x, 68, 62);
       },
     },
 
@@ -634,11 +631,18 @@
 
         // Lean out of the bend, from lateral acceleration. The turn rate gives
         // the radius: r = v / omega.
-        const turn = Math.abs(state.rot - m.prevRot) / Math.max(h, 1e-3);   // deg/s
+        // The DELTA first, then the new previous. Read after prevRot had been
+        // updated, `state.rot - m.prevRot` is exactly zero every frame, so the
+        // side always came out the same one and the car leant the same way into
+        // both left and right corners.
+        const dRot = state.rot - m.prevRot;
+        const turn = Math.abs(dRot) / Math.max(h, 1e-3);   // deg/s
         m.prevRot = state.rot;
         const omega = (turn * Math.PI) / 180;
         const radius = omega > 0.02 ? state.speed / omega : 0;
-        const side = state.rot - m.prevRot <= 0 ? 1 : -1;
+        // Heading falls (0, -90, -180) turning right, in CSS degrees: a falling
+        // heading is a right-hand bend, and a car in one leans left, out of it.
+        const side = dRot <= 0 ? 1 : -1;
         const want = radius > 0 ? Math.min(14, K.lateral(state.speed, radius) * 0.02) : 0;
         m.lean = K.spring(m.lean, want * side, h, 45, 11);
 
@@ -690,7 +694,6 @@
       // the basket entirely, which reads as two heads on a rope.
       slots: [[56, 118, 12], [96, 118, 12]],
       art: `
-        <g class="lift">
           <path class="env" d="M75 6 q46 0 46 46 q0 32-28 52 H57 q-28-20-28-52 q0-46 46-46 z"/>
           <path class="panel a" d="M75 6 q-18 23-18 50 q0 26 11 48 h-11 q-28-20-28-52 q0-46 46-46 z"/>
           <path class="panel b" d="M75 6 q18 23 18 50 q0 26-11 48 h11 q28-20 28-52 q0-46-46-46 z"/>
@@ -700,15 +703,13 @@
           <path class="basket" d="M52 124 h46 q6 0 6 6 v22 q0 6-6 6 H52 q-6 0-6-6 v-22 q0-6 6-6 z"/>
           <path class="rim" d="M46 130 H104"/>
           <circle class="sandbag" cx="46" cy="158" r="7"/>
-          <circle class="sandbag" cx="104" cy="158" r="7"/>
-        </g>`,
+        <circle class="sandbag" cx="104" cy="158" r="7"/>`,
       update(rig, state, dt) {
         const m = rig.mem;
         if (!m.init) {
           m.init = true;
           m.burner = rig.q('.burner');
           m.inner = rig.q('.inner');
-          m.lift = rig.q('.lift');
           m.rise = { x: 0, v: 0 };
         }
         const h = K.clampDt(dt);
@@ -742,7 +743,9 @@
         }
         m.lighter = Math.max(0, (m.lighter ?? 0) - h * 3);
         m.rise = K.spring(m.rise, -burn * 5 - m.lighter, h, 26, 9);
-        if (m.lift) m.lift.setAttribute('transform', `translate(0 ${m.rise.x.toFixed(2)})`);
+        // Envelope, basket, ropes, sandbags AND the two faces over the rim:
+        // lifting the artwork alone left the passengers behind on every flare.
+        rig.pose(0, m.rise.x);
       },
     },
 
