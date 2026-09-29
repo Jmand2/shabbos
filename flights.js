@@ -694,15 +694,61 @@
       el.remove();
       rails?.remove();
       rig.own?.remove();
+    };
+
+    // Is there anything left of this flight in the air?
+    const settled = () => !rig.smoke.list.length && !rig.spray.list.length
+      && !(rig.notes?.list.length) && !(rig.steam?.list.length)
+      && !(rig.debris?.length);
+
+    // Everything it made, taken back. The particle nodes live in the shared
+    // world layer and were never removed at all: each flight left forty or so
+    // circles in it, display:none and permanent, and an evening on the wall
+    // accumulated thousands.
+    const end = () => {
+      clear();
+      for (const k of ['puffNodes', 'sprayNodes', 'noteNodes', 'steamNodes']) {
+        (rig[k] ?? []).forEach((n) => n.remove());
+        rig[k] = [];
+      }
       (rig.debris ?? []).forEach((d) => d.node.remove());
       rig.debris = [];
     };
 
+    // How long the air is given to finish after the vehicle has gone. The
+    // longest thing anything releases lives 2.8s.
+    const LINGER = 4000;
+
     const t0 = performance.now();
     let last = null;
+    let gone = false;
     (function step(now) {
       const p = (now - t0) / ms;
-      if (p >= 1) { clear(); return; }
+      // TAKEN OUT FROM UNDER US. Removing a .flight element did not stop its
+      // loop: it went on flying an element that was no longer in the document,
+      // emitting into the shared world layer the whole time. Nothing in the app
+      // does that, but the suites do it constantly, and one orphaned rocket
+      // quietly seeding puffs into another test's sky is exactly the kind of
+      // thing that makes a check flaky rather than wrong.
+      if (!gone && !el.isConnected) { end(); return; }
+      // THE WAKE OUTLIVES THE VEHICLE. That is the whole claim the smoke makes
+      // — it belongs to the air, not to the thing that released it — so the
+      // loop does not stop when the flight does. It used to: the vehicle went,
+      // rAF was not asked for again, and every puff stayed exactly where and
+      // as bright as it was on that last frame. The rocket is still burning
+      // hard when its flight ends, so its exhaust column simply stayed printed
+      // down the screen until the page was reloaded.
+      if (p >= 1) {
+        if (!gone) { gone = true; clear(); }
+        const fade = K.clampDt(last ? (now - last.t) / 1000 : 0);
+        if (last) last.t = now;
+        stepSmoke(rig, fade);
+        // A hard stop as well: a tab that comes back from being hidden should
+        // not owe the air four minutes of drift.
+        if (settled() || now - t0 > ms + LINGER) { end(); return; }
+        requestAnimationFrame(step);
+        return;
+      }
       const pose = LANES[lane](p, v, W, H);
       // The offset a rare moment asked for on the last frame. A loop is a
       // circle laid over the lane rather than a different lane, so the path
@@ -737,8 +783,8 @@
       requestAnimationFrame(step);
     })(t0);
 
-    // Belt and braces: if rAF is throttled away, the node still goes.
-    setTimeout(clear, ms + 4000);
+    // Belt and braces: if rAF is throttled away, the nodes still go.
+    setTimeout(end, ms + LINGER + 1000);
   }
 
   function tick() {

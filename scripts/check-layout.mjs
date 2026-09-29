@@ -1122,6 +1122,41 @@ for (const view of VIEWS) {
     });
     ok(shed.seen, 'the rare rocket sheds a stage');
     ok(shed.gap > 60, `and the rocket climbs away from it (${shed.gap.toFixed(0)} px apart)`);
+
+    // THE WAKE FINISHES DYING. The loop used to stop on the frame the flight
+    // ended, so every puff froze where and as bright as it was: the rocket is
+    // still burning hard when its flight ends and its exhaust column stayed
+    // printed down the screen. The nodes were never taken back either, so an
+    // evening on the wall accumulated thousands of them.
+    const after = await page.evaluate(async () => {
+      document.querySelectorAll('.flight').forEach((n) => n.remove());
+      document.querySelectorAll('.flyway .puffs > *').forEach((n) => n.remove());
+      window.shabbosFlights.send('rocket');
+      const el = document.querySelector('.flight.rocket');
+      const seen = () => [...document.querySelectorAll('.flyway .puffs > *')]
+        .filter((n) => n.style.display !== 'none' && Number(n.style.opacity || 1) > 0.02).length;
+      let peak = 0;
+      while (el.isConnected) {
+        await new Promise((r) => requestAnimationFrame(r));
+        peak = Math.max(peak, seen());
+      }
+      const atEnd = seen();
+      // MEASURED BEFORE THE SAFETY NET. A timer sweeps the flight's leavings a
+      // second past the linger, and waiting that long tested the timer instead
+      // of the loop: stubbing the fade out and letting the timer tidy up, this
+      // passed. The longest puff lives 1.9s, so by 2.6s the air has to be clear
+      // on its own.
+      await new Promise((r) => setTimeout(r, 2600));
+      const early = { lit: seen(), nodes: document.querySelectorAll('.flyway .puffs > *').length };
+      await new Promise((r) => setTimeout(r, 3200));
+      return { peak, atEnd, early, nodes: document.querySelectorAll('.flyway .puffs > *').length };
+    });
+    ok(after.peak > 5, `the rocket leaves a column behind it (${after.peak} puffs at its most)`);
+    ok(after.early.lit === 0,
+      `and the air clears on its own once it has gone (${after.early.lit} still lit at 2.6s, `
+      + `${after.atEnd} at the moment it went)`);
+    ok(after.early.nodes === 0, `and its particle nodes go with it (${after.early.nodes} left at 2.6s)`);
+    ok(after.nodes === 0, `and none are left in the layer afterwards (${after.nodes})`);
   }
 
   await page.close();
