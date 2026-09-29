@@ -292,9 +292,24 @@ ends up at 10px and still clipped — it asks how many rows survive at a size
 worth reading across a room, and shows that many. A quiet Tuesday shows more
 than a crowded erev Yom Tov.
 
-Choosing 4, 8 or 12 still works, but only as a **ceiling**. If the board cannot
-fit that many at any size it shows fewer rather than clipping them, because an
-absent time is better than a cut one.
+Auto never shows half a service, and **every day on the board keeps a whole
+service of its own** before any day gets a second one. That is the floor, not
+the target: services are added after it in an interleaved order — every day's
+first, then every day's second — so a long morning cannot crowd out the day
+behind it. The only thing permitted to take a day off the board is the explicit
+fallback at the end of the search, which gives up candle lighting and havdalah
+first and then days, furthest away first. Two days shown completely beats three
+with their mornings cut in half.
+
+The number Auto searches on is a **fitting control, not a promise about a count**
+— nothing outside the search reads it, and all the search needs is that the
+content grows with it.
+
+Choosing 4, 8 or 12 is a different question: it is a number a person typed, and
+it is exact. Splitting a service to honour it is correct, because the count is
+the promise. The only thing it does not do is clip: if the board cannot fit that
+many at any size it shows fewer, because an absent time is better than a cut
+one.
 
 The next minyan gets the whole row rather than one recoloured number: accent
 label, a tinted band and a NEXT marker, decided independently per card so
@@ -419,8 +434,8 @@ drops the furthest day rather than quietly showing five.
 
 ## When the times were last confirmed
 
-The footer describes the oldest shul on screen, across every day the board
-reaches — not the newest thing in the file, and not today alone.
+The footer describes the oldest thing **on the board** — not the newest thing in
+the file, not today alone, and not the window the board was drawn from.
 
 `generated_at` goes fresh if **any** shul was fetched successfully, while the
 scraper deliberately retains the previous entry for any that failed. A shul
@@ -429,6 +444,41 @@ data had been confirmed minutes ago. Every entry now carries its own
 `fetched_at` and the line reports the worst of the ones actually displayed.
 Entries written before that field existed fall back to the file-level stamp, so
 nothing breaks while the old ones age out.
+
+"Actually displayed" is meant literally: the renderer records the shul, day and
+service sets it paints, and the footer reads those. Asking the day *window*
+instead meant a day Auto had given up through the day-drop fallback still
+decided how old the board claimed to be — a retained entry two days away, on
+screen nowhere, turning "Times from each shul's own website" into "Times last
+confirmed Apr 15" about times confirmed that morning.
+
+The sentence above it credits where those times came from, and it is about the
+**minyan times only**. A day is assembled from up to three places at once — a
+Shacharis off the shul's own site, a Mincha off the aggregator, a Maariv typed
+in from a printed calendar — so it names what it has: one site, both sites, "·
+includes manually confirmed times" beside them, or "Times entered by hand from
+the shuls' own calendars" when there is no site to credit. Candle lighting and
+havdalah are not minyan times and stay out of it; a candle time typed off a
+calendar used to make the whole board read as hand-entered.
+
+**System status** breaks the same thing down per shul and per day, and gives
+each source its own age, because they do not share one. A scrape has a
+`fetched_at` and a transcription has an `entered_at`, and
+
+```
+Shacharis agg · Mincha manual · Maariv manual · 18m ago · typed Sep 25
+```
+
+says the Mincha and Maariv were confirmed eighteen minutes ago when they were
+read off a printed calendar in September. It reads
+
+```
+Shacharis agg 18 min ago · Mincha/Maariv/Havdalah manual Apr 19
+```
+
+An edge is named for what it actually holds, too: a hand-entered havdalah — what
+the last night of a three-day chag carries — is called a havdalah and not a
+candle lighting.
 
 ## The weather
 
@@ -538,8 +588,15 @@ breaks — the module does nothing at all.
 | | |
 | --- | --- |
 | Something crosses | Off / every 2–5, 5–10, 10–20, 20–40 or 45–90 min |
+| On the hour | A few at once / Off |
 
-Each setting is a **range**, and the gap is drawn uniformly inside it and
+**The two are independent.** Either can be off without affecting the other, so
+"crossings off, hour on" is a display that flies nothing until the hour and then
+sends seven to ten at once, against the clock on the wall above it. The parade's
+guard used to check the crossings setting as well, which made that combination
+mean "nothing, ever" while the sheet said it was on.
+
+Each crossing setting is a **range**, and the gap is drawn uniformly inside it and
 redrawn after every flight, so the next one is never predictable from the last.
 Ranges rather than single numbers because that is what actually happens: once
 the gap became random, a label saying "every 10 minutes" was describing
@@ -603,7 +660,7 @@ so it also covers two-day Yom Tov and a Yom Tov that runs into Shabbos.
 
 ## How the code is laid out
 
-No build step and no framework. Eight ordinary scripts, loaded in this order and
+No build step and no framework. Eleven ordinary scripts, loaded in this order and
 sharing one script scope:
 
 | | |
@@ -616,6 +673,12 @@ sharing one script scope:
 | `sports.js` | scores, and whether they can still be believed |
 | `display.js` | everything that paints |
 | `app.js` | startup, intervals, the appliance lifecycle |
+| `kinetics.js` | motion maths, and nothing else |
+| `vehicles.js` | what each vehicle is, and how its parts move |
+| `flights.js` | scheduling, faces, the DOM, the world |
+
+The last three are the family flights and are described under **How the
+vehicles move**.
 
 **Not ES modules**, deliberately. jsdom cannot load `<script type="module">` at
 all, and both behavioural suites work by loading the real `index.html` and
@@ -630,8 +693,14 @@ visible to `weather.js`. Separate `eval()` calls do **not** — each gets its ow
 scope. The suites therefore concatenate the files and evaluate them as one
 program, which is the faithful equivalent.
 
-All eight are in the service worker's shell, cached and replaced as one
-generation — see below.
+All eleven are in the service worker's shell, cached and replaced as one
+generation — see below. That shell is written down in three places and loaded
+from a fourth, so `check-sw.mjs` compares them: every script and stylesheet
+`index.html` loads has to be precached, every one of ours has to be coupled to
+the generation, and the suite's own list has to be exactly that set. A file
+added to the page and left out of a list fails invisibly — it is simply fetched
+from the network, outside the generation — and both `kinetics.js` and
+`vehicles.js` arrived that way.
 
 ## Updates are all-or-nothing
 
@@ -736,6 +805,9 @@ is the one thing that gets noticed.
 
 ## The vehicles
 
+How they move is a section of its own — **How the vehicles move**, below. This
+is what they look like.
+
 Four paints rather than one outline: a **hull** you cannot see through, **glass**
 a little brighter for windows and canopies, **thin** detail lines that step back,
 and **solid** for the small marks that need to read at speed. Every vehicle was
@@ -760,6 +832,73 @@ height now, plus a constant for the fact that several of them draw outside their
 declared viewBox and `overflow: visible` paints all of it. It sits at 98% worst,
 and `check-layout.mjs` holds it there.
 
+## How the vehicles move
+
+Every part of a vehicle moves **because the vehicle moves**. Wheels roll the
+distance travelled, bodies lean and pitch out of the acceleration they are
+under, the boat rides a real sea, and exhaust stays where it was released. None
+of it is on a timer, and adding one back is the main way to break it.
+
+Three files, with a line between them worth keeping:
+
+| | |
+| --- | --- |
+| `kinetics.js` | pure motion maths. Springs, the sea, rolling, exhaust beats, speed that looks ahead, particle pools. No DOM, no vehicles, no scheduling. Tested on its own by `check-kinetics.mjs`. |
+| `vehicles.js` | one entry per vehicle: artwork, seat slots, named parts, and an `update(rig, state, dt)` that says how those parts answer the motion. Nothing about when it flies or where the faces come from. |
+| `flights.js` | scheduling, faces and their decryption, lanes and paths, the DOM lifecycle, the shared world layer, the parade. It hands a vehicle a `rig` and a `state` and gets out of the way. |
+
+If you find yourself adding vehicle-specific behaviour to `flights.js`, or
+motion maths to `vehicles.js`, the thing you are writing belongs one file over.
+
+**Whole-vehicle motion moves the riders.** A flight element is
+
+```
+.flight
+  .body        <- artwork, seat circles and face overlays, together
+    svg
+    img, img
+```
+
+and anything representing the vehicle itself moving — a hull riding a swell, a
+balloon lifting on its burner, a helicopter pitching to set off — goes through
+`rig.pose(dx, dy, rot, cx, cy)`, which transforms `.body`. Inner SVG transforms
+are for the parts that genuinely move on their own: wheels, rotor blades,
+propellers, limbs, banner cloth, a burner flame, suspension. The distinction is
+not stylistic. Rocking a group inside the `<svg>` moves the drawing and leaves
+the faces where they were, which is how the boat spent a while rolling through
+the swell while its two passengers hung level and motionless in the air above
+it.
+
+**Do not add CSS-only animation to a whole vehicle.** `.car svg { chug }` and
+`.boat svg { bob }` both existed, both moved the artwork and not the faces, and
+both ran on clocks of their own rather than on anything the vehicle was doing —
+the boat already rides a real sea through `hullTarget()` and a spring, so a ±3°
+sine laid over it was a second, contradictory swell. Keyframes are still right
+for a part that has its own rhythm and no relationship to the motion.
+
+**Particles are world-space once emitted.** Smoke, spray, steam, notes and
+anything a vehicle sheds go into the shared world layer in screen coordinates,
+because the whole point of them is that the vehicle leaves them behind. They
+outlive the flight — the loop keeps stepping them after the vehicle has gone,
+and takes their nodes back only when there is nothing left of them — and every
+emitter has a hard cap, because a parade puts ten vehicles on an iPad at once
+and eventual cleanup is not a budget.
+
+`rig.point(ax, ay)` is how artwork coordinates become world coordinates. It
+applies the vehicle's pivot, its scale **and its heading**, which is the same
+matrix the browser builds for the element. A vehicle that is rotated and places
+something without that last part puts it where it would have been if the vehicle
+were level: the rocket exhausted out of its side for a while.
+
+About one flight in fifteen does something — the train whistles and is a
+carriage longer, the plane loops, the rocket sheds a stage, the balloon drops a
+sandbag, the car honks. It is decided once, when the flight launches, from a
+seed made of its kind and the second it went, so it is a property of that flight
+rather than of whoever is looking, and it cannot flicker frame to frame. A
+vehicle whose rare moment changes its *shape* says so through `rare()`, which
+returns a new spec that is spread over a per-flight copy — never over the shared
+definition every other flight of that kind is built from.
+
 ## What a data-only push does not do
 
 The scraper pushes three times a day and changes nothing but generated JSON, so
@@ -779,9 +918,9 @@ browser, no jsdom, and it runs where a bad scrape actually comes from.
 
 ## Checking a change
 
-All four suites run in GitHub Actions on every push and pull request
-(`.github/workflows/check.yml`), and both exit non-zero when something is
-actually wrong. `check.mjs` used to print its problems and then call
+All seven suites run in GitHub Actions on every push and pull request
+(`.github/workflows/check.yml`), and every one of them exits non-zero when
+something is actually wrong. `check.mjs` used to print its problems and then call
 `process.exit(0)` regardless, which is worth nothing to a CI job — it now counts
 failures and reports a verdict.
 
@@ -792,7 +931,25 @@ npm install
 npm test
 ```
 
-There is a third suite, and it is the one that can see a real box:
+`npm test` runs them in this order, cheapest first:
+
+| | |
+| --- | --- |
+| `check:data` | the scrape on its own — no browser, no jsdom, seconds |
+| `check:kinetics` | the motion maths, 16 checks, called directly |
+| `check:vehicles` | static gates on the artwork: face size, stroke width, node budget, and that every CSS rule still matches a part that exists |
+| `check` | 13 Shabbos and Yom Tov moments, the degraded starts, the scraper, and all 365 days of the coming year |
+| `check:ui` | behaviour a frozen frame cannot show, in jsdom |
+| `check:sw` | the shell lists, then one generation installed against another over a half-working network, in WebKit |
+| `check:layout` | real geometry in WebKit at the sizes the iPad runs at |
+
+The last two need a browser:
+
+```
+npx playwright install webkit
+```
+
+The layout suite is the one that can see a real box:
 
 ```
 npx playwright install webkit
@@ -808,6 +965,18 @@ runs, at the sizes the iPad runs at, and asserts that nothing overflows its box,
 that no band paints over another, that no panel clips its own contents, and that
 the numerals stay large enough to read across a room. It found ten failures
 across six views the first time it was run.
+
+It also holds the parts of the motion system that only a real browser can
+answer: that a rider's offset from the seat drawn under them does not change
+while the vehicle moves (boat, balloon and helicopter, over two hundred frames
+each); that a rotated vehicle places its world points where an independent
+derivation says it should; that the rocket's exhaust leaves the nozzle it is
+drawn under; that a parade of ten vehicles puts its 795 DOM nodes back where it
+found them and leaves nothing asking for animation frames; and that Auto keeps a
+whole service from every day it shows on the narrowest board there is. Add
+`--update-screenshots` and it also writes frame sequences to
+`screenshots/motion/`, which is where you look when the question is whether a
+rider is really in the seat.
 
 There is a second suite for the behaviour a single frozen frame cannot show —
 the board repainting twice a minute, the horizon rolling over at nightfall, and
