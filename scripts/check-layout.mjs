@@ -1388,6 +1388,44 @@ for (const view of VIEWS) {
       `and no flight is still asking for frames (${parade.raf} against ${parade.base.raf} before)`);
   }
 
+  // START FROM AN EMPTY SKY. Removing a .flight stops its loop on the next
+  // frame and its particle nodes go with it — on the NEXT frame, not this one.
+  // Clearing the layer and sending immediately left the previous vehicle's
+  // last puffs in the group, and "the newest puff" is found by position in it.
+  const quiet = () => page.evaluate(async () => {
+    document.querySelectorAll('.flight').forEach((n) => n.remove());
+    for (let i = 0; i < 120; i += 1) {
+      await new Promise((r) => requestAnimationFrame(r));
+      if (!document.querySelectorAll('.flyway .puffs > *, .flight').length) return true;
+    }
+    document.querySelectorAll('.flyway .puffs > *, .flyway .rails > *').forEach((n) => n.remove());
+    return false;
+  });
+
+  /* EMITTERS HAVE CEILINGS, NOT JUST CLEANUP ------------------------------- */
+  {
+    // A parade puts ten vehicles on an iPad at once and several of them emit
+    // every frame, so what bounds the work is the cap and not the fact that
+    // particles eventually die. Measured on the heaviest emitter there is: the
+    // rocket burns continuously for its whole flight.
+    await quiet();
+    const capped = await page.evaluate(async () => {
+      window.shabbosFlights.send('rocket');
+      const el = document.querySelector('.flight.rocket');
+      let peak = 0;
+      for (let i = 0; i < 400 && el.isConnected; i += 1) {
+        await new Promise((r) => requestAnimationFrame(r));
+        peak = Math.max(peak, [...document.querySelectorAll('.flyway .puff')]
+          .filter((n) => n.style.display !== 'none').length);
+      }
+      if (el.isConnected) el.remove();
+      return peak;
+    });
+    ok(capped > 20, `the rocket really does fill its exhaust pool (${capped})`);
+    // kinetics' own default, which is what rig.smoke is built with.
+    ok(capped <= 40, `and never exceeds its cap of 40 (${capped})`);
+  }
+
   /* THE TWO SWITCHES ARE INDEPENDENT --------------------------------------- */
   {
     // Settings offer "Something crosses" and "On the hour" as two controls, but
@@ -1447,8 +1485,8 @@ for (const view of VIEWS) {
     // frames. If the artwork moves and the face does not, that offset opens up.
     await page.evaluate(() => window.shabbosFlights.stand(4));
     for (const name of ['boat', 'balloon', 'helicopter']) {
+      await quiet();
       const held = await page.evaluate(async (n) => {
-        document.querySelectorAll('.flight').forEach((x) => x.remove());
         window.shabbosFlights.send(n);
         const el = document.querySelector(`.flight.${n}`);
         if (!el) return null;
@@ -1473,7 +1511,7 @@ for (const view of VIEWS) {
           }
         }
         el.remove();
-        document.querySelectorAll('.flyway .sea, .flyway .puffs > *').forEach((x) => x.remove());
+        document.querySelectorAll('.flyway .sea').forEach((x) => x.remove());
         return { drift, swing };
       }, name);
       ok(held !== null, `${name}: a rider can be seated and followed`);
@@ -1527,9 +1565,8 @@ for (const view of VIEWS) {
     // leave the nozzle it is drawn under — measured against the flame's own
     // rectangle, which the browser places, not against the same arithmetic the
     // code under test uses.
+    await quiet();
     const exhaust = await page.evaluate(async () => {
-      document.querySelectorAll('.flight').forEach((n) => n.remove());
-      document.querySelectorAll('.flyway .puffs > *').forEach((n) => n.remove());
       window.shabbosFlights.send('rocket');
       const el = document.querySelector('.flight.rocket');
       const mid = (b) => ({ x: b.left + b.width / 2, y: b.top + b.height / 2 });
@@ -1561,7 +1598,6 @@ for (const view of VIEWS) {
         seen += 1;
       }
       if (el.isConnected) el.remove();
-      document.querySelectorAll('.flyway .puffs > *').forEach((n) => n.remove());
       return { worst, turned, seen };
     });
     ok(exhaust.seen > 20, `the rocket is watched while it burns (${exhaust.seen} puffs)`);
