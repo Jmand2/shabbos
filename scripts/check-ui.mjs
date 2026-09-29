@@ -988,6 +988,105 @@ console.log('\n=== Y3: the cap still wins, and every day still gets a share ==='
   }
 }
 
+console.log('\n=== P: the footer credits the times that are on the board ===');
+{
+  // A day is assembled from up to three places at once — a Shacharis off the
+  // shul's own site, a Mincha off the aggregator, a Maariv typed off a printed
+  // calendar — and the sentence under the board has to be right about the ones
+  // it is describing, which are the MINYAN times and only those.
+  const one = (sources, extra = {}) => ({
+    generated_at: '2027-04-21T06:00:00Z',
+    days: Object.fromEntries(PESACH.map((iso) => [iso, { 'beth-aaron': {
+      fetched_at: '2027-04-21T06:00:00Z',
+      shacharis: [{ label: 'Shacharis', time: '7:00 AM' }, { label: 'Shacharis', time: '8:30 AM' }],
+      mincha: [{ label: 'Mincha', time: '1:30 PM' }, { label: 'Mincha', time: '7:00 PM' }],
+      maariv: [{ label: 'Maariv', time: '8:45 PM' }],
+      sources, ...extra,
+    } }])),
+  });
+  const footer = async (data) => {
+    const { w } = await boot('2027-04-21T15:00:00-04:00',
+      { minyanim: data, settings: { shuls: ['beth-aaron'] } });
+    return $(w, 'freshness').textContent;
+  };
+
+  const allShul = await footer(one({ shacharis: 'shul', mincha: 'shul', maariv: 'shul' }));
+  ok(/each shul’s own website/.test(allShul), `all from the shuls ("${allShul}")`);
+
+  const allAgg = await footer(one({ shacharis: 'aggregator', mincha: 'aggregator', maariv: 'aggregator' }));
+  ok(/teaneckminyanim\.com/.test(allAgg) && !/shul’s own/.test(allAgg),
+    `all from the aggregator ("${allAgg}")`);
+
+  const mixed = await footer(one({ shacharis: 'shul', mincha: 'aggregator', maariv: 'shul' }));
+  ok(/websites and teaneckminyanim\.com/.test(mixed), `both, named as both ("${mixed}")`);
+
+  // MANUAL IS NOT A WEBSITE. It was collected into the set and then never
+  // consulted — the sentence only asked whether 'shul' was present — so a day
+  // typed in by hand from a printed calendar was credited to teaneckminyanim,
+  // which had supplied none of it.
+  const handAndShul = await footer(one({ shacharis: 'shul', mincha: 'manual', maariv: 'manual' }));
+  ok(/each shul’s own website/.test(handAndShul) && /manually confirmed/.test(handAndShul),
+    `hand-entered times are said so, beside the site that gave the rest ("${handAndShul}")`);
+
+  const handOnly = await footer(one({ shacharis: 'manual', mincha: 'manual', maariv: 'manual' }));
+  ok(!/teaneckminyanim/.test(handOnly) && /by hand/.test(handOnly),
+    `and a board typed entirely by hand credits nobody else ("${handOnly}")`);
+
+  // AN EDGE FIELD IS NOT A MINYAN TIME. A candle lighting typed off a calendar
+  // sat in entry.sources.edge, and Object.values swept it up with the rest, so
+  // the minyan times read as hand-entered because the candles were.
+  const candles = await footer(one(
+    { shacharis: 'aggregator', mincha: 'aggregator', maariv: 'aggregator', edge: 'manual' },
+    { edge: { candles: '7:23 PM' }, hand: { entered_at: '2027-04-20', edge: ['candles'] } },
+  ));
+  ok(/teaneckminyanim\.com/.test(candles) && !/manually confirmed/.test(candles),
+    `a hand-typed candle time does not make the minyanim manual ("${candles}")`);
+}
+
+console.log('\n=== P2: System Status dates each source by its own clock ===');
+{
+  // "Shacharis agg · Mincha manual · Maariv manual · 18m ago · typed Sep 25"
+  // says the Mincha and Maariv were confirmed eighteen minutes ago. They were
+  // transcribed from a printed calendar in September; the eighteen minutes
+  // belongs to the Shacharis beside them.
+  const now = '2027-04-21T15:00:00-04:00';
+  const scraped = new Date(new Date(now).getTime() - 18 * 60000).toISOString();
+  const data = {
+    generated_at: scraped,
+    days: Object.fromEntries(PESACH.map((iso) => [iso, { 'beth-aaron': {
+      fetched_at: scraped,
+      shacharis: [{ label: 'Shacharis', time: '7:00 AM' }],
+      mincha: [{ label: 'Mincha', time: '1:30 PM' }],
+      maariv: [{ label: 'Maariv', time: '8:45 PM' }],
+      sources: { shacharis: 'aggregator', mincha: 'manual', maariv: 'manual', edge: 'manual' },
+      edge: { havdalah: '8:41 PM' },
+      hand: { entered_at: '2027-04-19', sections: ['mincha', 'maariv'], edge: ['havdalah'] },
+    } }])),
+  };
+  const { w } = await boot(now, { minyanim: data, settings: { shuls: ['beth-aaron'] } });
+  // Asked of the function the panel is built from. renderStatus() also reaches
+  // for the service worker's cache names, which do not exist here, and a panel
+  // that never finished rendering would have made these pass by saying nothing.
+  const stamp = new w.Date();
+  const rows = w.shulSources(stamp, w.daysShown(stamp, w.dayInfo(stamp)))
+    .map(([name, detail]) => `${name} ${detail}`);
+  const line = rows.find((r) => /Shacharis/.test(r)) ?? '';
+  ok(!!line, `System Status has a line for the shul (${rows.length} shul lines)`);
+  ok(/Shacharis agg 18 min ago/.test(line),
+    `the scraped service carries the scrape's age ("${line.slice(0, 90)}")`);
+  // Everything typed off the same calendar on the same day is one group, in the
+  // order the services come.
+  ok(/Mincha\/Maariv\/Havdalah manual/.test(line),
+    'services from the same place are named together, not one by one');
+  ok(!/manual \d+ min ago/.test(line),
+    'and nothing hand-entered is described as minutes old');
+  ok(/Apr 19/.test(line), 'the typed services carry the day they were typed');
+  // AND AN EDGE IS NAMED FOR WHAT IT IS. A three-day chag's last night carries
+  // a havdalah, not a candle lighting, and every one of them read "Candles".
+  ok(/Havdalah manual/.test(line) && !/Candles/.test(line),
+    `a hand-entered havdalah is called one ("${line.slice(-60)}")`);
+}
+
 console.log('\n=== F: freshness describes the oldest shul on screen ===');
 {
   const old = '2027-04-20T06:00:00Z';     // a day and a half before "now"

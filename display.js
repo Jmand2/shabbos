@@ -76,6 +76,9 @@ function runsOf(rows) {
 }
 let lastBoard = '';
 let lastMarks = '';
+// The shul/day/service sets the board is currently showing, written by build()
+// and read by the footer. Empty until something has been drawn.
+let shownRows = [];
 
 function render() {
   const now = new Date();
@@ -403,6 +406,18 @@ function renderShuls(now, days) {
   const build = (cap, withEdges = true, maxDays = Infinity) => {
   const perCardLines = [];
   let lines = 0;
+  // WHAT ACTUALLY ENDS UP ON THE SCREEN. The footer describes the times the
+  // board is showing, and it used to describe the window the board was drawn
+  // FROM: every shul, every day the period reaches, every service in the file,
+  // including days Auto had dropped and an edge field that may not be on the
+  // card at all. A day given up by the day-drop fallback still decided how old
+  // the board claimed to be, and a candle time typed off a calendar made the
+  // minyan times read as hand-entered.
+  //
+  // build() is the only thing that writes the board, and whichever build ran
+  // last is what is on it: every path either paints or has already probed the
+  // arrangement it settles on. So recording here records the truth.
+  const showing = [];
 
   const cards = list.map((shul) => {
     lines = 0;
@@ -447,6 +462,14 @@ function renderShuls(now, days) {
       const k = isoOf(r.at);
       if (!byDay.has(k)) byDay.set(k, []);
       byDay.get(k).push(r);
+    }
+    for (const [iso, rows] of byDay) {
+      showing.push({
+        slug: shul.slug,
+        iso,
+        groups: [...new Set(rows.map((r) => r.group))],
+        edges: withEdges && edgeRowsFor(shul.slug, rows[0].at).length > 0,
+      });
     }
 
     // Collected as blocks rather than one string, so they can be dealt into
@@ -532,6 +555,7 @@ function renderShuls(now, days) {
   document.documentElement.style.setProperty('--clock-fill', fill);
 
   paintBoard(cards.join(''));
+  shownRows = showing;
   return fitBoard();
   };
 
@@ -854,6 +878,11 @@ function renderHorizon(now, info) {
    has no business owning. It credits open-meteo too, which is how it ended
    up next to the forecast in the first place. */
 
+// The services the footer's "Times from…" sentence is about. Candle lighting
+// and havdalah are not minyan times and do not belong in it — and `edge` is a
+// field the card need not be showing at all.
+const MINYAN_GROUPS = ['shacharis', 'mincha', 'maariv'];
+
 // The oldest thing on screen, not the newest thing in the file.
 //
 // generated_at goes fresh if ANY shul was fetched successfully, while the
@@ -864,19 +893,23 @@ function renderHorizon(now, info) {
 function shownStamp(now, days) {
   const file = minyanim.generated_at ? new Date(minyanim.generated_at) : null;
   const stamps = [];
-  // Every day the board reaches, not just today. Once the window widened to
-  // cover a three-day Yom Tov this still asked about today alone, so a Shabbos
-  // entry retained from an older run sat two columns away from a line calling
-  // the board current.
-  for (const day of days) {
-    const iso = isoOf(day);
-    for (const s of shownShuls()) {
-      const entry = minyanim.days?.[iso]?.[s.slug];
-      if (!entry) continue;
-      // No per-shul stamp means data written before they existed; the
-      // file-level one is the only thing left to fall back on.
-      stamps.push(entry.fetched_at ? new Date(entry.fetched_at) : file);
-    }
+  // THE ROWS ON THE BOARD, not the window they were drawn from. This walked
+  // every day the rest period reaches and every chosen shul, which is a wider
+  // set than the card: a day Auto gave up through the day-drop fallback still
+  // decided how old the board claimed to be, so a Shabbos entry two days away
+  // and not on screen anywhere aged a line describing what was.
+  //
+  // Falls back to the window before the first paint, when there is nothing
+  // shown to ask about yet.
+  const rows = shownRows.length
+    ? shownRows
+    : days.flatMap((day) => shownShuls().map((s) => ({ slug: s.slug, iso: isoOf(day) })));
+  for (const { slug, iso } of rows) {
+    const entry = minyanim.days?.[iso]?.[slug];
+    if (!entry) continue;
+    // No per-shul stamp means data written before they existed; the
+    // file-level one is the only thing left to fall back on.
+    stamps.push(entry.fetched_at ? new Date(entry.fetched_at) : file);
   }
   const known = stamps.filter(Boolean);
   if (!known.length) return file;
@@ -893,30 +926,45 @@ function renderFreshness(now = new Date(), days = [now]) {
   // not just today. A shul's own site reaches today and tomorrow; the days past
   // that come from the aggregator, so on a long Yom Tov the same shul is both.
   // Asking about today alone claimed the whole board came from the shul.
-  const shown = shownShuls();
+  // PER SERVICE, and only the services on the board.
+  //
+  // The scraper moved provenance into entry.sources, where a day can
+  // legitimately be part shul, part aggregator and part typed in by hand. Two
+  // things were wrong with reading it here. It took Object.values, which
+  // includes `edge` — so a candle time typed off a printed calendar made the
+  // MINYAN times read as hand-entered, from a field that need not be on the
+  // card at all. And `manual` was collected and then never consulted: the
+  // sentence only asked whether 'shul' was present, so a day whose every
+  // service was typed in by hand was credited to teaneckminyanim.com, which
+  // had not supplied any of it.
+  const rows = shownRows.length
+    ? shownRows
+    : days.flatMap((day) => shownShuls().map((sh) => ({ slug: sh.slug, iso: isoOf(day), groups: MINYAN_GROUPS })));
   const sources = new Set();
-  for (const day of days) {
-    for (const shul of shown) {
-      const entry = minyanim.days?.[isoOf(day)]?.[shul.slug];
-      // PER SERVICE. The scraper moved provenance into entry.sources, where a
-      // day can legitimately be part shul and part aggregator, and this went on
-      // reading entry.source — a key many entries no longer carry at all. On
-      // today's data both shuls' times came from their own sites and the footer
-      // still credited teaneckminyanim, because Ohr Saadya had no entry.source
-      // and undefined is not 'shul'. The old key stays as a fallback for a file
-      // written before the migration.
-      if (!entry) continue;
-      const per = Object.values(entry.sources ?? {});
-      if (per.length) for (const v of per) sources.add(v === 'shul' ? 'shul' : v === 'manual' ? 'manual' : 'aggregator');
-      else sources.add(entry.source === 'shul' ? 'shul' : 'aggregator');
-    }
+  for (const { slug, iso, groups } of rows) {
+    const entry = minyanim.days?.[iso]?.[slug];
+    if (!entry) continue;
+    const per = (groups ?? MINYAN_GROUPS)
+      .map((g) => entry.sources?.[g])
+      .filter(Boolean);
+    // The old flat key, for a file written before the migration.
+    if (per.length) for (const v of per) sources.add(v === 'shul' ? 'shul' : v === 'manual' ? 'manual' : 'aggregator');
+    else if (entry.source) sources.add(entry.source === 'shul' ? 'shul' : 'aggregator');
   }
-  const source = !sources.has('shul') ? 'teaneckminyanim.com'
-    : !sources.has('aggregator') ? 'each shul’s own website'
-      : 'the shuls’ websites and teaneckminyanim.com';
+  // Manual is not a website, so it is named separately rather than folded into
+  // whichever site happens to be mentioned.
+  const fetched = [...sources].filter((v) => v !== 'manual');
+  const site = !fetched.length ? null
+    : !fetched.includes('shul') ? 'teaneckminyanim.com'
+      : !fetched.includes('aggregator') ? 'each shul’s own website'
+        : 'the shuls’ websites and teaneckminyanim.com';
+  const byHand = sources.has('manual');
+  const credit = site
+    ? `Times from ${site}${byHand ? ' · includes manually confirmed times' : ''}`
+    : 'Times entered by hand from the shuls’ own calendars';
   const times = hours > STALE_HOURS
     ? `Times last confirmed ${stamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-    : `Times from ${source}`;
+    : credit;
   // Open-Meteo is free to use under CC-BY, which asks for exactly this line.
   if (!settings.showWeather || !weather) { $('freshness').textContent = times; return; }
   const age = weatherAge();

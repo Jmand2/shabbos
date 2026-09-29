@@ -1261,6 +1261,60 @@ for (const view of VIEWS) {
     await page.screenshot({ path: join(SHOTS, 'three-day-auto-portrait.png') });
   }
   await page.close();
+
+  // A DAY THAT IS NOT ON THE BOARD CANNOT AGE IT.
+  //
+  // The freshness line walked every day the rest period reaches and every
+  // chosen shul, which is a wider set than the card. A day Auto had given up
+  // through the day-drop fallback still decided how old the board claimed to
+  // be — so a retained entry two days away, on screen nowhere, turned "Times
+  // from each shul's own website" into "Times last confirmed Apr 19" about
+  // times that had been confirmed that morning.
+  //
+  // Deep enough that the furthest day is dropped, and that day alone is stale.
+  const heavy = JSON.parse(JSON.stringify(dense));
+  const CROWD = ['beth-aaron', 'ohr-saadya', 'rinat'];
+  for (const iso of Object.keys(heavy.days)) {
+    const base = heavy.days[iso]['beth-aaron'];
+    base.shacharis = Array.from({ length: 8 }, (_, i) => ({
+      label: 'Shacharis', time: `${6 + Math.floor(i / 2)}:${i % 2 ? '40' : '10'} AM`,
+    }));
+    base.sources = { shacharis: 'shul', mincha: 'shul', maariv: 'shul' };
+    heavy.days[iso] = Object.fromEntries(CROWD.map((slug) => [slug, { ...base }]));
+  }
+  // Six days before "now", and on the FURTHEST day only, which is the one the
+  // board has to give up first.
+  const ANCIENT = '2027-04-15T06:00:00Z';
+  for (const slug of CROWD) {
+    heavy.days['2027-04-24'][slug] = { ...heavy.days['2027-04-24'][slug], fetched_at: ANCIENT };
+  }
+  current = { ...current, minyanim: heavy, settings: { ...current.settings, shuls: CROWD } };
+  const page2 = await browser.newPage({ viewport: { width: 768, height: 1024 } });
+  await page2.route('**/api.open-meteo.com/**', (r) => route_ok(r, forecast(current.at)));
+  await page2.route('**site.api.espn.com**', (r) => r.abort());
+  await page2.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
+  await settle(page2);
+  await page2.waitForFunction(() => {
+    const snap = [...document.querySelectorAll('.card .body .group')].map((n) => n.textContent).join('|')
+      + `#${document.querySelectorAll('.card .body .time').length}`;
+    const same = window.__snap === snap;
+    window.__snap = snap;
+    window.__stable = same ? (window.__stable ?? 0) + 1 : 0;
+    return window.__stable >= 3;
+  }, null, { timeout: 15000, polling: 400 }).catch(() => {});
+  const aged = await page2.evaluate(() => ({
+    days: [...document.querySelectorAll('.card:first-of-type .body .group')].map((n) => n.textContent.trim()),
+    footer: document.getElementById('freshness')?.textContent ?? '',
+  }));
+  const kept = aged.days.some((d) => /Shabbos/.test(d));
+  // The premise, asserted rather than assumed: three shuls and an eight-deep
+  // morning on a 768 px board really is past what it can show, so the furthest
+  // day really is given up. Without this the check below passes by never having
+  // been in the situation it is about.
+  ok(!kept, `the board gives up its furthest day under this load (${aged.days.join(' / ')})`);
+  ok(!/last confirmed/.test(aged.footer),
+    `and the day it gave up does not age the line ("${aged.footer}")`);
+  await page2.close();
   current = { at: null, settings: {} };
 }
 

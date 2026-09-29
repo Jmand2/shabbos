@@ -80,26 +80,63 @@ async function cacheVersion() {
 // aggregator, a Maariv typed in from a calendar — and one label for the day
 // could only ever be right about part of it.
 const SOURCE_SHORT = { shul: 'site', aggregator: 'agg', manual: 'manual' };
-function sourceSummary(entry) {
+
+// AGE BELONGS TO THE SOURCE THAT HAS ONE.
+//
+// The line used to be a list of services and then, on the end of all of them,
+// how long ago the scrape ran and the day the manual part was typed:
+//
+//   Shacharis agg · Mincha manual · Maariv manual · 18m ago · typed Sep 25
+//
+// which says the Mincha and Maariv were confirmed eighteen minutes ago. They
+// were not; they were transcribed from a printed calendar in September, and
+// the eighteen minutes belongs to the Shacharis beside them. Services are
+// grouped by where they came from and each group carries its own when:
+//
+//   Shacharis agg 18m ago · Mincha/Maariv manual Sep 25
+//
+// `when` is supplied by the caller, because only the caller knows the entry's
+// stamps and this is also used where no age is wanted at all.
+function sourceSummary(entry, when = null) {
   const src = entry?.sources;
   if (!src) return entry?.source === 'shul' ? 'site' : 'agg';
-  const parts = [];
+  const named = [];
   for (const [g, label] of [['shacharis', 'Shacharis'], ['mincha', 'Mincha'],
     ['maariv', 'Maariv']]) {
-    if (src[g]) parts.push(`${label} ${SOURCE_SHORT[src[g]] ?? src[g]}`);
+    if (src[g]) named.push([src[g], label]);
   }
   // The edge is not always candle lighting. This said "Candles" for every one
   // of them, so a hand-entered HAVDALAH — which is what a Sunday night of a
   // three-day chag carries — was reported as a manual candle time. Named from
-  // what the entry actually holds.
+  // what the entry actually holds, and both when it holds both.
   if (src.edge) {
     const keys = Object.keys(entry.edge ?? {});
     const what = keys.length
       ? keys.map((k) => (k === 'havdalah' ? 'Havdalah' : 'Candles')).join('/')
       : 'Edge';
-    parts.push(`${what} ${SOURCE_SHORT[src.edge] ?? src.edge}`);
+    named.push([src.edge, what]);
   }
-  return parts.join(' · ') || 'none';
+  if (!named.length) return 'none';
+  // Grouped by source, in the order the services themselves come.
+  const groups = [];
+  for (const [source, label] of named) {
+    const open = groups.find((x) => x.source === source);
+    if (open) open.labels.push(label);
+    else groups.push({ source, labels: [label] });
+  }
+  return groups
+    .map(({ source, labels }) => `${labels.join('/')} ${SOURCE_SHORT[source] ?? source}`
+      + (when ? when(source) : ''))
+    .join(' · ');
+}
+
+// 2026-09-25 -> Sep 25. The day something was typed, not a timestamp: it was
+// read off a printed calendar and the hour of it means nothing.
+function typedOn(iso) {
+  const d = new Date(`${iso}T12:00:00`);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 function shulSources(now, days) {
@@ -108,16 +145,12 @@ function shulSources(now, days) {
       const entry = minyanim.days?.[isoOf(day)]?.[s.slug];
       const label = dayName(now, day).label.split(' · ')[0];
       if (!entry) return `${label} —`;
-      // fetched_at belongs to the SCRAPE. Appending it to a line that includes
-      // hand-entered services said a schedule transcribed from a printed
-      // calendar in September was twenty minutes old because the scraper had
-      // refreshed the Shacharis beside it. The typed part carries the day it
-      // was typed.
-      const live = entry.hand && Object.keys(entry.sources ?? {})
-        .every((k) => entry.sources[k] === 'manual')
-        ? '' : ` ${ago(entry.fetched_at ?? minyanim.generated_at)}`;
-      const typed = entry.hand?.entered_at ? ` · typed ${entry.hand.entered_at}` : '';
-      return `${label} ${sourceSummary(entry)}${live}${typed}`;
+      // fetched_at belongs to the SCRAPE and entered_at to the transcription,
+      // so each group is given the one that is actually about it.
+      const when = (source) => (source === 'manual'
+        ? (entry.hand?.entered_at ? ` ${typedOn(entry.hand.entered_at)}` : '')
+        : ` ${ago(entry.fetched_at ?? minyanim.generated_at)}`);
+      return `${label} ${sourceSummary(entry, when)}`;
     });
     return [s.name, parts.join('  ·  ')];
   });
