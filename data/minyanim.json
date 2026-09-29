@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-29T14:45:55.632Z",
+  "generated_at": "2026-09-29T19:54:32.040Z",
   "source": "teaneckminyanim.com",
   "days": {
     "2026-09-26": {
@@ -1635,7 +1635,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:29.678Z"
+        "fetched_at": "2026-09-29T19:54:03.122Z"
       },
       "bmob": {
         "shacharis": [
@@ -1663,7 +1663,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:29.970Z"
+        "fetched_at": "2026-09-29T19:54:03.447Z"
       },
       "bais-menachem": {
         "shacharis": [
@@ -1677,7 +1677,7 @@
         "sources": {
           "shacharis": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:30.260Z"
+        "fetched_at": "2026-09-29T19:54:03.770Z"
       },
       "beth-aaron": {
         "shacharis": [
@@ -1715,7 +1715,7 @@
           }
         ],
         "source": "shul",
-        "fetched_at": "2026-09-29T14:45:18.690Z",
+        "fetched_at": "2026-09-29T19:53:51.908Z",
         "sources": {
           "shacharis": "shul",
           "mincha": "shul",
@@ -1778,7 +1778,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:30.554Z"
+        "fetched_at": "2026-09-29T19:54:04.098Z"
       },
       "bnai-yeshurun": {
         "shacharis": [
@@ -1856,7 +1856,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:30.852Z"
+        "fetched_at": "2026-09-29T19:54:04.429Z"
       },
       "jewish-center": {
         "shacharis": [
@@ -1876,7 +1876,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:31.142Z"
+        "fetched_at": "2026-09-29T19:54:04.753Z"
       },
       "shtiebel": {
         "shacharis": [
@@ -1890,7 +1890,7 @@
         "sources": {
           "shacharis": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:31.434Z"
+        "fetched_at": "2026-09-29T19:54:05.077Z"
       },
       "keter-torah": {
         "shacharis": [
@@ -1932,7 +1932,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:31.727Z"
+        "fetched_at": "2026-09-29T19:54:05.403Z"
       },
       "lieber": {
         "shacharis": [
@@ -1958,7 +1958,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:32.018Z"
+        "fetched_at": "2026-09-29T19:54:05.727Z"
       },
       "maayan-judaica": {
         "shacharis": [],
@@ -1972,7 +1972,7 @@
         "sources": {
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:32.309Z"
+        "fetched_at": "2026-09-29T19:54:06.051Z"
       },
       "ohr-hatorah": {
         "shacharis": [
@@ -2010,7 +2010,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:32.599Z"
+        "fetched_at": "2026-09-29T19:54:06.375Z"
       },
       "ohr-saadya": {
         "shacharis": [
@@ -2034,7 +2034,7 @@
           "shacharis": "shul",
           "mincha": "shul"
         },
-        "fetched_at": "2026-09-29T14:45:32.890Z"
+        "fetched_at": "2026-09-29T19:54:06.699Z"
       },
       "one500": {
         "shacharis": [
@@ -2060,7 +2060,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:33.181Z"
+        "fetched_at": "2026-09-29T19:54:07.021Z"
       },
       "rinat": {
         "shacharis": [
@@ -2102,7 +2102,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:33.473Z"
+        "fetched_at": "2026-09-29T19:54:07.347Z"
       },
       "shaare-tefillah": {
         "shacharis": [
@@ -2126,7 +2126,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:33.764Z"
+        "fetched_at": "2026-09-29T19:54:07.669Z"
       },
       "shaarei-orah": {
         "shacharis": [
@@ -2156,7 +2156,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:34.055Z"
+        "fetched_at": "2026-09-29T19:54:07.993Z"
       },
       "chabad": {
         "shacharis": [
@@ -2182,7 +2182,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:34.345Z"
+        "fetched_at": "2026-09-29T19:54:08.318Z"
       },
       "teaneck-square": {
         "shacharis": [
@@ -2212,7 +2212,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:34.636Z"
+        "fetched_at": "2026-09-29T19:54:08.643Z"
       },
       "westgate": {
         "shacharis": [],
@@ -2236,7 +2236,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:34.927Z"
+        "fetched_at": "2026-09-29T19:54:08.966Z"
       },
       "windrose": {
         "shacharis": [],
@@ -2250,7 +2250,7 @@
         "sources": {
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:35.217Z"
+        "fetched_at": "2026-09-29T19:54:09.289Z"
       },
       "yeshivas-bais-mordechai": {
         "shacharis": [
@@ -2280,7 +2280,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:35.507Z"
+        "fetched_at": "2026-09-29T19:54:09.613Z"
       },
       "young-israel-of-teaneck": {
         "shacharis": [
@@ -2318,7 +2318,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:35.799Z"
+        "fetched_at": "2026-09-29T19:54:09.938Z"
       }
     },
     "2026-09-30": {
@@ -2348,7 +2348,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:36.091Z"
+        "fetched_at": "2026-09-29T19:54:10.264Z"
       },
       "bmob": {
         "shacharis": [
@@ -2376,7 +2376,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:36.383Z"
+        "fetched_at": "2026-09-29T19:54:10.590Z"
       },
       "bais-menachem": {
         "shacharis": [
@@ -2390,7 +2390,7 @@
         "sources": {
           "shacharis": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:36.672Z"
+        "fetched_at": "2026-09-29T19:54:10.913Z"
       },
       "beth-aaron": {
         "shacharis": [
@@ -2432,7 +2432,7 @@
           }
         ],
         "source": "shul",
-        "fetched_at": "2026-09-29T14:45:18.690Z",
+        "fetched_at": "2026-09-29T19:53:51.908Z",
         "sources": {
           "shacharis": "shul",
           "mincha": "shul",
@@ -2495,7 +2495,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:36.967Z"
+        "fetched_at": "2026-09-29T19:54:11.243Z"
       },
       "bnai-yeshurun": {
         "shacharis": [
@@ -2573,7 +2573,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:37.266Z"
+        "fetched_at": "2026-09-29T19:54:11.575Z"
       },
       "jewish-center": {
         "shacharis": [
@@ -2593,7 +2593,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:37.557Z"
+        "fetched_at": "2026-09-29T19:54:11.900Z"
       },
       "shtiebel": {
         "shacharis": [
@@ -2607,7 +2607,7 @@
         "sources": {
           "shacharis": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:37.846Z"
+        "fetched_at": "2026-09-29T19:54:12.222Z"
       },
       "keter-torah": {
         "shacharis": [
@@ -2649,7 +2649,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:38.139Z"
+        "fetched_at": "2026-09-29T19:54:12.549Z"
       },
       "lieber": {
         "shacharis": [
@@ -2675,7 +2675,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:38.430Z"
+        "fetched_at": "2026-09-29T19:54:12.873Z"
       },
       "maayan-judaica": {
         "shacharis": [],
@@ -2689,7 +2689,7 @@
         "sources": {
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:38.720Z"
+        "fetched_at": "2026-09-29T19:54:13.197Z"
       },
       "ohr-hatorah": {
         "shacharis": [
@@ -2727,7 +2727,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:39.012Z"
+        "fetched_at": "2026-09-29T19:54:13.524Z"
       },
       "ohr-saadya": {
         "shacharis": [
@@ -2751,7 +2751,7 @@
           "shacharis": "shul",
           "mincha": "shul"
         },
-        "fetched_at": "2026-09-29T14:45:39.304Z"
+        "fetched_at": "2026-09-29T19:54:13.849Z"
       },
       "one500": {
         "shacharis": [
@@ -2777,7 +2777,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:39.594Z"
+        "fetched_at": "2026-09-29T19:54:14.173Z"
       },
       "rinat": {
         "shacharis": [
@@ -2819,7 +2819,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:39.888Z"
+        "fetched_at": "2026-09-29T19:54:14.499Z"
       },
       "shaare-tefillah": {
         "shacharis": [
@@ -2843,7 +2843,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:40.180Z"
+        "fetched_at": "2026-09-29T19:54:14.824Z"
       },
       "shaarei-orah": {
         "shacharis": [
@@ -2873,7 +2873,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:40.472Z"
+        "fetched_at": "2026-09-29T19:54:15.150Z"
       },
       "chabad": {
         "shacharis": [
@@ -2899,7 +2899,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:40.762Z"
+        "fetched_at": "2026-09-29T19:54:15.473Z"
       },
       "teaneck-square": {
         "shacharis": [
@@ -2929,7 +2929,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:41.053Z"
+        "fetched_at": "2026-09-29T19:54:15.799Z"
       },
       "westgate": {
         "shacharis": [],
@@ -2953,7 +2953,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:41.344Z"
+        "fetched_at": "2026-09-29T19:54:16.124Z"
       },
       "windrose": {
         "shacharis": [],
@@ -2967,7 +2967,7 @@
         "sources": {
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:41.634Z"
+        "fetched_at": "2026-09-29T19:54:16.447Z"
       },
       "yeshivas-bais-mordechai": {
         "shacharis": [
@@ -2997,7 +2997,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:41.925Z"
+        "fetched_at": "2026-09-29T19:54:16.771Z"
       },
       "young-israel-of-teaneck": {
         "shacharis": [
@@ -3035,7 +3035,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:42.218Z"
+        "fetched_at": "2026-09-29T19:54:17.097Z"
       }
     },
     "2026-10-01": {
@@ -3065,7 +3065,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:42.509Z"
+        "fetched_at": "2026-09-29T19:54:17.421Z"
       },
       "bmob": {
         "shacharis": [
@@ -3093,7 +3093,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:42.811Z"
+        "fetched_at": "2026-09-29T19:54:17.745Z"
       },
       "bais-menachem": {
         "shacharis": [
@@ -3107,7 +3107,7 @@
         "sources": {
           "shacharis": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:43.100Z"
+        "fetched_at": "2026-09-29T19:54:18.068Z"
       },
       "beth-aaron": {
         "shacharis": [
@@ -3149,7 +3149,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:43.393Z"
+        "fetched_at": "2026-09-29T19:54:18.394Z"
       },
       "beth-abraham": {
         "shacharis": [
@@ -3207,7 +3207,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:43.686Z"
+        "fetched_at": "2026-09-29T19:54:18.723Z"
       },
       "bnai-yeshurun": {
         "shacharis": [
@@ -3285,7 +3285,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:43.984Z"
+        "fetched_at": "2026-09-29T19:54:19.054Z"
       },
       "jewish-center": {
         "shacharis": [
@@ -3305,7 +3305,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:44.273Z"
+        "fetched_at": "2026-09-29T19:54:19.377Z"
       },
       "shtiebel": {
         "shacharis": [
@@ -3319,7 +3319,7 @@
         "sources": {
           "shacharis": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:44.563Z"
+        "fetched_at": "2026-09-29T19:54:19.700Z"
       },
       "keter-torah": {
         "shacharis": [
@@ -3361,7 +3361,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:44.855Z"
+        "fetched_at": "2026-09-29T19:54:20.025Z"
       },
       "lieber": {
         "shacharis": [
@@ -3387,7 +3387,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:45.146Z"
+        "fetched_at": "2026-09-29T19:54:20.350Z"
       },
       "maayan-judaica": {
         "shacharis": [],
@@ -3401,7 +3401,7 @@
         "sources": {
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:45.435Z"
+        "fetched_at": "2026-09-29T19:54:20.674Z"
       },
       "ohr-hatorah": {
         "shacharis": [
@@ -3439,7 +3439,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:45.727Z"
+        "fetched_at": "2026-09-29T19:54:20.999Z"
       },
       "ohr-saadya": {
         "shacharis": [
@@ -3463,7 +3463,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:46.016Z"
+        "fetched_at": "2026-09-29T19:54:21.324Z"
       },
       "one500": {
         "shacharis": [
@@ -3489,7 +3489,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:46.310Z"
+        "fetched_at": "2026-09-29T19:54:21.648Z"
       },
       "rinat": {
         "shacharis": [
@@ -3531,7 +3531,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:46.601Z"
+        "fetched_at": "2026-09-29T19:54:21.973Z"
       },
       "shaare-tefillah": {
         "shacharis": [
@@ -3555,7 +3555,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:46.893Z"
+        "fetched_at": "2026-09-29T19:54:22.298Z"
       },
       "shaarei-orah": {
         "shacharis": [
@@ -3585,7 +3585,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:47.184Z"
+        "fetched_at": "2026-09-29T19:54:22.622Z"
       },
       "chabad": {
         "shacharis": [
@@ -3611,7 +3611,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:47.475Z"
+        "fetched_at": "2026-09-29T19:54:22.948Z"
       },
       "teaneck-square": {
         "shacharis": [
@@ -3641,7 +3641,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:47.766Z"
+        "fetched_at": "2026-09-29T19:54:23.273Z"
       },
       "westgate": {
         "shacharis": [],
@@ -3665,7 +3665,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:48.057Z"
+        "fetched_at": "2026-09-29T19:54:23.598Z"
       },
       "windrose": {
         "shacharis": [],
@@ -3679,7 +3679,7 @@
         "sources": {
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:48.347Z"
+        "fetched_at": "2026-09-29T19:54:23.923Z"
       },
       "yeshivas-bais-mordechai": {
         "shacharis": [
@@ -3709,7 +3709,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:48.638Z"
+        "fetched_at": "2026-09-29T19:54:24.247Z"
       },
       "young-israel-of-teaneck": {
         "shacharis": [
@@ -3747,7 +3747,7 @@
           "mincha": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:48.931Z"
+        "fetched_at": "2026-09-29T19:54:24.573Z"
       }
     },
     "2026-10-02": {
@@ -3773,7 +3773,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:49.222Z"
+        "fetched_at": "2026-09-29T19:54:24.898Z"
       },
       "bmob": {
         "shacharis": [
@@ -3801,7 +3801,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:49.513Z"
+        "fetched_at": "2026-09-29T19:54:25.223Z"
       },
       "bais-menachem": {
         "shacharis": [
@@ -3815,7 +3815,7 @@
         "sources": {
           "shacharis": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:49.803Z"
+        "fetched_at": "2026-09-29T19:54:25.546Z"
       },
       "beth-aaron": {
         "shacharis": [
@@ -3844,7 +3844,7 @@
           "mincha": "aggregator",
           "edge": "manual"
         },
-        "fetched_at": "2026-09-29T14:45:50.094Z",
+        "fetched_at": "2026-09-29T19:54:25.872Z",
         "edge": {
           "candles": "6:18 PM"
         },
@@ -3895,7 +3895,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:50.389Z"
+        "fetched_at": "2026-09-29T19:54:26.200Z"
       },
       "bnai-yeshurun": {
         "shacharis": [
@@ -3931,7 +3931,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:50.687Z"
+        "fetched_at": "2026-09-29T19:54:26.528Z"
       },
       "jewish-center": {
         "shacharis": [
@@ -3951,7 +3951,7 @@
           "shacharis": "aggregator",
           "maariv": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:50.978Z"
+        "fetched_at": "2026-09-29T19:54:26.852Z"
       },
       "shtiebel": {
         "shacharis": [
@@ -3965,7 +3965,7 @@
         "sources": {
           "shacharis": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:51.268Z"
+        "fetched_at": "2026-09-29T19:54:27.176Z"
       },
       "keter-torah": {
         "shacharis": [
@@ -3991,7 +3991,7 @@
         "sources": {
           "shacharis": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:51.560Z"
+        "fetched_at": "2026-09-29T19:54:27.501Z"
       },
       "lieber": {
         "shacharis": [
@@ -4005,13 +4005,13 @@
         "sources": {
           "shacharis": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:51.850Z"
+        "fetched_at": "2026-09-29T19:54:27.824Z"
       },
       "maayan-judaica": {
         "shacharis": [],
         "mincha": [],
         "maariv": [],
-        "fetched_at": "2026-09-29T14:45:52.140Z"
+        "fetched_at": "2026-09-29T19:54:28.148Z"
       },
       "ohr-hatorah": {
         "shacharis": [
@@ -4043,7 +4043,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:52.432Z"
+        "fetched_at": "2026-09-29T19:54:28.473Z"
       },
       "ohr-saadya": {
         "shacharis": [
@@ -4063,7 +4063,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:52.724Z"
+        "fetched_at": "2026-09-29T19:54:28.798Z"
       },
       "one500": {
         "shacharis": [
@@ -4077,7 +4077,7 @@
         "sources": {
           "shacharis": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:53.014Z"
+        "fetched_at": "2026-09-29T19:54:29.122Z"
       },
       "rinat": {
         "shacharis": [
@@ -4113,7 +4113,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:53.306Z"
+        "fetched_at": "2026-09-29T19:54:29.448Z"
       },
       "shaare-tefillah": {
         "shacharis": [
@@ -4137,7 +4137,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:53.597Z"
+        "fetched_at": "2026-09-29T19:54:29.773Z"
       },
       "shaarei-orah": {
         "shacharis": [
@@ -4161,7 +4161,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:53.887Z"
+        "fetched_at": "2026-09-29T19:54:30.098Z"
       },
       "chabad": {
         "shacharis": [
@@ -4175,7 +4175,7 @@
         "sources": {
           "shacharis": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:54.178Z"
+        "fetched_at": "2026-09-29T19:54:30.421Z"
       },
       "teaneck-square": {
         "shacharis": [
@@ -4189,13 +4189,13 @@
         "sources": {
           "shacharis": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:54.468Z"
+        "fetched_at": "2026-09-29T19:54:30.744Z"
       },
       "westgate": {
         "shacharis": [],
         "mincha": [],
         "maariv": [],
-        "fetched_at": "2026-09-29T14:45:54.758Z"
+        "fetched_at": "2026-09-29T19:54:31.066Z"
       },
       "windrose": {
         "shacharis": [],
@@ -4209,7 +4209,7 @@
         "sources": {
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:55.049Z"
+        "fetched_at": "2026-09-29T19:54:31.390Z"
       },
       "yeshivas-bais-mordechai": {
         "shacharis": [
@@ -4233,7 +4233,7 @@
           "shacharis": "aggregator",
           "mincha": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:55.340Z"
+        "fetched_at": "2026-09-29T19:54:31.713Z"
       },
       "young-israel-of-teaneck": {
         "shacharis": [
@@ -4255,7 +4255,7 @@
         "sources": {
           "shacharis": "aggregator"
         },
-        "fetched_at": "2026-09-29T14:45:55.631Z"
+        "fetched_at": "2026-09-29T19:54:32.038Z"
       }
     }
   }
