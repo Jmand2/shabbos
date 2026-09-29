@@ -390,6 +390,10 @@ function renderShuls(now, days) {
   const list = shownShuls();
   if (!list.length) {
     paintBoard('<p class="none">No shuls chosen. Open Settings to pick some.</p>');
+    // Nothing is showing, so nothing may be credited or aged. Left as it was,
+    // the footer would go on describing the board from before the last shul
+    // was unticked.
+    shownRows = [];
     return;
   }
 
