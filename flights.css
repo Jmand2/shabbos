@@ -118,6 +118,9 @@ body:not(.day) .balloon .inner { opacity: calc(var(--burn, 0) * 0.5); }
 .balloon .rim { stroke: #C9A45E; stroke-width: 4; }
 .balloon .rope { fill: none; stroke: #C9A45E; stroke-width: 2.8; }
 .balloon .sandbag { fill: #6B5530; stroke: #4A3A20; stroke-width: 2.6; }
+/* What a vehicle has let go of lives in the world layer, so it is painted by
+   the vehicle's own rules reaching into it rather than by rules of its own. */
+.flyway .debris { stroke-linejoin: round; }
 .balloon .burner { fill: #FFB03A; stroke: none; opacity: 0.15;
   transform-box: fill-box; transform-origin: 50% 0; }
 
@@ -156,6 +159,13 @@ body:not(.day) .balloon .inner { opacity: calc(var(--burn, 0) * 0.5); }
 /* Notes are a glyph, not a puff: a dancer trailing grey circles is a dancer on
    fire. Warm, because they are the one thing on screen that is a sound. */
 .flyway .note { fill: #F2D06B; stroke: none; }
+/* Steam is white and thin where exhaust is grey and fat. The whistle is the
+   one time the train makes a sound you can see.
+
+   Called `jet` because `.steam` is taken: styles.css gives a sports team row
+   `display: contents`, which is a rule that silently removes an SVG circle
+   from the page while leaving it in the DOM looking perfectly correct. */
+.flyway .jet { fill: #EEF3FA; stroke: none; }
 
 /* THE CAR -----------------------------------------------------------------
    A convertible: no roof over the one thing worth looking at. The body leans
@@ -181,6 +191,10 @@ body:not(.day) .car .lamp.front { opacity: 0.95; }
    between two values rather than fading — and it is off far more than it is on.
    Nothing on this wall blinks except this, for about a second, at a corner. */
 .car .blink { fill: #F5A25D; stroke: none; opacity: 0; }
+/* The horn, one flight in fifteen. Off by default and off nearly all the time
+   even then: two blasts of about a tenth of a second. */
+.car .honk { fill: none; stroke: #F5E3B0; stroke-width: 3.2; stroke-linecap: round;
+  opacity: 0; transform-box: fill-box; transform-origin: 0% 50%; }
 
 /* THE BOAT -----------------------------------------------------------------
    It rides a real sea now. What was here before was two wave paths sliding

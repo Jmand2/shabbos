@@ -412,9 +412,38 @@
   function stepSmoke(rig, dt) {
     paint(rig, 'smoke', 'puffNodes', 'puff', rig.smoke.step(dt, { drag: 0.97 }));
     paint(rig, 'spray', 'sprayNodes', 'spray', rig.spray.step(dt, { drag: 0.99, gravity: 420 }));
-    // Notes only exist for the vehicles that make them; no rig pays for the
-    // system until it emits one.
+    // Notes and steam only exist for the vehicles that make them; no rig pays
+    // for a system until it emits into it.
     if (rig.notes) paint(rig, 'notes', 'noteNodes', 'note', rig.notes.step(dt, { drag: 0.995 }), NOTE);
+    // Painted as `.jet`, not `.steam`: the world layer lives in the same
+    // document as the rest of the app, and styles.css already has a `.steam`
+    // — a sports team row, at `display: contents`. Every particle of the
+    // whistle was in the DOM with the right radius, the right colour and a
+    // zero-sized box, because that rule took its box away.
+    if (rig.steam) paint(rig, 'steam', 'steamNodes', 'jet', rig.steam.step(dt, { drag: 0.985 }));
+    stepDebris(rig, dt);
+  }
+
+  // WHAT A VEHICLE SHEDS. A dropped stage or a cut-away sandbag stops belonging
+  // to the vehicle at the moment it is let go: it lives in the world layer, it
+  // falls on its own, and the vehicle climbs away from it. Heavier than a
+  // particle and there are never more than a couple, so each one is a real
+  // element rather than a circle in a list.
+  function stepDebris(rig, dt) {
+    if (!rig.debris || !rig.debris.length) return;
+    const h = K.clampDt(dt);
+    for (let i = rig.debris.length - 1; i >= 0; i -= 1) {
+      const d = rig.debris[i];
+      d.vy += 520 * h;
+      d.x += d.vx * h;
+      d.y += d.vy * h;
+      d.rot += d.spin * h;
+      d.age += h;
+      d.node.setAttribute('transform',
+        `translate(${d.x.toFixed(1)} ${d.y.toFixed(1)}) rotate(${d.rot.toFixed(1)}) scale(${d.scale})`);
+      d.node.style.opacity = Math.max(0, Math.min(1, (d.life - d.age) * 1.6)).toFixed(2);
+      if (d.age > d.life) { d.node.remove(); rig.debris.splice(i, 1); }
+    }
   }
 
   function paint(rig, _which, key, cls, list, d = null) {
@@ -457,7 +486,10 @@
       node.setAttribute('cx', p.x.toFixed(1));
       node.setAttribute('cy', p.y.toFixed(1));
       node.setAttribute('r', (p.size + (p.grow ?? 0) * age).toFixed(1));
-      node.style.opacity = (0.42 * (1 - age)).toFixed(2);
+      // Smoke is faint by default. Steam is not: a whistle is a hard white jet
+      // against a soft grey column, and at the same 0.42 the two came out the
+      // same colour and the whistle read as a little more exhaust.
+      node.style.opacity = ((p.alpha ?? 0.42) * (1 - age)).toFixed(2);
     });
   }
 
@@ -478,8 +510,11 @@
     return world;
   }
 
-  function build(name, riders) {
-    const v = VEHICLES[name];
+  // The PER-FLIGHT spec, not the shared one: a rare flight may be a different
+  // shape from its own kind — a longer train has another carriage, another
+  // seat and a wider viewBox — and none of that may reach the definition every
+  // other flight of that kind is built from.
+  function build(v, name, riders) {
     const [vw, vh] = v.vb;
     const el = document.createElement('div');
     el.className = `flight ${name}`;
@@ -511,16 +546,42 @@
     return el;
   }
 
-  function fly(name) {
+  // ABOUT ONE FLIGHT IN FIFTEEN, something happens: the train whistles and is a
+  // carriage longer, the plane loops, the rocket sheds a stage, the balloon
+  // drops a sandbag, the car honks.
+  const RARE_ONE_IN = 15;
+
+  // Drawn ONCE, when the flight launches, and carried for its whole life.
+  // Rolled per frame it would flicker; rolled per flight it is the same flight
+  // from its first frame to its last. Seeded from the kind and the second it
+  // went, so it is a property of that flight rather than of whoever is looking:
+  // two iPads that launch the same vehicle in the same second agree, and
+  // nothing about it changes when a tab is reloaded mid-crossing.
+  function seedFor(name) {
+    const str = `${name}:${Math.floor(Date.now() / 1000)}`;
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i += 1) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  function fly(name, opts = {}) {
     // A copy. `side` was written straight onto the shared definition, so two of
     // the same vehicle in the air at once had the second one move the first's
     // path out from under it. They cannot currently overlap at the shipped
     // intervals; this costs nothing and stops that being load-bearing.
-    const v = { ...VEHICLES[name] };
+    let v = { ...VEHICLES[name] };
+    const seed = seedFor(name);
+    const rare = opts.rare ?? (seed % RARE_ONE_IN === 0);
+    // A vehicle whose rare moment changes its SHAPE says so here, before
+    // anything is measured or built from it.
+    if (rare && v.rare) v = { ...v, ...v.rare() };
     const lane = name === 'helicopter' ? 'hover' : v.lane;
     const seats = Math.min(v.seats, faces.length);
     const riders = faceBag(seats);
-    const el = build(name, riders);
+    const el = build(v, name, riders);
 
     // Outer lanes pick a side; keeps the middle of the screen clear.
     v.side = Math.random() < 0.5 ? 0.18 : 0.82;
@@ -571,6 +632,30 @@
       // vehicle's to remove when it goes.
       world: ensureWorld(),
       t: 0,
+      // This flight's own copy of its definition, so update() can read what the
+      // rare variant changed rather than the shared original.
+      spec: v,
+      rare,
+      seed,
+      // Where the vehicle is relative to its lane. A loop is POSITION, and
+      // positions come from LANES — which stay pure — so a vehicle that wants
+      // to leave its path for a second says so here and fly() adds it in.
+      off: null,
+      // Let go of something: it goes into the world layer at screen
+      // coordinates and falls on its own from there.
+      drop(markup, at) {
+        const w3 = ensureWorld();
+        if (!w3) return null;
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', `debris ${name}`);
+        g.innerHTML = markup;
+        w3.rails.appendChild(g);
+        if (!rig.debris) rig.debris = [];
+        rig.debris.push({
+          node: g, rot: 0, age: 0, spin: 0, life: 2.6, scale: 1, vx: 0, vy: 0, ...at,
+        });
+        return g;
+      },
     };
 
     // Track, laid along the lane once and left alone: the train crosses it, it
@@ -602,15 +687,31 @@
     const oy = pv ? (pv[1] / vh) * 100 : 50;
     if (pv) el.style.transformOrigin = `${ox}% ${oy}%`;
 
+    // Everything this flight put on the screen, in one place: its own element,
+    // the track it was given, whatever it owns in the world layer, and anything
+    // it dropped on the way.
+    const clear = () => {
+      el.remove();
+      rails?.remove();
+      rig.own?.remove();
+      (rig.debris ?? []).forEach((d) => d.node.remove());
+      rig.debris = [];
+    };
+
     const t0 = performance.now();
     let last = null;
     (function step(now) {
       const p = (now - t0) / ms;
-      if (p >= 1) { el.remove(); rails?.remove(); rig.own?.remove(); return; }
+      if (p >= 1) { clear(); return; }
       const pose = LANES[lane](p, v, W, H);
-      el.style.transform = `translate(${pose.x}px, ${pose.y}px) translate(${-ox}%, ${-oy}%) `
-        + `rotate(${pose.rot}deg) scale(${scale})`;
-      rig.at = pose;
+      // The offset a rare moment asked for on the last frame. A loop is a
+      // circle laid over the lane rather than a different lane, so the path
+      // stays what it was and the aircraft leaves it and comes back.
+      const off = rig.off ?? { x: 0, y: 0, rot: 0 };
+      const at = { x: pose.x + off.x, y: pose.y + off.y, rot: pose.rot + off.rot };
+      el.style.transform = `translate(${at.x}px, ${at.y}px) translate(${-ox}%, ${-oy}%) `
+        + `rotate(${at.rot}deg) scale(${scale})`;
+      rig.at = at;
 
       // Velocity and acceleration by differencing the path, so every vehicle
       // gets physical inputs without a single lane having to know about them.
@@ -637,7 +738,7 @@
     })(t0);
 
     // Belt and braces: if rAF is throttled away, the node still goes.
-    setTimeout(() => { el.remove(); rails?.remove(); rig.own?.remove(); }, ms + 4000);
+    setTimeout(clear, ms + 4000);
   }
 
   function tick() {
@@ -880,7 +981,7 @@
       // Lets a flight be launched by name, which is the only way any of this
       // can be tested or looked at deliberately: flights are otherwise random,
       // minutes apart, and gone in seconds.
-      send: (name) => { try { fly(name ?? vehicleBag()[0]); } catch (e) { console.error(e); } },
+      send: (name, opts) => { try { fly(name ?? vehicleBag()[0], opts); } catch (e) { console.error(e); } },
       names: () => Object.keys(VEHICLES),
       // What a vehicle actually measures on screen at a given width: the scale
       // it flies at, and each face's radius in real pixels. The size gates need

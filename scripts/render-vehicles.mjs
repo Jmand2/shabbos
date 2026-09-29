@@ -73,9 +73,9 @@ const reset = (face) => page.evaluate((f) => {
   window.__face = `data:image/svg+xml;base64,${btoa(f)}`;
 }, face);
 
-const send = (name) => page.evaluate((n) => {
+const send = (name, rare = false) => page.evaluate(({ n, rare: r }) => {
   window.__sent = performance.now();
-  window.shabbosFlights.send(n);
+  window.shabbosFlights.send(n, r ? { rare: true } : undefined);
   // Faces on at once, not after the wait: the rocket climbs about 490 px a
   // second, so half a second spent dressing it is half the screen, and it had
   // left before the shutter.
@@ -92,7 +92,7 @@ const send = (name) => page.evaluate((n) => {
       + `width:${R * 2 / vw * 100}%;height:${R * 2 / vh * 100}%;border-color:${rings[i % 4]}`;
     f.appendChild(img);
   });
-}, name);
+}, { n: name, rare });
 
 // Wait for a frame worth photographing, then STOP THE WORLD on that frame. A
 // screenshot costs a couple of hundred milliseconds, which for the rocket is
@@ -104,7 +104,7 @@ const send = (name) => page.evaluate((n) => {
 // their portraits are then the screen exactly as it is. The rocket never does —
 // it climbs at 82% of the width and grows past the 180 px it has to its right
 // as it tilts — so it gets a second run under the loose test, and a pan.
-const settle = (name, strict) => page.waitForFunction(({ n, strict: hard }) => {
+const settle = (name, strict, rare = false) => page.waitForFunction(({ n, strict: hard, rare: wantMoment }) => {
   const el = document.querySelector(`.flight.${n}`);
   if (!el) return false;
   const b = el.getBoundingClientRect();
@@ -128,15 +128,28 @@ const settle = (name, strict) => page.waitForFunction(({ n, strict: hard }) => {
     ? size >= limit - 40 || (lo > -16 && hi < limit + 16)
     : hi > 0 && lo < limit);
   // A light that only comes on part of the time is the point of the vehicle it
-  // is on — the balloon's burner is what a balloon does at night — and a
-  // portrait taken between flares shows a vehicle that does not do it.
-  const lit = el.querySelector('.inner');
-  if (lit && Number(getComputedStyle(lit).opacity) < 0.3) return false;
+  // is on — the balloon's burner is what a balloon does at night, the car's
+  // horn is two blasts of a tenth of a second — and a portrait taken between
+  // them shows a vehicle that does not do the thing it is here to do.
+  for (const sel of wantMoment ? ['.inner', '.honk'] : ['.inner']) {
+    const lit = el.querySelector(sel);
+    if (lit && Number(getComputedStyle(lit).opacity) < 0.3) return false;
+  }
+  // update() sets this while the rare moment is actually on the screen. Given
+  // a moment or two to develop: frozen on the frame the flag went up, a jet of
+  // steam is four small circles at the whistle and a loop has not yet bent.
+  // Not much longer than that, though — a dropped sandbag falls at 520 px/s²
+  // and is off the bottom of the frame in half a second.
+  if (wantMoment) {
+    if (!el.dataset.moment) { window.__moment = 0; return false; }
+    window.__moment = window.__moment || performance.now();
+    if (performance.now() - window.__moment < 200) return false;
+  }
   const good = span(b.left, b.right, b.width, innerWidth)
     && span(b.top, b.bottom, b.height, innerHeight);
   if (good) window.requestAnimationFrame = () => 0;
   return good;
-}, { n: name, strict }, { timeout: strict ? 14000 : 20000 }).then(() => true, () => false);
+}, { n: name, strict, rare }, { timeout: strict ? 14000 : 20000 }).then(() => true, () => false);
 
 // Pan to what could not fit, by moving the whole flyway rather than the
 // vehicle. Smoke, exhaust, the sea and the track are world-space siblings of
@@ -159,22 +172,35 @@ const panTo = (name) => page.evaluate((n) => {
     + `${Math.round(pan(b.top, b.bottom, innerHeight))}px)`;
 }, name);
 
-for (const name of names) {
+// Which vehicles have a rare moment, asked of the definitions rather than
+// listed here: a sixth one added later gets its portrait without this knowing.
+const rareKinds = new Set(await page.evaluate(
+  () => window.shabbosFlights.names().filter((n) => window.shabbosFlights.spec(n).moment),
+));
+
+const shoot = async (name, file, rare) => {
   await reset(FACE);
-  await send(name);
-  let framed = await settle(name, true);
+  await send(name, rare);
+  let framed = await settle(name, true, rare);
   if (!framed) {
     await reset(FACE);
-    await send(name);
-    framed = await settle(name, false);
+    await send(name, rare);
+    framed = await settle(name, false, rare);
     await panTo(name);
   }
-  await page.screenshot({ path: join(OUT, `${name}.png`) });
+  await page.screenshot({ path: join(OUT, `${file}.png`) });
   await page.evaluate(() => { document.documentElement.style.filter = 'blur(3px)'; });
   await page.waitForTimeout(150);
-  await page.screenshot({ path: join(OUT, `${name}-room.png`) });
+  await page.screenshot({ path: join(OUT, `${file}-room.png`) });
   await page.evaluate(() => { document.documentElement.style.filter = ''; });
-  console.log(`  ${name}${framed ? '' : ' (never framed)'}`);
+  console.log(`  ${file}${framed ? '' : ' (never framed)'}`);
+};
+
+for (const name of names) {
+  await shoot(name, name, false);
+  // The one flight in fifteen gets its own portrait: nobody can review a moment
+  // by waiting for it to come round.
+  if (rareKinds.has(name)) await shoot(name, `${name}-rare`, true);
 }
 await browser.close();
 server.close();

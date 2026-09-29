@@ -153,14 +153,36 @@
       + `<path class="cow" d="M160 -25 L188 -1 H160 z"/>`;
   };
 
-  const TRAIN_ART = ''
-    + [0, 1, 2].map((i) => carriageArt(i * CAR_PITCH, i)).join('')
-    + [0, 1, 2].map((i) => `<path class="coupler" d="M${i * CAR_PITCH + 108} ${RAIL - 18} `
-      + `H${(i + 1) * CAR_PITCH}"/>`).join('')
-    + `<g class="engine" transform="translate(${ENGINE_X} ${RAIL}) scale(${ENGINE_S})">`
-    + engineInner() + `</g>`
-    + `<g class="rider driver"><path class="shirt" fill="${SHIRTS[3]}" `
-    + `d="M${ENGINE_X + 35 - 31} ${RAIL - 48} q0 -27 31 -27 q31 0 31 27 z"/></g>`;
+  // The train is drawn to a LENGTH rather than written out once: its rare
+  // moment is an extra carriage, and a train with four of them has to be the
+  // same train, a carriage longer, not a second drawing that will drift from
+  // the first. Everything downstream — the viewBox, the seats, where the
+  // funnel is — comes off the same number.
+  const trainArt = (cars) => {
+    const ex = cars * CAR_PITCH;
+    const idx = [...Array(cars).keys()];
+    return ''
+      + idx.map((i) => carriageArt(i * CAR_PITCH, i)).join('')
+      + idx.map((i) => `<path class="coupler" d="M${i * CAR_PITCH + 108} ${RAIL - 18} `
+        + `H${(i + 1) * CAR_PITCH}"/>`).join('')
+      + `<g class="engine" transform="translate(${ex} ${RAIL}) scale(${ENGINE_S})">`
+      + engineInner() + `</g>`
+      + `<g class="rider driver"><path class="shirt" fill="${SHIRTS[3]}" `
+      + `d="M${ex + 35 - 31} ${RAIL - 48} q0 -27 31 -27 q31 0 31 27 z"/></g>`;
+  };
+
+  // vb, seats and slots for a train of that length. The engine is 244 units
+  // long at its own scale, which is what the 252 of spare width is.
+  const trainShape = (cars) => ({
+    vb: [cars * CAR_PITCH + 252, 185],
+    seats: cars + 1,
+    slots: [
+      ...[...Array(cars).keys()].map((i) => [i * CAR_PITCH + 54, RAIL - 92, 17.2]),
+      [cars * CAR_PITCH + 35, RAIL - 88, 17.2],
+    ],
+    art: trainArt(cars),
+    engineX: cars * CAR_PITCH,
+  });
 
   /* update() ---------------------------------------------------------------
      `state` carries x, y, rot, scale, speed, accel, dist and p. `rig` carries
@@ -223,9 +245,50 @@
     // in the air. The smoke used to be drawn inside the train and travelled
     // with it, which is precisely why the train never looked like it was
     // moving: nothing was being left behind.
+    // Where the engine is depends on how long the train is, and a rare train is
+    // a carriage longer: read it off this flight's own spec rather than off the
+    // shared one, or a four-carriage train exhausts out of thin air a hundred
+    // units behind its funnel.
+    const engX = rig.spec?.engineX ?? ENGINE_X;
+
+    // THE WHISTLE. One in fifteen: a jet of white steam, back and up, held for
+    // about half a second, and then the train is past. Steam, not smoke — its
+    // own system, so it can be white and thin while the exhaust stays grey and
+    // fat, and so neither of them is drawn in the other's colour.
+    if (rig.rare) {
+      if (!m.whistle && state.p > 0.3) m.whistle = rig.t + 1.1;
+      if (m.whistle && rig.t < m.whistle) {
+        // Marks the flight while its moment is actually on the screen. The
+        // reference renders wait for this rather than for a guessed delay.
+        rig.el.dataset.moment = '1';
+        if (!rig.steam) rig.steam = K.particles(30);
+        // ABOVE THE CAB ROOF, and a long way back from the funnel. The world
+        // layer sits under the vehicles, so a jet released anywhere the engine
+        // covers is a jet nobody sees: at the dome it was inside the exhaust
+        // column, and on the boiler it was behind the cab roof.
+        const wp = rig.point(engX + 40 * ENGINE_S, RAIL - 114 * ENGINE_S);
+        for (let i = 0; i < 2; i += 1) {
+          rig.steam.emit({
+            x: wp.x, y: wp.y,
+            vx: -150 - Math.random() * 110,
+            vy: -40 - Math.random() * 60,
+            life: 0.85,
+            alpha: 0.92,
+            size: (5 + Math.random() * 3) * state.scale,
+            grow: 20 * state.scale,
+          });
+        }
+      } else if (m.whistle) {
+        // Cleared when it stops, so the flag means IS WHISTLING and not HAS
+        // WHISTLED: a reference render that waits on the second gets a picture
+        // of a train that has finished.
+        delete rig.el.dataset.moment;
+      }
+    }
+
     const n = K.beats(m.prevAngle, m.angle, 4);
     for (let i = 0; i < n; i += 1) {
-      const p = rig.point(ENGINE_X + 143 * ENGINE_S, RAIL - 113 * ENGINE_S);
+      const p = rig.point(engX + 143 * ENGINE_S, RAIL - 113 * ENGINE_S);
       const ex = p.x + (Math.random() - 0.5) * 6;
       rig.smoke.emit({
         x: ex,
@@ -245,16 +308,20 @@
 
   const VEHICLES = {
     train: {
-      vb: [600, 185], seats: 4, colour: '#D9544D', speed: 67, lane: 'horizon', dir: 1,
-      band: 0.045,
       // 17.2 * FACE(2.1) = 36: a 72 px face at 1024 wide, the size the room
       // test says survives. The pitch is 116, well clear of the neighbour
       // limit, so the face radius is set by the slot and not by its neighbour.
-      slots: [[54, RAIL - 92, 17.2], [170, RAIL - 92, 17.2], [286, RAIL - 92, 17.2],
-        [ENGINE_X + 35, RAIL - 88, 17.2]],
-      art: TRAIN_ART,
+      ...trainShape(3),
+      colour: '#D9544D', speed: 67, lane: 'horizon', dir: 1,
+      band: 0.045,
       track: true,
       update: trainUpdate,
+      // ONE IN FIFTEEN: it whistles, and it is a carriage longer. The extra
+      // carriage is a fourth child on the train rather than a fourth wagon
+      // behind an unchanged one, which is why the shape is generated and not
+      // written out: vb, seats, slots and the funnel all move with it.
+      rare: () => trainShape(4),
+      moment: true,
     },
 
     /* THE BOAT ---------------------------------------------------------------
@@ -366,7 +433,7 @@
        line. The tow rope sags, because rope does. */
     plane: {
       vb: [300, 96], seats: 3, colour: '#6E8BD6', speed: 98, lane: 'upper', dir: 1,
-      band: -0.045,
+      band: -0.045, moment: true,
       // 56 apart, not 50: at 50 the faces are 50.4 across and touch, which
       // reads as one wobbling caterpillar rather than three people.
       //
@@ -415,6 +482,29 @@
           for (let x = 46; x <= 196; x += 10) d += ` L${x} ${(58 + wave(x)).toFixed(1)}`;
           m.cloth.setAttribute('d', d);
         }
+        // ONE IN FIFTEEN: A LOOP. A circle laid over the lane, not a different
+        // lane — LANES stay pure and give back where the plane would have been,
+        // and this is how far it has left that for a second and a half. The
+        // banner comes round with it, because it is tied on.
+        if (rig.rare) {
+          const a = (state.p - 0.42) / 0.15;
+          if (a > 0 && a < 1) {
+            const th = a * Math.PI * 2;
+            const R = 86 * (state.scale || 1);
+            // Zero at both ends of the turn, so it leaves the path and rejoins
+            // it without a step in either position or heading.
+            rig.off = {
+              x: R * Math.sin(th),
+              y: -R * (1 - Math.cos(th)),
+              rot: (th * 180) / Math.PI,
+            };
+            rig.el.dataset.moment = '1';
+          } else {
+            rig.off = null;
+            delete rig.el.dataset.moment;
+          }
+        }
+
         [60, 116, 172].forEach((x, k) => {
           const seat = rig.seat(k);
           if (!seat) return;
@@ -487,6 +577,7 @@
        car taking a bend. */
     car: {
       vb: [150, 92], seats: 1, colour: '#E0A030', speed: 80, lane: 'lap', dir: 1,
+      moment: true,
       // 11 * FACE(2.1) = 23 units, which is 104 px across at 1024 wide. The
       // floor is 70 and this was set at 15, giving 142 — a head wider than the
       // bonnet. Rule 1 is a floor, not a target: past a point a bigger face
@@ -505,6 +596,11 @@
             <path class="blink right" d="M124 54 h10 v7 h-10 z"/>
           </g>
         </g>
+        <g class="honk">
+          <path d="M150 50 q9-4 15-10"/>
+          <path d="M152 60 H168"/>
+          <path d="M150 70 q9 4 15 10"/>
+        </g>
         <g class="wheel" data-base="translate(38 78)">
           <circle class="tyre" r="13"/><circle class="hub" r="4.5"/>
           <path class="spokes" d="M0 -10 V10 M-10 0 H10"/>
@@ -522,6 +618,7 @@
           m.wheels = rig.qa('.wheel');
           m.back = rig.q('.lamp.back');
           m.blinks = rig.qa('.blink');
+          m.honk = rig.q('.honk');
           m.lean = { x: 0, v: 0 };
           m.pitch = { x: 0, v: 0 };
           m.head = { x: 0, v: 0 };
@@ -559,6 +656,19 @@
         const seat = rig.seat(0);
         if (seat) seat.style.transform = `rotate(${m.head.x.toFixed(2)}deg)`;
 
+        // ONE IN FIFTEEN: TWO SHORT BLASTS. Lines off the bonnet, on for a
+        // tenth of a second each — a horn is not a light and does not glow, it
+        // is there and then it is not. The group scales about the bonnet; no
+        // face is inside it.
+        if (rig.rare && m.honks === undefined && state.p > 0.22) m.honks = rig.t;
+        if (m.honks !== undefined && m.honk) {
+          const e = rig.t - m.honks;
+          const on = (e > 0 && e < 0.13) || (e > 0.28 && e < 0.41);
+          if (on) rig.el.dataset.moment = '1';
+          m.honk.style.opacity = on ? '0.95' : '0';
+          m.honk.style.transform = on ? `scale(${(1 + (e % 0.13) * 1.4).toFixed(2)})` : 'scale(1)';
+        }
+
         // Brake lights while slowing; indicator before a bend.
         if (m.back) m.back.style.opacity = state.accel < -12 ? '1' : '0.25';
         const soon = Math.abs(state.rot % 90) > 0.5 || turn > 1;
@@ -575,6 +685,7 @@
        inside a box. */
     balloon: {
       vb: [150, 168], seats: 2, colour: '#A96FA0', speed: 24, lane: 'rise',
+      moment: true,
       // OVER the rim, not in front of the basket. At y=140 the faces covered
       // the basket entirely, which reads as two heads on a rope.
       slots: [[56, 118, 12], [96, 118, 12]],
@@ -614,7 +725,23 @@
         // an opacity, because an inline opacity would beat the day rule and the
         // glow would burn through the afternoon.
         if (m.inner) m.inner.style.setProperty('--burn', burn.toFixed(3));
-        m.rise = K.spring(m.rise, -burn * 5, h, 26, 9);
+
+        // ONE IN FIFTEEN: A SANDBAG GOES. It is cut loose, it falls, and the
+        // balloon answers by climbing — which is the only reason anyone ever
+        // threw one over the side.
+        if (rig.rare && !m.dropped && state.p > 0.36) {
+          m.dropped = true;
+          rig.el.dataset.moment = '1';
+          const bag = rig.qa('.sandbag')[0];
+          const at = rig.point(46, 158 + m.rise.x);
+          if (bag) bag.style.display = 'none';
+          rig.drop('<circle class="sandbag" r="7"/>', {
+            x: at.x, y: at.y, vx: -14, vy: 10, spin: 40, life: 2.8, scale: state.scale || 1,
+          });
+          m.lighter = 9;
+        }
+        m.lighter = Math.max(0, (m.lighter ?? 0) - h * 3);
+        m.rise = K.spring(m.rise, -burn * 5 - m.lighter, h, 26, 9);
         if (m.lift) m.lift.setAttribute('transform', `translate(0 ${m.rise.x.toFixed(2)})`);
       },
     },
@@ -738,6 +865,7 @@
        with it is a rocket standing still. */
     rocket: {
       vb: [150, 176], seats: 1, colour: '#C2703D', speed: 200, lane: 'launch',
+      moment: true,
       slots: [[75, 52, 13]],
       art: `
         <path class="shell" d="M75 6 q30 28 30 72 v30 H45 V78 q0-44 30-72 z"/>
@@ -759,6 +887,30 @@
         if (m.flame) {
           m.flame.setAttribute('transform',
             `${m.flame.dataset.base} scale(1 ${(thrust * flick).toFixed(2)})`);
+        }
+
+        // ONE IN FIFTEEN: IT DROPS A STAGE. The skirt goes, and the same skirt
+        // reappears in the world layer as something falling away — it stopped
+        // being part of the rocket at the moment it was let go, so it does not
+        // travel with it. A burst out of the joint covers the separation, which
+        // is the whole visual point of a staging: a bang, and then two objects
+        // where there was one.
+        if (rig.rare && !m.staged && state.p > 0.42) {
+          m.staged = true;
+          rig.el.dataset.moment = '1';
+          const j = rig.point(75, 124);
+          rig.q('.skirt')?.style.setProperty('display', 'none');
+          rig.drop('<g transform="translate(-75 -116)">'
+            + '<path class="skirt" d="M45 106 h60 v18 q0 8-8 8 H53 q-8 0-8-8 z"/></g>', {
+            x: j.x, y: j.y, vx: (Math.random() - 0.5) * 60, vy: 40, spin: 90, life: 2.4, scale: sc,
+          });
+          for (let i = 0; i < 12; i += 1) {
+            rig.smoke.emit({
+              x: j.x, y: j.y,
+              vx: (Math.random() - 0.5) * 320, vy: (Math.random() - 0.2) * 190,
+              life: 0.8, size: 4 * sc, grow: 22 * sc,
+            });
+          }
         }
         // The column is left where it was burnt.
         if (rig.t > m.next) {

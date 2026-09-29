@@ -1029,6 +1029,101 @@ for (const view of VIEWS) {
     ok(tilt <= 30, `and never past 30° (worst ${tilt.toFixed(1)}°)`);
   }
 
+  /* PHASE 4: rare moments -------------------------------------------------- */
+  {
+    // A rare flight is a DIFFERENT SHAPE of its own kind, and none of that may
+    // reach the definition every other flight is built from. The longer train
+    // is made by spreading a new shape over a copy; spread over the original it
+    // would have put a fourth carriage on every train from then on.
+    const leak = await page.evaluate(async () => {
+      const before = window.shabbosFlights.spec('train');
+      const was = { seats: before.seats, vb: [...before.vb], slots: before.slots.length };
+      document.querySelectorAll('.flight').forEach((n) => n.remove());
+      window.shabbosFlights.send('train', { rare: true });
+      await new Promise((r) => setTimeout(r, 120));
+      const long = document.querySelector('.flight.train svg')?.getAttribute('viewBox');
+      document.querySelectorAll('.flight').forEach((n) => n.remove());
+      window.shabbosFlights.send('train');
+      await new Promise((r) => setTimeout(r, 120));
+      const plain = document.querySelector('.flight.train svg')?.getAttribute('viewBox');
+      const after = window.shabbosFlights.spec('train');
+      document.querySelectorAll('.flight').forEach((n) => n.remove());
+      return { was, long, plain, now: { seats: after.seats, vb: [...after.vb], slots: after.slots.length } };
+    });
+    ok(leak.long !== leak.plain && /^0 0 716/.test(leak.long ?? ''),
+      `the rare train is a carriage longer (${leak.long} against ${leak.plain})`);
+    ok(leak.was.seats === leak.now.seats && leak.was.vb[0] === leak.now.vb[0]
+      && leak.was.slots === leak.now.slots,
+      'and the shared definition is untouched by it');
+
+    // THE WHISTLE ACTUALLY APPEARS. Its particles were in the DOM with the
+    // right radius and the right colour and no box at all for a while, because
+    // they were painted as `.steam` and styles.css gives a sports team row
+    // `display: contents`. Measured, not asserted: what is on the screen.
+    const whistle = await page.evaluate(async () => {
+      document.querySelectorAll('.flyway .puffs > *').forEach((n) => n.remove());
+      document.querySelectorAll('.flight').forEach((n) => n.remove());
+      window.shabbosFlights.send('train', { rare: true });
+      const el = document.querySelector('.flight.train');
+      let marked = false;
+      let boxed = 0;
+      for (let i = 0; i < 900 && el.isConnected; i += 1) {
+        await new Promise((r) => requestAnimationFrame(r));
+        if (el.dataset.moment) marked = true;
+        const jets = [...document.querySelectorAll('.flyway .jet')]
+          .filter((n) => n.style.display !== 'none' && n.getBoundingClientRect().width > 0);
+        boxed = Math.max(boxed, jets.length);
+        if (marked && boxed) break;
+      }
+      el.remove();
+      document.querySelectorAll('.flyway .puffs > *').forEach((n) => n.remove());
+      return { marked, boxed };
+    });
+    ok(whistle.marked, 'the rare train raises its moment while it whistles');
+    ok(whistle.boxed > 0, `and the steam is drawn, not merely in the DOM (${whistle.boxed} with a box)`);
+
+    // AN ORDINARY FLIGHT HAS NO MOMENT. One in fifteen is the point; the seed
+    // is drawn once per flight, so a plain one must never light up mid-crossing.
+    const plainCar = await page.evaluate(async () => {
+      document.querySelectorAll('.flight').forEach((n) => n.remove());
+      window.shabbosFlights.send('car', { rare: false });
+      const el = document.querySelector('.flight.car');
+      let ever = false;
+      for (let i = 0; i < 240 && el.isConnected; i += 1) {
+        await new Promise((r) => requestAnimationFrame(r));
+        if (el.dataset.moment) ever = true;
+      }
+      el.remove();
+      return ever;
+    });
+    ok(!plainCar, 'and a flight that is not the rare one never has a moment');
+
+    // WHAT IS DROPPED IS DROPPED. The stage goes into the world layer, so it
+    // stays where it was let go while the rocket climbs away from it — the same
+    // claim the exhaust makes, about something with a shape.
+    const shed = await page.evaluate(async () => {
+      document.querySelectorAll('.flight').forEach((n) => n.remove());
+      window.shabbosFlights.send('rocket', { rare: true });
+      const el = document.querySelector('.flight.rocket');
+      let start = null;
+      let gap = 0;
+      for (let i = 0; i < 600 && el.isConnected; i += 1) {
+        await new Promise((r) => requestAnimationFrame(r));
+        const d = document.querySelector('.flyway .debris');
+        if (!d) continue;
+        const db = d.getBoundingClientRect();
+        const rb = el.getBoundingClientRect();
+        if (!start) start = { d: db.top, r: rb.top };
+        gap = Math.max(gap, (db.top - start.d) - (rb.top - start.r));
+      }
+      if (el.isConnected) el.remove();
+      document.querySelectorAll('.flyway .debris').forEach((n) => n.remove());
+      return { seen: start !== null, gap };
+    });
+    ok(shed.seen, 'the rare rocket sheds a stage');
+    ok(shed.gap > 60, `and the rocket climbs away from it (${shed.gap.toFixed(0)} px apart)`);
+  }
+
   await page.close();
 }
 
