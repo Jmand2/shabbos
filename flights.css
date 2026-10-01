@@ -152,6 +152,10 @@ body:not(.day) .balloon .inner { opacity: calc(var(--burn, 0) * 0.5); }
 .rocket .fin { fill: #9E5730; stroke: #6B3C18; stroke-width: 2.8; }
 .rocket .skirt { fill: #7A4423; stroke: #6B3C18; stroke-width: 2.8; }
 .rocket .stripe { stroke: #F5D2A0; stroke-width: 3.2; }
+/* The nozzle, as a point. Drawn nowhere: it is where the exhaust is released,
+   and it is in the artwork so that a test can ask the browser where that point
+   of the drawing actually landed. */
+.rocket .vent { fill: none; stroke: none; }
 .rocket .flame { stroke: none; }
 .rocket .flame .outer { fill: #E0A030; opacity: 0.9; }
 .rocket .flame .inner { fill: #F7EDBE; }

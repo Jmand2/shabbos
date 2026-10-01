@@ -867,7 +867,7 @@
        the exhaust column STAYS HANGING in the air — a rocket whose smoke goes up
        with it is a rocket standing still. */
     rocket: {
-      vb: [150, 176], seats: 1, colour: '#C2703D', speed: 200, lane: 'launch',
+      vb: [150, 176], seats: 1, colour: '#C2703D', speed: 170, lane: 'launch',
       moment: true,
       slots: [[75, 52, 13]],
       art: `
@@ -876,6 +876,7 @@
         <path class="fin" d="M105 84 L132 116 q3 17-8 22 l-19-17 z"/>
         <path class="skirt" d="M45 106 h60 v18 q0 8-8 8 H53 q-8 0-8-8 z"/>
         <path class="stripe" d="M52 96 H98"/>
+        <circle class="vent" cx="75" cy="150" r="1.5"/>
         <g class="flame" data-base="translate(75 132)">
           <path class="outer" d="M-13 0 q13 34 13 40 q0-6 13-40 z"/>
           <path class="inner" d="M-7 0 q7 24 7 28 q0-4 7-28 z"/>
@@ -918,6 +919,13 @@
         // The column is left where it was burnt.
         if (rig.t > m.next) {
           m.next = rig.t + 0.045;
+          // The same point .vent is drawn at. That element exists so a test can
+          // ask the BROWSER where this point of the drawing ended up and
+          // compare it with where rig.point() put the smoke — which is the only
+          // way to check the transform against something other than itself. The
+          // flame's own rectangle will not do it: the flame stretches with
+          // thrust and turns with the vehicle, so its centre wanders away from
+          // the nozzle exactly when the answer matters most.
           const p = rig.point(75, 150);
           rig.smoke.emit({
             x: p.x + (Math.random() - 0.5) * 8 * sc,

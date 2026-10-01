@@ -1425,7 +1425,9 @@ for (const view of VIEWS) {
       window.shabbosFlights.send('rocket');
       const el = document.querySelector('.flight.rocket');
       let peak = 0;
-      for (let i = 0; i < 400 && el.isConnected; i += 1) {
+      // Long enough to fill a pool of 40 at one puff every 45ms, and no longer:
+      // this runs immediately before a test that measures frame timing.
+      for (let i = 0; i < 220 && el.isConnected; i += 1) {
         await new Promise((r) => requestAnimationFrame(r));
         peak = Math.max(peak, [...document.querySelectorAll('.flyway .puff')]
           .filter((n) => n.style.display !== 'none').length);
@@ -1586,9 +1588,26 @@ for (const view of VIEWS) {
       let turned = 0;
       let seen = 0;
       let last = '';
-      for (let i = 0; i < 240 && el.isConnected; i += 1) {
+      let prev = performance.now();
+      let stalls = 0;
+      // THE WHOLE CLIMB, not the first four seconds of it. The rocket leaves
+      // the pad upright and tilts as it goes, so a window that ends early only
+      // ever sees the angles where getting the rotation wrong barely shows: at
+      // 240 frames the unrotated transform was 43 px out and this passed.
+      for (let i = 0; i < 900 && el.isConnected; i += 1) {
         await new Promise((r) => requestAnimationFrame(r));
-        const flame = el.querySelector('.flame');
+        // NOT ACROSS A STALL. The emitter is throttled to one puff every 45ms
+        // and the rocket covers five hundred pixels a second, so a frame that
+        // took half a second is a frame in which the vehicle moved a long way
+        // and released nothing: the newest puff is then simply an old puff, and
+        // the distance between it and the nozzle is a measurement of the stall
+        // rather than of the geometry. It reported 967 px once, on a run where
+        // the test before this one had just driven four hundred frames.
+        const now = performance.now();
+        const gap = now - prev;
+        prev = now;
+        if (gap > 100) { stalls += 1; continue; }
+        const flame = el.querySelector('.vent');
         // The newest puff: nodes are painted index for index against the
         // particle list, so the last visible one is the one just released.
         const puffs = [...document.querySelectorAll('.flyway .puff')]
@@ -1604,20 +1623,28 @@ for (const view of VIEWS) {
         last = key;
         const rot = Math.abs(Number(/rotate\(([-\d.]+)deg\)/.exec(el.style.transform)?.[1] ?? 0));
         turned = Math.max(turned, rot);
-        const f = mid(flame.getBoundingClientRect());
+        // A detached element measures as a rectangle at the origin, and the
+        // last frame of a flight catches exactly that: the vehicle has been
+        // removed and its anchor reports 0,0,0,0, which is a thousand pixels
+        // from anywhere. Every other frame of the climb sits under twenty.
+        const box = flame.getBoundingClientRect();
+        if (!box.width) continue;
+        const f = mid(box);
         const p = mid(newest.getBoundingClientRect());
         worst = Math.max(worst, Math.hypot(p.x - f.x, p.y - f.y));
         seen += 1;
       }
       if (el.isConnected) el.remove();
-      return { worst, turned, seen };
+      return { worst, turned, seen, stalls };
     });
-    ok(exhaust.seen > 20, `the rocket is watched while it burns (${exhaust.seen} puffs)`);
+    ok(exhaust.seen > 20,
+      `the rocket is watched while it burns (${exhaust.seen} puffs`
+      + `${exhaust.stalls ? `, ${exhaust.stalls} stalled frame(s) skipped` : ''})`);
     ok(exhaust.turned > 2, `and it is genuinely tilted while it is (${exhaust.turned.toFixed(1)}°)`);
-    // Generous, because the flame's own rectangle is the whole flame and the
-    // exhaust leaves from the end of it — but nothing like the hundreds of
-    // pixels an unrotated transform put it out by.
-    ok(exhaust.worst < 60,
+    // A puff is released with a velocity of its own and is measured a frame
+    // later, so this is not zero — but it is nothing like the hundreds of
+    // pixels an unrotated transform puts it out by once the rocket has tilted.
+    ok(exhaust.worst < 40,
       `and its exhaust leaves the nozzle it is drawn under (worst ${exhaust.worst.toFixed(0)} px)`);
   }
 

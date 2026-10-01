@@ -273,8 +273,15 @@ function renderEdge(now, info) {
 
 // Netz, shkiya and tzeis, in the tile beside the clock. They used to appear
 // only on the horizon, so turning that off — which is now the default — left
-// them nowhere. These are the three that pace the day; the setting adds the
-// rest for anyone who wants them.
+// them nowhere. These are the three that pace the day.
+//
+// The setting adds ONE more, not three. It used to add latest Shema, earliest
+// Mincha and plag as well, and six rows in the corner of a wall display is a
+// luach: the tile grew taller than the date beside it and took the space off
+// the clock, which is the thing anyone across the room is actually reading.
+// Sof zman Shema is the one of the three worth the line — it is a DEADLINE,
+// where Mincha gedola and plag are "not before" times that nobody is watching
+// a clock for.
 let lastZmanim = '';
 
 function renderZmanim(info) {
@@ -283,9 +290,7 @@ function renderZmanim(info) {
   // assumes you already know; the pairing is how a luach reads.
   const rows = [['נץ החמה', 'Earliest Shacharis', toDate(cal.getSunrise()), 'netz']];
   if (settings.showZmanim) {
-    rows.push(['סוף זמן שמע', 'Latest Shema', toDate(cal.getSofZmanShmaGRA()), 'mid'],
-      ['מנחה גדולה', 'Earliest Mincha', toDate(cal.getMinchaGedola()), 'mid'],
-      ['פלג המנחה', 'Early Maariv', toDate(cal.getPlagHamincha()), 'mid']);
+    rows.push(['סוף זמן שמע', 'Latest Shema', toDate(cal.getSofZmanShmaGRA()), 'mid']);
   }
   rows.push(['שקיעה', 'Sunset', info.sunset, 'shkiya'],
     ['צאת הכוכבים', 'Nightfall', info.tzeis, 'tzeis']);
