@@ -58,23 +58,46 @@ function nextShabbos(from) {
   return d;
 }
 
-/* Is work forbidden right now? Drives the no-touch lock. */
+// A TIME DOES NOT VANISH THE MOMENT IT ARRIVES.
+//
+// Somebody who walks in at 7:05 wants to know whether they have missed the
+// seven o'clock, and for a while after it has passed havdalah is the most
+// useful thing on the wall — it is the answer to "is it out yet". Pulling
+// either off the board the instant the clock reaches it takes away the fact
+// that is being asked about at exactly the moment it is asked.
+//
+// Twenty minutes, and then it goes. Long enough to cover walking in late and
+// the gap between a published havdalah and when people actually make it; short
+// enough that the board is never a list of things that already happened.
+const JUST_GONE_MS = 20 * 60000;
+const stillUp = (at, now) => !!at && at.getTime() > now.getTime() - JUST_GONE_MS;
+
+/* Is work forbidden right now? Drives the no-touch lock.
+ *
+ * FROM SHKIYA, not from candle lighting. Melacha is forbidden from sunset;
+ * the eighteen minutes before it are the published lighting time, which is a
+ * margin, and they are also exactly when somebody is still finishing up — the
+ * hotplate, the lights, and the display itself. Locking at candle lighting
+ * took the settings away during the one stretch of the week when they are most
+ * likely to be wanted. It still unlocks at tzeis. */
 function isLocked(now, info) {
-  const candles = toDate(info.cal.getCandleLighting());
   if (info.civil.jc.isAssurBemelacha() && now < info.tzeis) return true;
-  return info.civil.jc.isTomorrowShabbosOrYomTov() && now >= candles;
+  return info.civil.jc.isTomorrowShabbosOrYomTov() && now >= info.sunset;
 }
 
 // Walks forward to the end of the current rest period, so Friday night shows
 // havdalah and a three-day Yom Tov shows the day it actually ends. Returns the
 // day as well: a shul's havdalah is read off that day's maariv, not off tzeis.
-function restEnd(now) {
+function restEnd(now, grace = 0) {
   for (let i = 0; i < 4; i += 1) {
     const day = addDays(now, i);
     const jc = new JewishDay(day).jc;
     if (!jc.isAssurBemelacha() || jc.isTomorrowShabbosOrYomTov()) continue;
     const tzeis = toDate(zmanim(day).getTzais());
-    if (tzeis > now) return { day, tzeis };
+    // `grace` keeps a period that has only just ended, for callers that want
+    // to go on naming its havdalah for a few minutes. Nothing that decides
+    // whether work is forbidden passes one.
+    if (tzeis.getTime() > now.getTime() - grace) return { day, tzeis };
   }
   return null;
 }

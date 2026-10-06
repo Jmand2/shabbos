@@ -75,8 +75,17 @@ function scheduleFor(slug, now, days) {
   if (!known) return { state: 'unavailable' };
 
   const ahead = rows.filter((r) => r.at > now).sort((a, b) => a.at - b.at);
-  if (!ahead.length) return { state: 'awaiting' };
-  return { state: 'ok', rows: ahead };
+  // AND WHAT HAS JUST GONE, kept apart from it. A minyan that started five
+  // minutes ago is the most useful line on the board to somebody hurrying in,
+  // but it is not something the board is offering them — so it is not counted
+  // against the cap. Mixed into `rows`, a 1:45 Mincha fifteen minutes past
+  // became the one service Auto had room for on a tight board and pushed the
+  // 6:35 Kabbalas Shabbos off it: the next minyan, displaced by one nobody can
+  // get to. These are added back to the days that are already on the card.
+  const recent = rows.filter((r) => r.at <= now && stillUp(r.at, now))
+    .sort((a, b) => a.at - b.at);
+  if (!ahead.length && !recent.length) return { state: 'awaiting' };
+  return { state: 'ok', rows: ahead, recent };
 }
 
 // Chronological order alone lets today crowd out the rest of a long Yom Tov:

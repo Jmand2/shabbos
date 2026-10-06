@@ -432,6 +432,43 @@ the board gets an even share first, unspent share flows to the days that can use
 it, and the cap itself is still a hard ceiling — a cap of four over five days
 drops the furthest day rather than quietly showing five.
 
+## A time does not vanish the moment it arrives
+
+Everything on the board — a minyan, candle lighting, havdalah — stays up for
+**twenty minutes after it starts**, drawn dimmed and struck through so it reads
+as past. Somebody walking in at five past wants to know what they have missed,
+and for a while after it passes havdalah is the most useful thing on the wall:
+it is the answer to "is it out yet". Removing either at the stroke of the hour
+takes away the fact being asked about at exactly the moment it is asked.
+
+Three things follow, and each was a bug on the way:
+
+- **It is an addition, never a substitution.** The lingering rows are not
+  counted against Auto's cap. Mixed into one list, a Mincha a quarter of an hour
+  past became the one service a tight board had room for and pushed the Kabbalas
+  Shabbos that was actually next straight off the card.
+- **A day can be held by a lingering row alone.** Day groups were built from
+  upcoming minyanim, so the moment a shul's last Maariv passed the whole day —
+  heading, havdalah and all — came off the card. On a Saturday night that is the
+  one fact everybody is looking for, removed at the hour they look for it.
+- **NEXT means the next one still to come.** The first row on the board may now
+  be one that has already gone, and flagging it would be a lie about the one
+  thing the flag is for.
+
+A day of one row is an every-evening occurrence because of this, so a card only
+splits into columns when every column has something in it. A heading and one row
+down the left with the whole of tomorrow down the right is worse than the empty
+space the split was meant to reclaim.
+
+## The lock starts at shkiya
+
+Melacha is forbidden from sunset. The eighteen minutes before it are the
+published lighting time — a margin — and they are also exactly when somebody is
+still finishing up: the hotplate, the lights, and the display itself. Locking at
+candle lighting took the settings away during the one stretch of the week when
+they are most likely to be wanted. The other end is unchanged: it opens again at
+tzeis.
+
 ## When the times were last confirmed
 
 The footer describes the oldest thing **on the board** — not the newest thing in

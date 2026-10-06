@@ -167,8 +167,8 @@ function havdalahFor(slug, endDay) {
 // One time when the shuls on screen agree, one line each when they do not —
 // which is the whole point, since they end Shabbos minutes apart. With nothing
 // shul-specific to show we fall back to tzeis, the town-wide answer.
-function havdalahLines(now) {
-  const end = restEnd(now);
+function havdalahLines(now, grace = 0) {
+  const end = restEnd(now, grace);
   if (!end) return [];
   const shown = shownShuls();
   const per = shown.map((s) => ({ name: s.name, at: havdalahFor(s.slug, end.day) }))
@@ -194,7 +194,7 @@ function havdalahLines(now) {
 
    The shul's published time wins. The fallback is a calculation, and it is
    only there so a shul that publishes nothing still shows something. */
-function edgeRowsFor(slug, day) {
+function edgeRowsFor(slug, day, now) {
   const out = [];
   const published = minyanim.days?.[isoOf(day)]?.[slug]?.edge ?? {};
   const jc = new JewishDay(day).jc;
@@ -229,7 +229,10 @@ function edgeRowsFor(slug, day) {
       if (dark) out.push({ label: 'Nightfall', at: dark });
     }
   }
-  return out;
+  // Same twenty minutes everything else on the board gets. Havdalah is worth
+  // keeping for a while after it passes — it is the answer to "is it out yet"
+  // — and a candle time two hours gone is only clutter.
+  return now ? out.filter((e) => stillUp(e.at, now)) : out;
 }
 
 function renderEdge(now, info) {
@@ -246,6 +249,8 @@ function renderEdge(now, info) {
   const candles = toDate(info.cal.getCandleLighting());
   const restingNow = jc.isAssurBemelacha() && now < info.tzeis;
   const restingNext = jc.isTomorrowShabbosOrYomTov();
+  // Out, but only just. See JUST_GONE_MS.
+  const justOut = jc.isAssurBemelacha() && stillUp(info.tzeis, now);
   const parts = [];
   if (restingNow && restingNext) {
     // Another day of rest starts tonight. Into Shabbos, lighting is at the usual
@@ -256,11 +261,19 @@ function renderEdge(now, info) {
       parts.push(`Candles ${intoShabbos ? '' : 'after '}<b>${clockTime(lightAt)}</b>`);
     }
     parts.push(...havdalahLines(now));
-  } else if (isLocked(now, info)) {
-    parts.push(...havdalahLines(now));
-  } else if (restingNext && now < candles) {
+  } else if (isLocked(now, info) || justOut) {
+    // AND FOR TWENTY MINUTES AFTER IT IS OUT. This tile is the only place
+    // havdalah appears in the clock-only layout, and it went blank at the
+    // stroke of tzeis — on the one night of the week, at the one moment,
+    // somebody is looking at it to find out whether Shabbos is over.
+    parts.push(...havdalahLines(now, JUST_GONE_MS));
+  } else if (restingNext && now < info.sunset) {
     // Both ends, not just the one about to happen. Knowing Shabbos is in at
     // 6:41 is half the question; the other half is when it is out.
+    //
+    // Up to SHKIYA, not up to candle lighting. The lock starts at shkiya now,
+    // and this stopped at candles — so the eighteen minutes between them were
+    // eighteen minutes with nothing in the tile at all.
     parts.push(`Candles <b>${clockTime(candles)}</b>`, ...havdalahLines(now));
   }
   // On an ordinary weekday there is no transition to announce. Hide the element
@@ -385,6 +398,27 @@ function dealIntoColumns(blocks, columns) {
     if (tall < bestTall) { bestTall = tall; best = cut; }
   }
 
+  // A SPLIT HAS TO BE WORTH MAKING. Columns break between days, so a day with
+  // a single row in it forces a cut that leaves one column nearly empty and the
+  // other carrying everything — a lone "Maariv 7:30pm" down the left and the
+  // whole of tomorrow crammed into the right. That is worse than the empty
+  // space it was meant to reclaim, and a day of one row is now ordinary: a time
+  // is kept for twenty minutes after it starts, so the last minyan of an
+  // evening sits alone under its own heading for a while.
+  //
+  // Every column has to carry something. A heading and one row down the left
+  // with the whole of tomorrow down the right is worse than the empty space the
+  // split was meant to reclaim — and a day of one row is now an every-evening
+  // occurrence, because a time is kept for twenty minutes after it starts and
+  // the last minyan of the day spends that time sitting alone under its own
+  // heading.
+  {
+    let from2 = 0;
+    const heights = [];
+    for (const to of best) { heights.push(lines(from2, to)); from2 = to; }
+    if (Math.min(...heights) < 3) return one();
+  }
+
   const cols = [];
   let from = 0;
   for (const to of best) { cols.push(days.slice(from, to).flatMap((d) => d.blocks)); from = to; }
@@ -464,20 +498,60 @@ function renderShuls(now, days) {
     // Auto counts SERVICES per day; an explicit setting counts TIMES. Two
     // different questions — see capRuns/capTimes.
     const ahead = auto ? capRuns(window, cap) : capTimes(window, cap);
-    const next = ahead[0];
+    // THE NEXT ONE STILL TO COME. ahead[0] is no longer that: the list keeps a
+    // service for twenty minutes after it starts, so the first row on the board
+    // can be one that has already gone, and flagging it NEXT would be a lie
+    // about the thing the flag exists to answer.
+    const next = ahead.find((r) => r.at > now);
 
+    // Keyed by day, and carrying that day, because a day can now earn its place
+    // without a single minyan on it.
     const byDay = new Map();
     for (const r of ahead) {
       const k = isoOf(r.at);
-      if (!byDay.has(k)) byDay.set(k, []);
-      byDay.get(k).push(r);
+      if (!byDay.has(k)) byDay.set(k, { at: r.at, rows: [] });
+      byDay.get(k).rows.push(r);
     }
-    for (const [iso, rows] of byDay) {
+    // A DAY WITH NOTHING LEFT BUT ITS EDGE STILL BELONGS ON THE BOARD. Groups
+    // were built from minyan times alone, so the moment a shul's last Maariv
+    // passed, that whole day — heading, havdalah and all — came off the card.
+    // On a Saturday night that is the fact everybody is looking for, removed at
+    // the hour they look for it.
+    //
+    // Only while edges are being shown at all: the day-drop fallback turns them
+    // off before it gives up a day, and a day climbing back on through its edge
+    // would undo exactly what that fallback is for.
+    if (withEdges) {
+      for (const day of days) {
+        const k = isoOf(day);
+        if (byDay.has(k)) continue;
+        if (!edgeRowsFor(shul.slug, day, now).length) continue;
+        byDay.set(k, { at: day, rows: [] });
+      }
+    }
+    // AND WHAT HAS JUST GONE, back into the days that made it onto the board.
+    // Added after the cap, never counted against it: these are not something
+    // the board is offering anybody, they are there so that walking in five
+    // minutes late still answers the question.
+    for (const r of s.recent ?? []) {
+      const k = isoOf(r.at);
+      // CREATING THE DAY IF IT HAS GONE. A day whose last minyan has just
+      // started has no future rows left, so nothing had put it on the board —
+      // and a Maariv seventeen minutes ago disappeared along with the whole
+      // evening it belonged to. These are always today or the earliest day
+      // shown (they are in the past), which is the one day the day-drop
+      // fallback never gives up, so nothing it dropped can climb back.
+      if (!byDay.has(k)) byDay.set(k, { at: r.at, rows: [] });
+      byDay.get(k).rows.push(r);
+    }
+    for (const day of byDay.values()) day.rows.sort((a, b) => a.at - b.at);
+    const ordered = [...byDay.entries()].sort((a, b) => a[1].at - b[1].at);
+    for (const [iso, { at, rows }] of ordered) {
       showing.push({
         slug: shul.slug,
         iso,
         groups: [...new Set(rows.map((r) => r.group))],
-        edges: withEdges && edgeRowsFor(shul.slug, rows[0].at).length > 0,
+        edges: withEdges && edgeRowsFor(shul.slug, at, now).length > 0,
       });
     }
 
@@ -485,12 +559,12 @@ function renderShuls(now, days) {
     // columns below. Each carries the number of lines it will occupy, which is
     // what the balancing works on.
     const blocks = [];
-    for (const [iso, rows] of byDay) {
-      const when = dayName(now, rows[0].at);
+    for (const [, { at: dayAt, rows }] of ordered) {
+      const when = dayName(now, dayAt);
       // Anything that is not today is always announced. Without this, a board
       // late at night shows tomorrow's 5:10 AM with nothing saying it is not
       // tonight — and on a long Yom Tov, three identical mornings in a row.
-      if (when.cls !== 'today' || byDay.size > 1) {
+      if (when.cls !== 'today' || ordered.length > 1) {
         blocks.push({ head: true, lines: 1,
           html: `<p class="group ${when.cls}">${esc(when.label)}</p>` });
         lines += 1;
@@ -531,17 +605,22 @@ function renderShuls(now, days) {
             + (here ? `<span class="nextflag" data-at="${next.at.getTime()}">Next</span>` : '')
             + `</span>`
             + `<span class="times ${day}${here}">`
-            + times.map((r) => `<span class="time${r === next ? ' next' : ''}">${clockFace(r.time)}</span>`).join('')
+            // `gone` is the twenty minutes a time is kept after it starts. It
+            // has to LOOK past, or the board is quietly telling somebody that
+            // a minyan they have missed is still to come.
+            + times.map((r) => `<span class="time${r === next ? ' next' : ''}`
+              + `${r.at <= now ? ' gone' : ''}">${clockFace(r.time)}</span>`).join('')
             + `</span>` });
       }
 
       // The shul's own candle lighting and havdalah, under that day's times.
-      for (const e of withEdges ? edgeRowsFor(shul.slug, rows[0].at) : []) {
+      for (const e of withEdges ? edgeRowsFor(shul.slug, dayAt, now) : []) {
         lines += 1;
         blocks.push({ head: false, lines: 1,
           html: `<span class="label ${day} edgerow">${esc(e.label)}</span>`
             + `<span class="times ${day} edgerow">`
-            + `<span class="time edgetime">${clockFace(clockTimeLong(e.at))}</span></span>` });
+            + `<span class="time edgetime${e.at <= now ? ' gone' : ''}">`
+            + `${clockFace(clockTimeLong(e.at))}</span></span>` });
       }
     }
     // Lines per column, not per card, once the content is split.

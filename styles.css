@@ -1086,6 +1086,20 @@ body[data-face="clean"]   .clock { font-family: "Avenir Next", ui-sans-serif, -a
 .card .body .label.tomorrow { color: var(--mute); }
 /* but the next minyan stays the next minyan, whichever day it falls on */
 .card .body .times.tomorrow .time.next { color: var(--accent); }
+
+/* ALREADY GONE, AND STILL SHOWN. A time stays on the board for twenty minutes
+   after it starts, because somebody walking in at five past wants to know what
+   they have missed and because havdalah is the answer to "is it out yet" for a
+   while after it passes. It has to read as past, though — a 7:00 Mincha drawn
+   at 7:15 exactly as it was drawn at 6:45 is the board telling somebody they
+   still have time. Dimmed and struck, which says "this has happened" without
+   adding a word anybody has to read. */
+.card .body .time.gone {
+  opacity: 0.42;
+  text-decoration: line-through;
+  text-decoration-thickness: 0.07em;
+}
+.times.edgerow .time.gone { color: var(--accent); }
 /* Sized off --minyan like .label, NOT off vh.
    A vh heading is invisible to the fit loop: it cannot be shrunk, so on a board
    the loop cannot fit it just goes on failing at every scale and settles at the

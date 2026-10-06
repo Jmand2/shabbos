@@ -218,6 +218,15 @@ const MEASURE = () => {
   // looking for is the one row that must not move the others.
   out.titles = [];
   out.nextRows = [];
+  // THE NEXT MINYAN IS NEVER DISPLACED. A time is kept on the board for twenty
+  // minutes after it starts, and those lingering rows must be an addition and
+  // never a substitution: counted against Auto's cap, a Mincha a quarter of an
+  // hour past became the one service a tight board had room for and pushed the
+  // one that was actually next off it — leaving a struck time and no NEXT at
+  // all. Only a board with nothing upcoming on it may be without a flag.
+  out.futureTimes = [...document.querySelectorAll('.card .body .time')]
+    .filter((n) => !n.classList.contains('gone') && !n.classList.contains('edgetime')).length;
+  out.nextFlags = document.querySelectorAll('.card .body .nextflag').length;
   for (const card of document.querySelectorAll('.card')) {
     const h2 = card.querySelector('h2');
     const box = card.getBoundingClientRect();
@@ -497,6 +506,9 @@ for (const view of VIEWS) {
       `the shul name leaves the schedule its room (${(m.titles ?? []).join('%, ')}%)`);
     // The NEXT row may be taller — it carries a second line — but not so much
     // taller that it shifts the rows beside it into a different rhythm.
+    ok(!m.futureTimes || m.nextFlags > 0,
+      `the next minyan is flagged while one is coming (${m.nextFlags} flag(s), `
+      + `${m.futureTimes} upcoming time(s))`);
     for (const r of m.nextRows ?? []) {
       ok(r.flag <= r.line * 1.9,
         `the NEXT flag costs a line, not a row (${r.flag}px on ${r.line}px type)`);
@@ -1387,7 +1399,13 @@ for (const view of VIEWS) {
     });
     ok(parade.sent >= 7, `the parade launches a crowd (${parade.sent})`);
     ok(parade.peak.flights >= 5, `and they are in the air together (${parade.peak.flights} at once)`);
-    ok(parade.peak.world > 20, `and they fill the world layer (${parade.peak.world} objects at its peak)`);
+    // SOMETHING, not a number. The parade draws seven to ten vehicles at random
+    // and several of them emit nothing at all — a parachute, a car and a plane
+    // between them put one object in the world layer. Asserting twenty passed
+    // for a year and then failed on an unlucky draw of twelve, which is a test
+    // reporting the dice. What this block is actually about is the next three
+    // lines: whatever went in came back out.
+    ok(parade.peak.world > 0, `and they put things in the world layer (${parade.peak.world} at its peak)`);
     ok(parade.left.flights === 0, `every flight is gone afterwards (${parade.left.flights} left)`);
     ok(parade.left.world === 0,
       `and so is everything they put in the world (${parade.left.world} left of ${parade.peak.world})`);

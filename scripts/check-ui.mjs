@@ -1087,6 +1087,123 @@ console.log('\n=== P2: System Status dates each source by its own clock ===');
     `a hand-entered havdalah is called one ("${line.slice(-60)}")`);
 }
 
+console.log('\n=== L: the lock follows shkiya, not candle lighting ===');
+{
+  // Melacha is forbidden from sunset. The eighteen minutes before it are the
+  // published lighting time — a margin — and they are also exactly when
+  // somebody is still finishing up: the hotplate, the lights, and the display
+  // itself. Locking at candle lighting took the settings away during the one
+  // stretch of the week when they are most likely to be wanted.
+  //
+  // 2026-09-18: candles 6:41:54pm, shkiya 7:00:50pm, tzeis 7:40:41pm.
+  // 2026-09-19: tzeis 7:38:57pm.
+  const lockedAt = async (iso) => {
+    const { w } = await boot(iso, { settings: { shuls: ['beth-aaron', 'ohr-saadya'] } });
+    return w.document.body.classList.contains('locked');
+  };
+  ok(await lockedAt('2026-09-18T18:35:00-04:00') === false,
+    'Friday before candle lighting: open');
+  ok(await lockedAt('2026-09-18T18:50:00-04:00') === false,
+    'and in the eighteen minutes AFTER candle lighting: still open');
+  ok(await lockedAt('2026-09-18T18:59:00-04:00') === false,
+    'right up to the minute before shkiya');
+  ok(await lockedAt('2026-09-18T19:02:00-04:00') === true,
+    'and shut from shkiya');
+  ok(await lockedAt('2026-09-19T19:30:00-04:00') === true,
+    'Shabbos afternoon: shut');
+  ok(await lockedAt('2026-09-19T19:45:00-04:00') === false,
+    'and open again after tzeis — the other end is unchanged');
+}
+
+console.log('\n=== G: a time stays up for twenty minutes after it starts ===');
+{
+  // Pulling a time off the board the instant the clock reaches it takes away
+  // the fact being asked about at exactly the moment it is asked: somebody
+  // walking in at five past wants to know what they have missed, and havdalah
+  // is the answer to "is it out yet" for a while after it passes.
+  //
+  // Beth Aaron on 2026-09-19: last Maariv 7:42pm, havdalah 7:51pm.
+  const board = async (iso) => {
+    const { w } = await boot(iso, { settings: { shuls: ['beth-aaron'] } });
+    const card = w.document.querySelector('.card');
+    return {
+      days: [...card.querySelectorAll('.body .group')].map((n) => n.textContent.trim()),
+      labels: [...card.querySelectorAll('.body .label')].map((n) => n.textContent.replace('Next', '').trim()),
+      times: [...card.querySelectorAll('.body .time')].map((n) => n.textContent.trim()),
+      gone: [...card.querySelectorAll('.body .time.gone')].map((n) => n.textContent.trim()),
+      nextGone: card.querySelectorAll('.body .time.next.gone').length,
+      nextAt: card.querySelector('.body .time.next')?.textContent.trim() ?? null,
+    };
+  };
+
+  const during = await board('2026-09-19T19:30:00-04:00');
+  ok(during.times.some((t) => /7:42/.test(t)) && !during.gone.some((t) => /7:42/.test(t)),
+    `before it, the 7:42 Maariv is up and not struck (${during.nextAt})`);
+
+  const justAfter = await board('2026-09-19T19:50:00-04:00');
+  ok(justAfter.times.some((t) => /7:42/.test(t)),
+    'eight minutes after it starts, the 7:42 Maariv is still on the board');
+  ok(justAfter.gone.some((t) => /7:42/.test(t)),
+    'and drawn as past, so nobody reads it as still to come');
+  ok(justAfter.nextGone === 0,
+    `and NEXT is not on it (${justAfter.nextAt ?? 'nothing flagged'})`);
+
+  // THE DAY IS HELD BY ITS EDGE ALONE. At five past eight the last Maariv is
+  // more than twenty minutes gone, so Saturday has no minyan left at all — and
+  // the whole day used to come off the card at that moment, taking havdalah
+  // with it on the one night of the week anybody is looking for it.
+  const edgeOnly = await board('2026-09-19T20:05:00-04:00');
+  ok(!edgeOnly.times.some((t) => /7:42/.test(t)),
+    'twenty-three minutes after, the Maariv has gone');
+  ok(edgeOnly.labels.includes('Havdalah'),
+    `but havdalah is still up (${edgeOnly.labels.join(', ')})`);
+  ok(edgeOnly.gone.some((t) => /7:51/.test(t)),
+    'drawn as past, like everything else that has happened');
+  ok(edgeOnly.days.length >= 1 && /Today/.test(edgeOnly.days[0]),
+    `and the day it belongs to is still on the card (${edgeOnly.days.join(' / ')})`);
+
+  // WHAT HAS GONE IS NEVER COUNTED AGAINST THE CAP. This is the shape of the
+  // regression: mixed into one list, a Mincha fifteen minutes past was the one
+  // service Auto had room for on a tight board, and it pushed the Kabbalas
+  // Shabbos that was actually next straight off the card. Asked of the function
+  // that hands the board its rows, because the cap is applied to `rows` alone.
+  {
+    const { w } = await boot('2026-09-19T19:50:00-04:00',
+      { settings: { shuls: ['beth-aaron'] } });
+    const at = new w.Date();
+    const sched = w.scheduleFor('beth-aaron', at, w.daysShown(at, w.dayInfo(at)));
+    ok(sched.rows.every((r) => r.at > at),
+      `the cap only ever sees times still to come (${sched.rows.length} of them)`);
+    ok((sched.recent ?? []).length > 0 && sched.recent.every((r) => r.at <= at),
+      `and what has just gone is handed over separately (${sched.recent?.length})`);
+  }
+
+  // THE CLOCK-ONLY TILE, which is the only place havdalah appears when the
+  // cards are hidden. It went blank at the stroke of tzeis, and moving the lock
+  // to shkiya then opened an eighteen-minute hole before Shabbos as well.
+  {
+    const tile = async (iso) => {
+      const { w } = await boot(iso,
+        { settings: { shuls: ['beth-aaron'], layout: 'clock' } });
+      return $(w, 'edge').textContent;
+    };
+    const before = await tile('2026-09-18T18:50:00-04:00');
+    ok(/Candles/.test(before) && /Havdalah/.test(before),
+      `between candle lighting and shkiya it still says both ends ("${before}")`);
+    const during = await tile('2026-09-19T19:20:00-04:00');
+    ok(/Havdalah/.test(during), `and through Shabbos ("${during}")`);
+    const just = await tile('2026-09-19T19:45:00-04:00');
+    ok(/Havdalah/.test(just), `and for a few minutes after it is out ("${just}")`);
+    const gone = await tile('2026-09-19T20:05:00-04:00');
+    ok(!/Havdalah/.test(gone), `and then it stops ("${gone || 'empty'}")`);
+  }
+
+  const later = await board('2026-09-19T20:35:00-04:00');
+  ok(!later.labels.includes('Havdalah'),
+    `three quarters of an hour after, it is gone (${later.labels.join(', ') || 'nothing'})`);
+  ok(!later.gone.length, 'and nothing struck is left behind on the board');
+}
+
 console.log('\n=== F: freshness describes the oldest shul on screen ===');
 {
   const old = '2027-04-20T06:00:00Z';     // a day and a half before "now"
