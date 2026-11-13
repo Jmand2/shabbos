@@ -7,7 +7,7 @@
 // and it runs where a bad one would come from: the refresh workflow itself.
 //
 //   node scripts/check-data.mjs
-import { readFile } from 'node:fs/promises';
+import { appendFile, readFile } from 'node:fs/promises';
 import { cleanLabel, cleanTime, normaliseSections, coversRange } from './fetch-minyanim.mjs';
 
 const OUT = new URL('../data/minyanim.json', import.meta.url);
@@ -15,6 +15,26 @@ const GROUPS = ['shacharis', 'mincha', 'maariv'];
 
 let bad = 0;
 const fail = (msg) => { bad += 1; console.log('  FAIL', msg); };
+
+/* TWO KINDS OF PROBLEM, AND ONLY ONE OF THEM MAY STOP THE COMMIT ------------
+
+   A MALFORMED file breaks the app, and the run must not commit it. That is
+   fail(): it exits non-zero, and the workflow's commit step never runs.
+
+   An INCOMPLETE file is a different thing entirely. It is well-formed and it
+   is current; some source simply has not published something yet. Gating the
+   commit on that was a two-week outage. From 2026-10-30 every run fetched the
+   days correctly, found one shul whose furthest-out Mincha the aggregator had
+   not rendered, failed, and skipped the commit — so the wall went on serving
+   the file from 2026-10-30, which was staler and emptier than the one being
+   thrown away each time. The check written to keep one wrong day off the wall
+   is the reason a wrong month stayed on it.
+
+   Freshness must never be gated on the source being complete. So
+   incompleteness warns, the data lands, and the workflow fails the job
+   AFTERWARDS, so a human still sees red without the board paying for it. */
+const warnings = [];
+const warn = (msg) => { warnings.push(msg); console.log('  WARN', msg); };
 
 const data = JSON.parse(await readFile(OUT, 'utf8'));
 const days = Object.keys(data.days ?? {}).sort();
@@ -75,19 +95,40 @@ for (const day of days) {
    This is only about a day that is present and quietly half-empty.
 
    The wall's shuls are the ones with a site of their own in shuls.json, which
-   is also what settings.js defaults to. */
+   is also what settings.js defaults to.
+
+   TODAY AND TOMORROW, NOT THE WHOLE HORIZON.
+   -----------------------------------------
+   This ran over every day on file, and the scrape reaches three days out. A
+   shul with no Mincha yet on day+3 is not a dropped service, it is a source
+   that publishes nearer the time: teaneckminyanim served Ohr Saadya's Monday
+   with "There are no Mincha minyanim scheduled" in the section while its own
+   summary line on the same page read "Next Minyan Today: Mincha/Maariv at
+   4:25 PM". Nothing is wrong there except the horizon, and scheduleFor() in
+   minyanim.js pools the days it shows anyway, so a far day still short of its
+   afternoon never reaches the wall as a claim about anything.
+
+   What the Succos bug actually was is a day ON the board saying a shul has no
+   Mincha. That is today, and tomorrow once tonight is done — so that is what
+   this asks about, and a quiet day beyond it is left to fill itself in. */
 const WALL_ALL = JSON.parse(await readFile(new URL('../data/shuls.json', import.meta.url), 'utf8'));
 const WALL = WALL_ALL.filter((s) => s.site).map((s) => s.slug);
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+// Date arithmetic at noon UTC so a DST boundary cannot move the day.
+const tomorrow = (() => {
+  const d = new Date(`${today}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+})();
 
-for (const day of days.filter((d) => d >= today)) {
+for (const day of days.filter((d) => d >= today && d <= tomorrow)) {
   for (const slug of WALL) {
     const entry = data.days[day][slug];
     if (!entry) continue;                       // no entry at all: not this check's business
     const later = (entry.mincha?.length ?? 0) + (entry.maariv?.length ?? 0);
     if (later) continue;
     const morning = entry.shacharis?.length ?? 0;
-    fail(`${day} ${slug}: ${morning} shacharis and nothing after — no mincha, no maariv. `
+    warn(`${day} ${slug}: ${morning} shacharis and nothing after — no mincha, no maariv. `
       + 'Either the source dropped it or data/overrides.json needs extending.');
   }
 }
@@ -147,5 +188,18 @@ for (const [i, entry] of (OVERRIDES.entries ?? []).entries()) {
 
 console.log(`  ${days.length} day(s), ${rows} row(s), ${stamped} entry stamp(s)`);
 console.log(`  ${days[0]} to ${days.at(-1)}`);
-console.log(bad ? `\n${bad} problem(s)` : '\nthe scrape is clean');
+
+// Handed to the workflow, which commits the data and THEN fails the job on it.
+// Annotated as well, so the warning is readable from the run summary without
+// opening the log of a step that passed.
+if (warnings.length) {
+  for (const msg of warnings) console.log(`::warning title=Incomplete minyan data::${msg}`);
+  if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, 'incomplete=1\n');
+}
+
+if (bad) console.log(`\n${bad} problem(s)`);
+else if (warnings.length) {
+  console.log(`\nwell-formed and current, but ${warnings.length} incomplete day(s)`);
+  console.log('committing anyway: stale data on the wall is worse than a short one');
+} else console.log('\nthe scrape is clean');
 process.exit(bad ? 1 : 0);

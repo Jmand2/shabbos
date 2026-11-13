@@ -22,6 +22,7 @@ jobs:
       # longer run on a data-only push. No browser and no jsdom — this is about
       # the file, and it runs where a bad one comes from.
       - name: Validate the scrape
+        id: validate
         run: node scripts/check-data.mjs
 
       - name: Commit if changed
@@ -33,3 +34,17 @@ jobs:
           git commit -m "Refresh minyan times"
           git pull --rebase --autostash
           git push
+
+      # AFTER the commit, deliberately.
+      #
+      # A well-formed file that the source has not finished filling in is worth
+      # a red X — somebody should look at whether a shul has gone missing — but
+      # it is not worth withholding. Gated BEFORE the commit, this exact
+      # condition held the wall on a month-old file for two weeks: one shul's
+      # unpublished Mincha, and every run's good data discarded with it.
+      - name: Report incomplete source data
+        if: steps.validate.outputs.incomplete == '1'
+        run: |
+          echo "The data was committed. The source is missing times for a shul on the wall;"
+          echo "see the warning annotations on this run."
+          exit 1
