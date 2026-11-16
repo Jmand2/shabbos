@@ -97,39 +97,47 @@ for (const day of days) {
    The wall's shuls are the ones with a site of their own in shuls.json, which
    is also what settings.js defaults to.
 
-   TODAY AND TOMORROW, NOT THE WHOLE HORIZON.
-   -----------------------------------------
-   This ran over every day on file, and the scrape reaches three days out. A
-   shul with no Mincha yet on day+3 is not a dropped service, it is a source
-   that publishes nearer the time: teaneckminyanim served Ohr Saadya's Monday
-   with "There are no Mincha minyanim scheduled" in the section while its own
-   summary line on the same page read "Next Minyan Today: Mincha/Maariv at
-   4:25 PM". Nothing is wrong there except the horizon, and scheduleFor() in
-   minyanim.js pools the days it shows anyway, so a far day still short of its
-   afternoon never reaches the wall as a claim about anything.
+   TODAY, AND ONLY TODAY.
+   ---------------------
+   This ran over every day on file, and the scrape reaches three days out. An
+   afternoon missing from a future day is not a dropped service. Some shuls set
+   Mincha and Maariv by the zman and publish them on the day itself, and Ohr
+   Saadya is one: on any future date, its own widget and teaneckminyanim both
+   carry the two Shacharis and no afternoon at all, every weekday, by design.
+   It appears the morning of, and the scrape picks it up the same day.
 
-   What the Succos bug actually was is a day ON the board saying a shul has no
-   Mincha. That is today, and tomorrow once tonight is done — so that is what
-   this asks about, and a quiet day beyond it is left to fill itself in. */
+   (Both sources agree, and always did. The line "Next Minyan Today:
+   Mincha/Maariv at 4:25 PM", read off a /next page for a future date and once
+   cited here as the aggregator contradicting its own empty section, is the
+   site's TODAY widget and belongs to the real today, whatever date the page
+   below it renders. It disappears once today's last minyan has gone. There was
+   never a contradiction to explain.)
+
+   So asking about tomorrow means asking a question whose answer is "not yet"
+   almost every weekday, and a check that cries every day is one nobody reads
+   the day it means something. scheduleFor() in minyanim.js pools the days it
+   shows in any case, so a future day short of its afternoon never reaches the
+   wall as a claim about anything.
+
+   Today is different. Today's times are published by now, and the board is
+   making a live statement about them — which is exactly what the Succos bug
+   was: Beth Aaron ON the wall, four Shacharis, nothing after. A gap here means
+   the day-of publication actually failed, and that is worth waking somebody
+   for. Tomorrow is left to fill itself in, because it will. */
 const WALL_ALL = JSON.parse(await readFile(new URL('../data/shuls.json', import.meta.url), 'utf8'));
 const WALL = WALL_ALL.filter((s) => s.site).map((s) => s.slug);
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-// Date arithmetic at noon UTC so a DST boundary cannot move the day.
-const tomorrow = (() => {
-  const d = new Date(`${today}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-})();
 
-for (const day of days.filter((d) => d >= today && d <= tomorrow)) {
+for (const day of days.filter((d) => d === today)) {
   for (const slug of WALL) {
     const entry = data.days[day][slug];
     if (!entry) continue;                       // no entry at all: not this check's business
     const later = (entry.mincha?.length ?? 0) + (entry.maariv?.length ?? 0);
     if (later) continue;
     const morning = entry.shacharis?.length ?? 0;
-    warn(`${day} ${slug}: ${morning} shacharis and nothing after — no mincha, no maariv. `
-      + 'Either the source dropped it or data/overrides.json needs extending.');
+    warn(`${day} ${slug}: ${morning} shacharis and nothing after — no mincha, no maariv, `
+      + 'and this is TODAY. The source should have published it by now: check '
+      + 'whether the shul has changed its schedule, or extend data/overrides.json.');
   }
 }
 
